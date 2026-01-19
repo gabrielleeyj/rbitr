@@ -34,7 +34,7 @@ type Store struct {
 	db *sql.DB
 }
 
-func New(db *sql.DB) *Store {
+func New(db *sql.DB) StoreAPI {
 	return &Store{db: db}
 }
 
@@ -56,14 +56,16 @@ func (s *Store) GetTenantByKeyHash(ctx context.Context, keyHash string) (models.
 
 func (s *Store) GetAdminKeyByHash(ctx context.Context, keyHash string) (models.AdminKey, error) {
 	var key models.AdminKey
+	var scopes StringArray
 	query := `SELECT admin_key_id, key_hash, scopes FROM rbitr.admin_keys WHERE key_hash = $1`
 	row := s.db.QueryRowContext(ctx, query, keyHash)
-	if err := row.Scan(&key.AdminKeyID, &key.KeyHash, &key.Scopes); err != nil {
+	if err := row.Scan(&key.AdminKeyID, &key.KeyHash, &scopes); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.AdminKey{}, ErrNotFound
 		}
 		return models.AdminKey{}, err
 	}
+	key.Scopes = scopes
 	return key, nil
 }
 

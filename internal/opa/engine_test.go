@@ -7,9 +7,9 @@ import (
 
 const samplePolicy = `package rbitr.policy
 
-default decision = {"decision": "DENY", "rule_id": "rule_default", "reason": "default", "policy_version": "p_v1"}
+default decision := {"decision": "DENY", "rule_id": "rule_default", "reason": "default", "policy_version": "p_v1"}
 
-decision := {"decision": "ALLOW", "rule_id": "rule_allow", "reason": "allow", "policy_version": "p_v1"} {
+decision := {"decision": "ALLOW", "rule_id": "rule_allow", "reason": "allow", "policy_version": "p_v1"} if {
 	input.action_type == "TICKET.CREATE"
 }
 `

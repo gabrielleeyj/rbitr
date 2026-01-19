@@ -13,11 +13,15 @@ type Result struct {
 	PolicyVersion string
 }
 
+type EngineAPI interface {
+	Evaluate(ctx context.Context, input map[string]any) (Result, error)
+}
+
 type Engine struct {
 	module string
 }
 
-func NewEngine(module string) *Engine {
+func NewEngine(module string) EngineAPI {
 	return &Engine{module: module}
 }
 

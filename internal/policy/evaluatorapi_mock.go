@@ -14,7 +14,7 @@ type MockEvaluatorAPI struct {
 }
 
 // Evaluate provides a mock function with given fields: ctx, tenantID, input
-func (_m *MockEvaluatorAPI) Evaluate(ctx context.Context, tenantID string, input map[string]interface{}) (Result, error) {
+func (_m *MockEvaluatorAPI) Evaluate(ctx context.Context, tenantID string, input map[string]any) (Result, error) {
 	ret := _m.Called(ctx, tenantID, input)
 
 	if len(ret) == 0 {
@@ -23,16 +23,16 @@ func (_m *MockEvaluatorAPI) Evaluate(ctx context.Context, tenantID string, input
 
 	var r0 Result
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]interface{}) (Result, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]any) (Result, error)); ok {
 		return rf(ctx, tenantID, input)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]interface{}) Result); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, map[string]any) Result); ok {
 		r0 = rf(ctx, tenantID, input)
 	} else {
 		r0 = ret.Get(0).(Result)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, map[string]interface{}) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, map[string]any) error); ok {
 		r1 = rf(ctx, tenantID, input)
 	} else {
 		r1 = ret.Error(1)

@@ -15,15 +15,15 @@ type Result struct {
 }
 
 type EvaluatorAPI interface {
-	Evaluate(ctx context.Context, tenantID string, input map[string]interface{}) (Result, error)
+	Evaluate(ctx context.Context, tenantID string, input map[string]any) (Result, error)
 }
 
 type Evaluator struct {
 	store store.StoreAPI
 }
 
-func NewEvaluator(store store.StoreAPI) *Evaluator {
-	return &Evaluator{store: store}
+func NewEvaluator(s store.StoreAPI) EvaluatorAPI {
+	return &Evaluator{store: s}
 }
 
 func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[string]any) (Result, error) {

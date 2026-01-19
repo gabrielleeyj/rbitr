@@ -1,0 +1,250 @@
+package public
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/gabrielleeyj/rbitr/internal/auth"
+	"github.com/gabrielleeyj/rbitr/internal/classification"
+	"github.com/gabrielleeyj/rbitr/internal/config"
+	"github.com/gabrielleeyj/rbitr/internal/connector"
+	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/policy"
+	"github.com/gabrielleeyj/rbitr/internal/store"
+	"github.com/gabrielleeyj/rbitr/internal/telemetry"
+	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
+)
+
+func TestHandleToolCall(t *testing.T) {
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant"}
+	tool := models.Tool{ToolID: "mock_internal", TenantID: "t1", BaseURL: "http://example", AuthType: "api_key", AuthValue: "key"}
+
+	cases := []struct {
+		name           string
+		headers        map[string]string
+		policyResult   policy.Result
+		policyError    error
+		storeSetup     func(*store.MockStoreAPI)
+		connectorSetup func(*connector.MockConnector)
+		expectedCode   int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:         "unauthorized",
+			headers:      map[string]string{auth.AgentIDHeader: "agent"},
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "forbidden",
+			headers:      map[string]string{auth.TenantKeyHeader: "key"},
+			expectedCode: http.StatusForbidden,
+		},
+		{
+			name:    "deny",
+			headers: map[string]string{auth.TenantKeyHeader: "key", auth.AgentIDHeader: "agent"},
+			policyResult: policy.Result{
+				Decision:      "DENY",
+				RuleID:        "rule_deny",
+				Reason:        "nope",
+				PolicyVersion: "p_v1",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+					return record.Decision == "DENY" && record.ActionType == "PAYMENT.REFUND"
+				})).Return(nil)
+			},
+			expectedCode: http.StatusForbidden,
+		},
+		{
+			name:    "require approval",
+			headers: map[string]string{auth.TenantKeyHeader: "key", auth.AgentIDHeader: "agent"},
+			policyResult: policy.Result{
+				Decision:      "REQUIRE_APPROVAL",
+				RuleID:        "rule_approval",
+				Reason:        "approval",
+				PolicyVersion: "p_v1",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("InsertApprovalRequest", context.Background(), mock.Anything).Return(nil)
+				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusConflict,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var payload ToolCallResponse
+				require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+				require.NotEmpty(t, payload.ApprovalRequestID)
+			},
+		},
+		{
+			name:    "allow",
+			headers: map[string]string{auth.TenantKeyHeader: "key", auth.AgentIDHeader: "agent"},
+			policyResult: policy.Result{
+				Decision:      "ALLOW",
+				RuleID:        "rule_allow",
+				Reason:        "ok",
+				PolicyVersion: "p_v1",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("GetTool", context.Background(), tenant.TenantID, "mock_internal").Return(tool, nil)
+				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
+			},
+			connectorSetup: func(connMock *connector.MockConnector) {
+				connMock.On("Execute", mock.Anything, mock.Anything).
+					Return(connector.Response{Status: http.StatusOK, Headers: map[string]string{"X-Test": "ok"}, Body: []byte("ok"), BodyHash: "sha256:abc"}, nil)
+			},
+			expectedCode: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var payload ToolCallResponse
+				require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+				require.Equal(t, "ok", payload.ToolBody)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			policyMock := policy.NewMockEvaluatorAPI(t)
+			connectorMock := connector.NewMockConnector(t)
+			var storeAPI store.StoreAPI = storeMock
+			deps := Dependencies{
+				Store:     storeAPI,
+				Policy:    policyMock,
+				Connector: connectorMock,
+				Metrics:   newTestMetrics(),
+				Config:    config.Config{BodyLimitSize: 256 * 1024, ResponseLimit: 256 * 1024},
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+			if tc.connectorSetup != nil {
+				tc.connectorSetup(connectorMock)
+			}
+			if tc.policyResult.Decision != "" || tc.policyError != nil {
+				policyMock.On("Evaluate", context.Background(), "t1", mock.Anything).
+					Return(tc.policyResult, tc.policyError)
+			}
+
+			payload := ToolCallRequest{
+				HTTPMethod: "POST",
+				Path:       "/refund",
+				Query:      "",
+				Headers:    map[string]string{"Content-Type": "application/json"},
+				Body:       "{}",
+			}
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodPost,
+				testhelpers.MakeBody(payload),
+				testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+			)
+			for key, value := range tc.headers {
+				req.Header.Set(key, value)
+			}
+
+			err := deps.handleToolCall(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedCode, rec.Code)
+			if tc.checkResponse != nil {
+				tc.checkResponse(t, rec)
+			}
+		})
+	}
+}
+
+func TestHandleEvidence(t *testing.T) {
+	cases := []struct {
+		name         string
+		headers      map[string]string
+		pathTenant   string
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+	}{
+		{
+			name:         "unauthorized",
+			headers:      map[string]string{auth.AgentIDHeader: "agent"},
+			pathTenant:   "t1",
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:         "tenant mismatch",
+			headers:      map[string]string{auth.AgentIDHeader: "agent", auth.TenantKeyHeader: "key"},
+			pathTenant:   "t2",
+			expectedCode: http.StatusForbidden,
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1"}, nil)
+			},
+		},
+		{
+			name:         "success",
+			headers:      map[string]string{auth.AgentIDHeader: "agent", auth.TenantKeyHeader: "key"},
+			pathTenant:   "t1",
+			expectedCode: http.StatusOK,
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1"}, nil)
+				storeMock.On("ListEvidence", context.Background(), "t1", 50).Return([]models.ActionDecisionRecord{
+					{DecisionID: "d1"},
+				}, nil)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			var storeAPI store.StoreAPI = storeMock
+			deps := Dependencies{
+				Store:   storeAPI,
+				Metrics: newTestMetrics(),
+				Config:  config.Config{BodyLimitSize: 256 * 1024},
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodGet,
+				nil,
+				testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{tc.pathTenant}},
+			)
+			for key, value := range tc.headers {
+				req.Header.Set(key, value)
+			}
+
+			err := deps.handleEvidence(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func newTestMetrics() *telemetry.Metrics {
+	return &telemetry.Metrics{
+		DecisionsTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total"}, []string{"decision", "action_type"}),
+		GatewayRequests:   prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total"}),
+		ToolExecTotal:     prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total"}),
+		ErrorsTotal:       prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total"}),
+		DecisionLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms"}),
+	}
+}
+
+func TestHandleToolCallClassification(t *testing.T) {
+	payload := ToolCallRequest{
+		HTTPMethod: "POST",
+		Path:       "/refund",
+		Query:      "",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+	}
+	classificationResult := classification.Classify("mock_internal", payload.HTTPMethod, payload.Path, payload.Query, payload.Headers)
+	require.Equal(t, "PAYMENT.REFUND", classificationResult.ActionType)
+	require.Equal(t, classification.RiskHigh, classificationResult.ActionRisk)
+}

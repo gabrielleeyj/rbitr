@@ -111,7 +111,8 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) error {
 	adminKey := c.Request().Header.Get(auth.AdminKeyHeader)
 	if _, err := auth.AuthenticateAdmin(c.Request().Context(), st, adminKey, scope); err != nil {
-		return authError(c, err)
+		_ = authError(c, err)
+		return err
 	}
 	return nil
 }
