@@ -1,0 +1,24 @@
+version: "2"
+issue-845-fix: true
+packages:
+  github.com/gabrielleeyj/rbitr/internal/store:
+    interfaces:
+      StoreAPI:
+        config:
+          inpackage: true
+          filename: storeapi_mock.go
+          structname: MockStoreAPI
+  github.com/gabrielleeyj/rbitr/internal/policy:
+    interfaces:
+      EvaluatorAPI:
+        config:
+          inpackage: true
+          filename: evaluatorapi_mock.go
+          structname: MockEvaluatorAPI
+  github.com/gabrielleeyj/rbitr/internal/connector:
+    interfaces:
+      Connector:
+        config:
+          inpackage: true
+          filename: connector_mock.go
+          structname: MockConnector

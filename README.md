@@ -22,3 +22,11 @@
   - jira (`http://localhost:8081`) in `migrations/00001_init.sql`.
 
 - Bootstrap update endpoints are locked after `PUT /admin/bootstrap/complete`.
+
+## Prometheus Metrics
+
+- `decisions_total{decision,action_type}`
+- `gateway_requests_total`
+- `tool_exec_total`
+- `errors_total`
+- `decision_latency_ms`
