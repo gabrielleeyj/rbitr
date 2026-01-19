@@ -1,3 +1,24 @@
 1. Run migrations: `goose -dir migrations postgres "$DATABASE_URL" up`
 2. Start mock tool and gateway: go run `./cmd/mocktool` and `go run ./cmd/gateway`
 3. Run tests: `go test ./...`
+
+## Information
+
+- Tool call payload is a JSON envelope with:
+  1. `http_method`,
+  2. `path`,
+  3. `query`,
+  4. `headers`,
+  5. `body`
+     (string) expected by `POST /v1/tools/{tool_id}/call`.
+- Seeded tenant `t_demo` with
+
+  ```
+  X-Tenant-Key = tenant_demo_key;
+  admin key = `admin_demo_key`;
+  ```
+
+  - tools mock_internal (`http://localhost:8090`)
+  - jira (`http://localhost:8081`) in `migrations/00001_init.sql`.
+
+- Bootstrap update endpoints are locked after `PUT /admin/bootstrap/complete`.
