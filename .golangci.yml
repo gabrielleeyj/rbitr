@@ -1,0 +1,135 @@
+version: "2"
+
+run:
+  concurrency: 8
+
+linters:
+  default: none
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - copyloopvar
+    - errcheck
+    - errname
+    - errorlint
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - goconst
+    - gocritic
+    - godot
+    - gosec
+    - govet
+    - ineffassign
+    #    - lll
+    - makezero
+    - mirror
+    - mnd
+    - musttag
+    - nestif
+    - nilerr
+    - nilnil
+    - noctx
+    - nolintlint
+    - perfsprint
+    - reassign
+    - revive
+    - rowserrcheck
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - experimental
+        - opinionated
+      settings:
+        captLocal:
+          paramsOnly: false
+        underef:
+          skipRecvDeref: false
+
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+
+    makezero:
+      always: true
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+    revive:
+      severity: error
+      rules:
+        - name: dot-imports
+        - name: import-alias-naming
+          arguments:
+            - ^[a-z][a-z0-9]{0,}$
+        - name: import-shadowing
+
+    rowserrcheck:
+      packages:
+        - github.com/jmoiron/sqlx
+
+  exclusions:
+    generated: strict
+    warn-unused: true
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+    rules:
+      - linters:
+          - lll
+        source: "^//go:generate "
+
+      - linters:
+          - bodyclose
+          - goconst
+          - gosec
+        path: _test\.go
+
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+issues:
+  max-same-issues: 50
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/gabrielleeyj/rbitr)
+
+    gofumpt:
+      extra-rules: true
+
+  exclusions:
+    generated: strict
+    warn-unused: true
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -1,0 +1,15 @@
+title = "rbitr gateway gitleaks config"
+
+[extend]
+useDefault = true # keep all the default rules
+
+[allowlist]
+# any path matching these patterns will be completely ignored
+paths = [
+  '''^config/''',
+  '''^deployment/''',
+
+  # specific files 
+  '''\.md$''',
+  '''gitleaks-report.json''',
+] # any path matching these patterns will be completely ignored
