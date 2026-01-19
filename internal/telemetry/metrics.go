@@ -1,0 +1,45 @@
+package telemetry
+
+import "github.com/prometheus/client_golang/prometheus"
+
+type Metrics struct {
+	DecisionsTotal    *prometheus.CounterVec
+	GatewayRequests   prometheus.Counter
+	ToolExecTotal     prometheus.Counter
+	ErrorsTotal       prometheus.Counter
+	DecisionLatencyMs prometheus.Histogram
+}
+
+func NewMetrics() *Metrics {
+	m := &Metrics{
+		DecisionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "decisions_total",
+			Help: "Total decisions by decision and action type.",
+		}, []string{"decision", "action_type"}),
+		GatewayRequests: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "gateway_requests_total",
+			Help: "Total gateway requests.",
+		}),
+		ToolExecTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "tool_exec_total",
+			Help: "Total tool executions.",
+		}),
+		ErrorsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "errors_total",
+			Help: "Total gateway errors.",
+		}),
+		DecisionLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "decision_latency_ms",
+			Help:    "Decision latency in ms.",
+			Buckets: prometheus.DefBuckets,
+		}),
+	}
+	prometheus.MustRegister(
+		m.DecisionsTotal,
+		m.GatewayRequests,
+		m.ToolExecTotal,
+		m.ErrorsTotal,
+		m.DecisionLatencyMs,
+	)
+	return m
+}

@@ -1,0 +1,68 @@
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/gabrielleeyj/rbitr/internal/api/admin"
+	"github.com/gabrielleeyj/rbitr/internal/api/public"
+	"github.com/gabrielleeyj/rbitr/internal/config"
+	"github.com/gabrielleeyj/rbitr/internal/db"
+	"github.com/gabrielleeyj/rbitr/internal/store"
+	"github.com/gabrielleeyj/rbitr/internal/telemetry"
+)
+
+func main() {
+	cfg := config.Load()
+
+	dbConn, err := db.Connect(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("db connect failed: %v", err)
+	}
+	defer dbConn.Close()
+
+	st := store.New(dbConn)
+	metrics := telemetry.NewMetrics()
+
+	e := echo.New()
+	e.Use(middleware.Recover())
+	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
+		Timeout: 15 * time.Second,
+	}))
+
+	e.GET("/healthz", func(c *echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	})
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+
+	public.RegisterRoutes(e, public.Dependencies{
+		Store:   st,
+		Metrics: metrics,
+		Config:  cfg,
+	})
+	admin.RegisterRoutes(e, admin.Dependencies{
+		Store:   st,
+		Metrics: metrics,
+		Config:  cfg,
+	})
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	sc := echo.StartConfig{
+		Address:         cfg.ListenAddr,
+		GracefulTimeout: 10 * time.Second,
+	}
+	if err := sc.Start(ctx, e); err != nil && err != http.ErrServerClosed {
+		e.Logger.Error("failed to start server", "error", err)
+	}
+}

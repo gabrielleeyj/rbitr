@@ -1,0 +1,59 @@
+package connector
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/gabrielleeyj/rbitr/internal/utils"
+)
+
+type REST struct {
+	Client        *http.Client
+	ResponseLimit int64
+}
+
+func NewREST(responseLimit int64) *REST {
+	return &REST{
+		Client: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		ResponseLimit: responseLimit,
+	}
+}
+
+func (r *REST) Execute(ctx context.Context, req Request) (Response, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, bytes.NewReader(req.Body))
+	if err != nil {
+		return Response{}, err
+	}
+	for key, value := range req.Headers {
+		httpReq.Header.Set(key, value)
+	}
+
+	resp, err := r.Client.Do(httpReq)
+	if err != nil {
+		return Response{}, err
+	}
+	defer resp.Body.Close()
+
+	limited := io.LimitReader(resp.Body, r.ResponseLimit)
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		return Response{}, err
+	}
+
+	respHeaders := make(map[string]string)
+	for key := range resp.Header {
+		respHeaders[key] = resp.Header.Get(key)
+	}
+
+	return Response{
+		Status:   resp.StatusCode,
+		Headers:  respHeaders,
+		Body:     body,
+		BodyHash: utils.HashBody(body),
+	}, nil
+}
