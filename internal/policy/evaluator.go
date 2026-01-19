@@ -14,11 +14,15 @@ type Result struct {
 	PolicyVersion string
 }
 
-type Evaluator struct {
-	store *store.Store
+type EvaluatorAPI interface {
+	Evaluate(ctx context.Context, tenantID string, input map[string]interface{}) (Result, error)
 }
 
-func NewEvaluator(store *store.Store) *Evaluator {
+type Evaluator struct {
+	store store.StoreAPI
+}
+
+func NewEvaluator(store store.StoreAPI) *Evaluator {
 	return &Evaluator{store: store}
 }
 

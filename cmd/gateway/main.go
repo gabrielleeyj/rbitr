@@ -16,7 +16,9 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/api/admin"
 	"github.com/gabrielleeyj/rbitr/internal/api/public"
 	"github.com/gabrielleeyj/rbitr/internal/config"
+	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/db"
+	"github.com/gabrielleeyj/rbitr/internal/policy"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 )
@@ -32,6 +34,8 @@ func main() {
 
 	st := store.New(dbConn)
 	metrics := telemetry.NewMetrics()
+	policyEval := policy.NewEvaluator(st)
+	restConnector := connector.NewREST(cfg.ResponseLimit)
 
 	e := echo.New()
 	e.Use(middleware.Recover())
@@ -45,9 +49,11 @@ func main() {
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	public.RegisterRoutes(e, public.Dependencies{
-		Store:   st,
-		Metrics: metrics,
-		Config:  cfg,
+		Store:     st,
+		Policy:    policyEval,
+		Connector: restConnector,
+		Metrics:   metrics,
+		Config:    cfg,
 	})
 	admin.RegisterRoutes(e, admin.Dependencies{
 		Store:   st,

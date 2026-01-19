@@ -23,9 +23,11 @@ import (
 )
 
 type Dependencies struct {
-	Store   *store.Store
-	Metrics *telemetry.Metrics
-	Config  config.Config
+	Store     store.StoreAPI
+	Policy    policy.EvaluatorAPI
+	Connector connector.Connector
+	Metrics   *telemetry.Metrics
+	Config    config.Config
 }
 
 type ToolCallRequest struct {
@@ -110,7 +112,10 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 
 	classificationResult := classification.Classify(toolID, payload.HTTPMethod, payload.Path, payload.Query, filteredHeaders)
 
-	policyEval := policy.NewEvaluator(d.Store)
+	if d.Policy == nil {
+		d.Metrics.ErrorsTotal.Inc()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluator not configured"})
+	}
 	policyInput := map[string]any{
 		"tenant_id":   tenant.TenantID,
 		"tool_id":     toolID,
@@ -119,7 +124,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		"method":      payload.HTTPMethod,
 		"path":        payload.Path,
 	}
-	decisionResult, err := policyEval.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
+	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
 	if err != nil {
 		d.Metrics.ErrorsTotal.Inc()
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluation failed"})
@@ -198,7 +203,10 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
 		}
 
-		rest := connector.NewREST(d.Config.ResponseLimit)
+		if d.Connector == nil {
+			d.Metrics.ErrorsTotal.Inc()
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
+		}
 		url := strings.TrimRight(tool.BaseURL, "/") + payload.Path
 		if payload.Query != "" {
 			if strings.HasPrefix(payload.Query, "?") {
@@ -212,7 +220,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		maps.Copy(forwardHeaders, filteredHeaders)
 		applyToolAuth(forwardHeaders, tool)
 
-		resp, err := rest.Execute(c.Request().Context(), connector.Request{
+		resp, err := d.Connector.Execute(c.Request().Context(), connector.Request{
 			Method:  payload.HTTPMethod,
 			URL:     url,
 			Headers: forwardHeaders,

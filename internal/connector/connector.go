@@ -1,8 +1,6 @@
 package connector
 
-import (
-	"context"
-)
+import "context"
 
 type Request struct {
 	Method  string
@@ -12,10 +10,10 @@ type Request struct {
 }
 
 type Response struct {
-	Status     int
-	Headers    map[string]string
-	Body       []byte
-	BodyHash   string
+	Status   int
+	Headers  map[string]string
+	Body     []byte
+	BodyHash string
 }
 
 type Connector interface {

@@ -15,6 +15,20 @@ var ErrBootstrapComplete = errors.New("bootstrap already completed")
 
 const bootstrapKey = "bootstrap_complete"
 
+type StoreAPI interface {
+	GetTenantByKeyHash(ctx context.Context, keyHash string) (models.Tenant, error)
+	GetAdminKeyByHash(ctx context.Context, keyHash string) (models.AdminKey, error)
+	GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error)
+	GetPolicy(ctx context.Context, tenantID string) (models.Policy, error)
+	InsertADR(ctx context.Context, record models.ActionDecisionRecord) error
+	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
+	ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error)
+	UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error
+	UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error
+	UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error
+	MarkBootstrapComplete(ctx context.Context) error
+}
+
 // Store wraps database operations.
 type Store struct {
 	db *sql.DB

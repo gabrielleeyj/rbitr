@@ -13,7 +13,7 @@ import (
 )
 
 type Dependencies struct {
-	Store   *store.Store
+	Store   store.StoreAPI
 	Metrics *telemetry.Metrics
 	Config  config.Config
 }
@@ -108,7 +108,7 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func requireAdminScope(c *echo.Context, st *store.Store, scope string) error {
+func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) error {
 	adminKey := c.Request().Header.Get(auth.AdminKeyHeader)
 	if _, err := auth.AuthenticateAdmin(c.Request().Context(), st, adminKey, scope); err != nil {
 		return authError(c, err)

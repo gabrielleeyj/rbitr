@@ -16,7 +16,7 @@ var ErrForbidden = errors.New("forbidden")
 const TenantKeyHeader = "X-Tenant-Key"
 const AgentIDHeader = "X-Agent-Id"
 
-func AuthenticateTenant(ctx context.Context, st *store.Store, tenantKey, agentID string) (models.Tenant, error) {
+func AuthenticateTenant(ctx context.Context, st store.StoreAPI, tenantKey, agentID string) (models.Tenant, error) {
 	if tenantKey == "" {
 		return models.Tenant{}, ErrUnauthorized
 	}
