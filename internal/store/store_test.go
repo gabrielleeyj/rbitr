@@ -409,3 +409,52 @@ func TestStoreSetAdminWriteLock(t *testing.T) {
 	require.NoError(t, st.SetAdminWriteLock(context.Background(), true))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestStoreUpdateLocked(t *testing.T) {
+	cases := []struct {
+		name string
+		call func(StoreAPI) error
+	}{
+		{
+			name: "tenant config",
+			call: func(st StoreAPI) error {
+				return st.UpdateTenantConfig(context.Background(), "t1", "Name", "key")
+			},
+		},
+		{
+			name: "tool config",
+			call: func(st StoreAPI) error {
+				return st.UpdateToolConfig(context.Background(), "t1", "tool", "http://example", "bearer", "token")
+			},
+		},
+		{
+			name: "policy",
+			call: func(st StoreAPI) error {
+				return st.UpdatePolicy(context.Background(), "t1", "module", "p_v2")
+			},
+		},
+		{
+			name: "risk override",
+			call: func(st StoreAPI) error {
+				return st.UpdateRiskOverride(context.Background(), "t1", "DATA.EXPORT", "HIGH")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+				WithArgs(adminWriteLockKey).
+				WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(settingTrue))
+
+			st := New(db)
+			err = tc.call(st)
+			require.ErrorIs(t, err, ErrAdminWriteLocked)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}

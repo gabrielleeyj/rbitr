@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -57,6 +58,12 @@ func TestEvaluatorEvaluate(t *testing.T) {
 			input:   map[string]any{},
 			wantErr: true,
 		},
+		{
+			name:    "invalid rego",
+			policy:  models.Policy{PolicyID: "p3", TenantID: "t1", RegoModule: "package rbitr.policy\n\nbad", PolicyVersion: "p_v1"},
+			input:   map[string]any{},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -82,4 +89,26 @@ func TestEvaluatorEvaluate(t *testing.T) {
 			require.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestEvaluatorCacheHit(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: invalidPolicy, PolicyVersion: "p_v1"}, nil)
+
+	evalIface := NewEvaluator(storeMock)
+	evaluator := evalIface.(*Evaluator)
+
+	prepared, err := opa.PrepareQuery(context.Background(), allowPolicy)
+	require.NoError(t, err)
+
+	evaluator.cache["t1:p_v1"] = cachedPrepared{
+		prepared:  prepared,
+		module:    invalidPolicy,
+		expiresAt: time.Now().Add(time.Minute),
+	}
+
+	result, err := evaluator.Evaluate(context.Background(), "t1", map[string]any{"action_type": "TICKET.CREATE"})
+	require.NoError(t, err)
+	require.Equal(t, "ALLOW", result.Decision)
 }
