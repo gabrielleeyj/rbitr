@@ -9,9 +9,13 @@ import (
 )
 
 func Connect(connStr string) (*sql.DB, error) {
+	return connect(sql.Open, connStr)
+}
+
+func connect(open func(string, string) (*sql.DB, error), connStr string) (*sql.DB, error) {
 	const pingTimeout = 5 * time.Second
 
-	db, err := sql.Open("pgx", connStr)
+	db, err := open("pgx", connStr)
 	if err != nil {
 		return nil, err
 	}
