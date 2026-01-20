@@ -44,6 +44,7 @@ func RegisterRoutes(e *echo.Echo, deps Dependencies) {
 	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/policy", deps.handlePolicyUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
+	adminGroup.PUT("/config/write-lock", deps.handleAdminWriteLock)
 	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
 }
 
@@ -180,6 +181,9 @@ func handleBootstrapError(c *echo.Context, err error) error {
 	}
 	if err == store.ErrBootstrapComplete {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "bootstrap already completed"})
+	}
+	if err == store.ErrAdminWriteLocked {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "update failed"})
 }

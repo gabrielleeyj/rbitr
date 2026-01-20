@@ -4,4 +4,8 @@ MOCKERY := mockery
 
 .PHONY: mocks
 mocks:
-	$(MOCKERY)
+	GOCACHE=$$(mktemp -d) $(MOCKERY) --config mockery.yaml
+
+.PHONY: demo
+demo:
+	./scripts/demo.sh

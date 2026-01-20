@@ -12,8 +12,10 @@ import (
 
 var ErrNotFound = errors.New("not found")
 var ErrBootstrapComplete = errors.New("bootstrap already completed")
+var ErrAdminWriteLocked = errors.New("admin writes locked")
 
 const bootstrapKey = "bootstrap_complete"
+const adminWriteLockKey = "admin_write_lock"
 
 type StoreAPI interface {
 	GetTenantByKeyHash(ctx context.Context, keyHash string) (models.Tenant, error)
@@ -29,6 +31,7 @@ type StoreAPI interface {
 	UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error
 	UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error
 	MarkBootstrapComplete(ctx context.Context) error
+	SetAdminWriteLock(ctx context.Context, locked bool) error
 }
 
 // Store wraps database operations.
@@ -199,7 +202,7 @@ func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([
 }
 
 func (s *Store) UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error {
-	if err := s.ensureBootstrapAvailable(ctx); err != nil {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
 
@@ -219,7 +222,7 @@ func (s *Store) UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKe
 }
 
 func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error {
-	if err := s.ensureBootstrapAvailable(ctx); err != nil {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
 
@@ -233,7 +236,7 @@ func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL,
 }
 
 func (s *Store) UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error {
-	if err := s.ensureBootstrapAvailable(ctx); err != nil {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
 
@@ -247,6 +250,10 @@ func (s *Store) UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVe
 }
 
 func (s *Store) UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (tenant_id, action_type) DO UPDATE SET action_risk = $3, updated_at = $4`,
@@ -275,6 +282,33 @@ func (s *Store) MarkBootstrapComplete(ctx context.Context) error {
 		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = $3`,
 		bootstrapKey, "true", time.Now().UTC())
 	return err
+}
+
+func (s *Store) SetAdminWriteLock(ctx context.Context, locked bool) error {
+	value := "false"
+	if locked {
+		value = "true"
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = $3`,
+		adminWriteLockKey, value, time.Now().UTC())
+	return err
+}
+
+func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, adminWriteLockKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if value == "true" {
+		return ErrAdminWriteLocked
+	}
+	return nil
 }
 
 func hashKey(key string) string {

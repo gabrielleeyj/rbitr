@@ -39,15 +39,6 @@ func TestHandleTenantConfigUpdate(t *testing.T) {
 			expectedErr:  true,
 		},
 		{
-			name:     "bootstrap complete",
-			adminKey: "key",
-			scopes:   []string{"admin:write"},
-			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("UpdateTenantConfig", context.Background(), "t1", "Tenant", "newkey").Return(store.ErrBootstrapComplete)
-			},
-			expectedCode: http.StatusConflict,
-		},
-		{
 			name:     "success",
 			adminKey: "key",
 			scopes:   []string{"admin:write"},
@@ -55,6 +46,15 @@ func TestHandleTenantConfigUpdate(t *testing.T) {
 				storeMock.On("UpdateTenantConfig", context.Background(), "t1", "Tenant", "newkey").Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:     "write lock",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("UpdateTenantConfig", context.Background(), "t1", "Tenant", "newkey").Return(store.ErrAdminWriteLocked)
+			},
+			expectedCode: http.StatusForbidden,
 		},
 	}
 
@@ -125,6 +125,16 @@ func TestHandleToolConfigUpdate(t *testing.T) {
 			},
 			expectedCode: http.StatusNoContent,
 		},
+		{
+			name:     "write lock",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  ToolConfigRequest{BaseURL: "http://example", AuthType: "bearer", AuthValue: "token"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").Return(store.ErrAdminWriteLocked)
+			},
+			expectedCode: http.StatusForbidden,
+		},
 	}
 
 	for _, tc := range cases {
@@ -192,6 +202,16 @@ func TestHandlePolicyUpdate(t *testing.T) {
 				storeMock.On("UpdatePolicy", context.Background(), "t1", "module", "p_v2").Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:     "write lock",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  PolicyUpdateRequest{RegoModule: "module", PolicyVersion: "p_v2"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("UpdatePolicy", context.Background(), "t1", "module", "p_v2").Return(store.ErrAdminWriteLocked)
+			},
+			expectedCode: http.StatusForbidden,
 		},
 	}
 
@@ -282,6 +302,63 @@ func TestHandleBootstrapComplete(t *testing.T) {
 	}
 }
 
+func TestHandleAdminWriteLock(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      AdminWriteLockRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			payload:      AdminWriteLockRequest{Locked: true},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  AdminWriteLockRequest{Locked: true},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("SetAdminWriteLock", context.Background(), true).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AdminKeyHeader, tc.adminKey)
+			}
+
+			var storeAPI store.StoreAPI = storeMock
+			deps := Dependencies{Store: storeAPI, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleAdminWriteLock(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
 func TestHandleRiskOverrideUpdate(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -314,6 +391,16 @@ func TestHandleRiskOverrideUpdate(t *testing.T) {
 				storeMock.On("UpdateRiskOverride", context.Background(), "t1", "DATA.EXPORT", "HIGH").Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:     "write lock",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  RiskOverrideRequest{ActionRisk: "HIGH"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("UpdateRiskOverride", context.Background(), "t1", "DATA.EXPORT", "HIGH").Return(store.ErrAdminWriteLocked)
+			},
+			expectedCode: http.StatusForbidden,
 		},
 	}
 

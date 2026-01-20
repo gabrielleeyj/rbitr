@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"regexp"
 	"testing"
 	"time"
@@ -305,145 +304,56 @@ func TestStoreListEvidence(t *testing.T) {
 }
 
 func TestStoreUpdateTenantConfig(t *testing.T) {
-	cases := []struct {
-		name        string
-		bootstrapOK bool
-		nameValue   string
-		keyValue    string
-		expectErr   error
-	}{
-		{
-			name:        "bootstrap complete",
-			bootstrapOK: false,
-			expectErr:   ErrBootstrapComplete,
-		},
-		{
-			name:        "update name and key",
-			bootstrapOK: true,
-			nameValue:   "New Name",
-			keyValue:    "newkey",
-		},
-	}
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenants SET name = $1 WHERE tenant_id = $2`)).
+		WithArgs("New Name", "t1").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_keys SET key_hash = $1 WHERE tenant_id = $2`)).
+		WithArgs(sqlmock.AnyArg(), "t1").WillReturnResult(sqlmock.NewResult(1, 1))
 
-			bootstrapQuery := regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)
-			if tc.bootstrapOK {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnError(sql.ErrNoRows)
-				if tc.nameValue != "" {
-					mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenants SET name = $1 WHERE tenant_id = $2`)).
-						WithArgs(tc.nameValue, "t1").WillReturnResult(sqlmock.NewResult(1, 1))
-				}
-				if tc.keyValue != "" {
-					mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_keys SET key_hash = $1 WHERE tenant_id = $2`)).
-						WithArgs(sqlmock.AnyArg(), "t1").WillReturnResult(sqlmock.NewResult(1, 1))
-				}
-			} else {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
-			}
-
-			st := New(db)
-			err = st.UpdateTenantConfig(context.Background(), "t1", tc.nameValue, tc.keyValue)
-			if tc.expectErr != nil {
-				require.ErrorIs(t, err, tc.expectErr)
-			} else {
-				require.NoError(t, err)
-			}
-			require.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
+	st := New(db)
+	err = st.UpdateTenantConfig(context.Background(), "t1", "New Name", "newkey")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestStoreUpdateToolConfig(t *testing.T) {
-	cases := []struct {
-		name        string
-		bootstrapOK bool
-		expectErr   error
-	}{
-		{
-			name:        "bootstrap complete",
-			bootstrapOK: false,
-			expectErr:   ErrBootstrapComplete,
-		},
-		{
-			name:        "update tool",
-			bootstrapOK: true,
-		},
-	}
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`)).
+		WithArgs("http://example", "bearer", "token", "t1", "tool").WillReturnResult(sqlmock.NewResult(1, 1))
 
-			bootstrapQuery := regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)
-			if tc.bootstrapOK {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnError(sql.ErrNoRows)
-				mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`)).
-					WithArgs("http://example", "bearer", "token", "t1", "tool").WillReturnResult(sqlmock.NewResult(1, 1))
-			} else {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
-			}
-
-			st := New(db)
-			err = st.UpdateToolConfig(context.Background(), "t1", "tool", "http://example", "bearer", "token")
-			if tc.expectErr != nil {
-				require.ErrorIs(t, err, tc.expectErr)
-			} else {
-				require.NoError(t, err)
-			}
-			require.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
+	st := New(db)
+	err = st.UpdateToolConfig(context.Background(), "t1", "tool", "http://example", "bearer", "token")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestStoreUpdatePolicy(t *testing.T) {
-	cases := []struct {
-		name        string
-		bootstrapOK bool
-		expectErr   error
-	}{
-		{
-			name:        "bootstrap complete",
-			bootstrapOK: false,
-			expectErr:   ErrBootstrapComplete,
-		},
-		{
-			name:        "update policy",
-			bootstrapOK: true,
-		},
-	}
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.policies SET rego_module = $1, policy_version = $2, updated_at = $3 WHERE tenant_id = $4`)).
+		WithArgs("module", "p_v2", sqlmock.AnyArg(), "t1").WillReturnResult(sqlmock.NewResult(1, 1))
 
-			bootstrapQuery := regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)
-			if tc.bootstrapOK {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnError(sql.ErrNoRows)
-				mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.policies SET rego_module = $1, policy_version = $2, updated_at = $3 WHERE tenant_id = $4`)).
-					WithArgs("module", "p_v2", sqlmock.AnyArg(), "t1").WillReturnResult(sqlmock.NewResult(1, 1))
-			} else {
-				mock.ExpectQuery(bootstrapQuery).WithArgs(bootstrapKey).WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
-			}
-
-			st := New(db)
-			err = st.UpdatePolicy(context.Background(), "t1", "module", "p_v2")
-			if tc.expectErr != nil {
-				require.ErrorIs(t, err, tc.expectErr)
-			} else {
-				require.NoError(t, err)
-			}
-			require.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
+	st := New(db)
+	err = st.UpdatePolicy(context.Background(), "t1", "module", "p_v2")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestStoreUpdateRiskOverride(t *testing.T) {
@@ -451,6 +361,9 @@ func TestStoreUpdateRiskOverride(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
 	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (tenant_id, action_type) DO UPDATE SET action_risk = $3, updated_at = $4`)).
@@ -477,5 +390,22 @@ func TestStoreMarkBootstrapComplete(t *testing.T) {
 
 	st := New(db)
 	require.NoError(t, st.MarkBootstrapComplete(context.Background()))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetAdminWriteLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = $3`)
+	mock.ExpectExec(query).
+		WithArgs(adminWriteLockKey, "true", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.SetAdminWriteLock(context.Background(), true))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
