@@ -15,13 +15,45 @@ decision := {"decision": "ALLOW", "rule_id": "rule_allow", "reason": "allow", "p
 `
 
 func TestEvaluatePolicy(t *testing.T) {
-	engine := NewEngine(samplePolicy)
-	result, err := engine.Evaluate(testContext(), map[string]interface{}{"action_type": "TICKET.CREATE"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cases := []struct {
+		name      string
+		module    string
+		input     map[string]any
+		expectErr bool
+	}{
+		{
+			name:   "allow",
+			module: samplePolicy,
+			input:  map[string]any{"action_type": "TICKET.CREATE"},
+		},
+		{
+			name: "invalid output",
+			module: `package rbitr.policy
+
+decision := "ALLOW"
+`,
+			input:     map[string]any{},
+			expectErr: true,
+		},
 	}
-	if result.Decision != "ALLOW" {
-		t.Fatalf("expected ALLOW, got %s", result.Decision)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := NewEngine(tc.module)
+			result, err := engine.Evaluate(testContext(), tc.input)
+			if tc.expectErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.Decision != "ALLOW" {
+				t.Fatalf("expected ALLOW, got %s", result.Decision)
+			}
+		})
 	}
 }
 

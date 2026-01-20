@@ -144,6 +144,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		d.Metrics.ErrorsTotal.Inc()
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluation failed"})
 	}
+	d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 	if decisionResult.Decision == "" {
 		decisionResult.Decision = "DENY"
 		decisionResult.RuleID = "rule_default_deny"
@@ -172,7 +173,6 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	switch decisionResult.Decision {
 	case "DENY":
 		d.Metrics.DecisionsTotal.WithLabelValues("DENY", classificationResult.ActionType).Inc()
-		d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
@@ -197,7 +197,6 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		adr.ApprovalRequestID = approvalID
 		d.Metrics.DecisionsTotal.WithLabelValues("REQUIRE_APPROVAL", classificationResult.ActionType).Inc()
-		d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 		if err := d.Store.InsertApprovalRequest(c.Request().Context(), approval); err != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist approval"})
@@ -236,6 +235,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		maps.Copy(forwardHeaders, filteredHeaders)
 		applyToolAuth(forwardHeaders, tool)
 
+		toolStart := time.Now()
 		resp, err := d.Connector.Execute(c.Request().Context(), connector.Request{
 			Method:  payload.HTTPMethod,
 			URL:     url,
@@ -246,6 +246,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 			d.Metrics.ErrorsTotal.Inc()
 			return c.JSON(http.StatusBadGateway, map[string]string{"error": "tool execution failed"})
 		}
+		d.Metrics.ToolLatencyMs.Observe(float64(time.Since(toolStart).Milliseconds()))
 		adr.ResponseHash = resp.BodyHash
 		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
 			d.Metrics.ErrorsTotal.Inc()
@@ -254,7 +255,6 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 
 		d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", classificationResult.ActionType).Inc()
 		d.Metrics.ToolExecTotal.Inc()
-		d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 
 		return c.JSON(http.StatusOK, ToolCallResponse{
 			RequestID:   requestID,

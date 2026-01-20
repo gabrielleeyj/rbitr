@@ -8,6 +8,7 @@ type Metrics struct {
 	ToolExecTotal     prometheus.Counter
 	ErrorsTotal       prometheus.Counter
 	DecisionLatencyMs prometheus.Histogram
+	ToolLatencyMs     prometheus.Histogram
 }
 
 func NewMetrics() *Metrics {
@@ -33,6 +34,11 @@ func NewMetrics() *Metrics {
 			Help:    "Decision latency in ms.",
 			Buckets: prometheus.DefBuckets,
 		}),
+		ToolLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "tool_latency_ms",
+			Help:    "Tool execution latency in ms.",
+			Buckets: prometheus.DefBuckets,
+		}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -40,6 +46,7 @@ func NewMetrics() *Metrics {
 		m.ToolExecTotal,
 		m.ErrorsTotal,
 		m.DecisionLatencyMs,
+		m.ToolLatencyMs,
 	)
 	return m
 }

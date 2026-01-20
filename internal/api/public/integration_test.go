@@ -3,12 +3,12 @@ package public
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/gabrielleeyj/rbitr/internal/config"
@@ -32,19 +32,6 @@ decision := {"decision": "ALLOW", "rule_id": "rule_allow_refund", "reason": "ok"
 `
 
 func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
-	called := make(chan struct{}, 1)
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/refund" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		called <- struct{}{}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	}))
-	defer toolServer.Close()
-
 	cases := []struct {
 		name             string
 		path             string
@@ -81,35 +68,35 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
+			db, sm, err := sqlmock.New()
 			require.NoError(t, err)
 			defer db.Close()
 
-			mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
 		WHERE tk.key_hash = $1`)).
 				WithArgs(sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
 
-			mock.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)).
+				WithArgs("t_demo", sqlmock.AnyArg()).
+				WillReturnRows(sqlmock.NewRows([]string{"action_risk"}))
+
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
 				WithArgs("t_demo").
 				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
 					AddRow("policy_demo", "t_demo", integrationPolicy, "p_v1", time.Now()))
 
-			mock.ExpectQuery(regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)).
-				WithArgs("t_demo", sqlmock.AnyArg()).
-				WillReturnError(sqlmock.ErrNoRows)
-
 			if tc.expectedDecision == "ALLOW" {
-				mock.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 					WithArgs("t_demo", "mock_internal").
 					WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value"}).
-						AddRow("mock_internal", "t_demo", toolServer.URL, "", ""))
+						AddRow("mock_internal", "t_demo", "http://mock.local", "", ""))
 			}
 
 			if tc.expectApproval {
-				mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.approval_requests (
+				sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
 		status, expires_at, created_at
 	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`)).
@@ -127,7 +114,7 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 					WillReturnResult(sqlmock.NewResult(1, 1))
 			}
 
-			mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
+			sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
 		action_summary, decision, reason, rule_id, policy_version, request_hash,
 		response_hash, approval_request_id, created_at
@@ -154,12 +141,22 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 
 			storeAPI := store.New(db)
 			policyEval := policy.NewEvaluator(storeAPI)
-			restConnector := connector.NewREST(1024)
+			connectorMock := connector.NewMockConnector(t)
+			if tc.expectToolCall {
+				connectorMock.On("Execute", mock.Anything, mock.MatchedBy(func(req connector.Request) bool {
+					return req.Method == tc.method && req.URL == "http://mock.local"+tc.path
+				})).Return(connector.Response{
+					Status:   http.StatusOK,
+					Headers:  map[string]string{"Content-Type": "application/json"},
+					Body:     []byte(`{"status":"ok"}`),
+					BodyHash: "hash",
+				}, nil)
+			}
 
 			deps := Dependencies{
 				Store:     storeAPI,
 				Policy:    policyEval,
-				Connector: restConnector,
+				Connector: connectorMock,
 				Metrics:   newTestMetrics(),
 				Config:    config.Config{BodyLimitSize: 256 * 1024, ResponseLimit: 1024},
 			}
@@ -180,7 +177,9 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 
 			err = deps.handleToolCall(ctx)
 			require.NoError(t, err)
-			require.Equal(t, tc.expectedStatus, rec.Code)
+			if rec.Code != tc.expectedStatus {
+				t.Fatalf("expected status %d got %d body=%s", tc.expectedStatus, rec.Code, rec.Body.String())
+			}
 
 			var response ToolCallResponse
 			require.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
@@ -190,15 +189,12 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 			}
 
 			if tc.expectToolCall {
-				select {
-				case <-called:
-					// ok
-				default:
-					t.Fatalf("expected connector to call tool server")
-				}
+				connectorMock.AssertCalled(t, "Execute", mock.Anything, mock.Anything)
+			} else {
+				connectorMock.AssertNotCalled(t, "Execute", mock.Anything, mock.Anything)
 			}
 
-			require.NoError(t, mock.ExpectationsWereMet())
+			require.NoError(t, sm.ExpectationsWereMet())
 		})
 	}
 }

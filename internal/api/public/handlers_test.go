@@ -259,6 +259,7 @@ func newTestMetrics() *telemetry.Metrics {
 		ToolExecTotal:     prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total"}),
 		ErrorsTotal:       prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total"}),
 		DecisionLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms"}),
+		ToolLatencyMs:     prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms"}),
 	}
 }
 

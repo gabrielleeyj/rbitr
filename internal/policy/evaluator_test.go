@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/opa"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
@@ -18,6 +19,11 @@ default decision := {"decision": "DENY", "rule_id": "rule_default", "reason": "d
 decision := {"decision": "ALLOW", "rule_id": "rule_allow", "reason": "ok", "policy_version": "p_v1"} if {
 	input.action_type == "TICKET.CREATE"
 }
+`
+
+const invalidPolicy = `package rbitr.policy
+
+decision := "ALLOW"
 `
 
 func TestEvaluatorEvaluate(t *testing.T) {
@@ -45,6 +51,12 @@ func TestEvaluatorEvaluate(t *testing.T) {
 				PolicyVersion: "p_v1",
 			},
 		},
+		{
+			name:    "invalid policy output",
+			policy:  models.Policy{PolicyID: "p2", TenantID: "t1", RegoModule: invalidPolicy, PolicyVersion: "p_v1"},
+			input:   map[string]any{},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -61,6 +73,9 @@ func TestEvaluatorEvaluate(t *testing.T) {
 			result, err := evaluator.Evaluate(context.Background(), "t1", tc.input)
 			if tc.wantErr {
 				require.Error(t, err)
+				if tc.policy.RegoModule == invalidPolicy {
+					require.ErrorIs(t, err, opa.ErrInvalidPolicyOutput)
+				}
 				return
 			}
 			require.NoError(t, err)

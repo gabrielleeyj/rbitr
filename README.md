@@ -74,6 +74,7 @@ Additional Fields (TBD):
 - `tool_exec_total`
 - `errors_total`
 - `decision_latency_ms`
+- `tool_latency_ms`
 
 ## Simulation
 
