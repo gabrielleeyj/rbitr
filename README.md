@@ -1,4 +1,10 @@
-1. Run migrations: `goose -dir migrations postgres "$DATABASE_URL" up`
+1. Run migrations:
+
+```bash
+export DATABASE_URL=postgres://postgres@localhost:2345/rbitr?sslmode=disable \
+goose -dir migrations postgres "$DATABASE_URL" up
+```
+
 2. Start mock tool and gateway: go run `./cmd/mocktool` and `go run ./cmd/gateway`
 3. Run tests: `go test ./...`
 
