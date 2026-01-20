@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/classification"
@@ -20,6 +18,9 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandleToolCall(t *testing.T) {
@@ -192,7 +193,22 @@ func TestHandleEvidence(t *testing.T) {
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1"}, nil)
 				storeMock.On("ListEvidence", context.Background(), "t1", 50).Return([]models.ActionDecisionRecord{
-					{DecisionID: "d1"},
+					{
+						DecisionID:    "d1",
+						RequestID:     "r1",
+						TenantID:      "t1",
+						AgentID:       "agent",
+						ToolID:        "tool",
+						ActionType:    "DATA.READ",
+						ActionRisk:    "LOW",
+						ActionSummary: "Read data",
+						Decision:      "ALLOW",
+						Reason:        "ok",
+						RuleID:        "rule_allow",
+						PolicyVersion: "p_v1",
+						RequestHash:   "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+						CreatedAt:     time.Now().UTC(),
+					},
 				}, nil)
 			},
 		},
@@ -223,6 +239,9 @@ func TestHandleEvidence(t *testing.T) {
 			err := deps.handleEvidence(ctx)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedCode, rec.Code)
+			if tc.expectedCode == http.StatusOK {
+				assertEvidenceWhitelist(t, rec.Body.Bytes())
+			}
 		})
 	}
 }
@@ -247,4 +266,58 @@ func TestHandleToolCallClassification(t *testing.T) {
 	classificationResult := classification.Classify("mock_internal", payload.HTTPMethod, payload.Path, payload.Query, payload.Headers)
 	require.Equal(t, "PAYMENT.REFUND", classificationResult.ActionType)
 	require.Equal(t, classification.RiskHigh, classificationResult.ActionRisk)
+}
+
+func assertEvidenceWhitelist(t *testing.T, body []byte) {
+	validateEvidenceContract(t, body)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+
+	require.ElementsMatch(t, []string{"tenant_id", "records"}, keys(payload))
+
+	records, ok := payload["records"].([]any)
+	require.True(t, ok)
+	require.Len(t, records, 1)
+
+	record, ok := records[0].(map[string]any)
+	require.True(t, ok)
+
+	allowed := map[string]bool{
+		"decision_id":         true,
+		"request_id":          true,
+		"tenant_id":           true,
+		"agent_id":            true,
+		"tool_id":             true,
+		"action_type":         true,
+		"action_risk":         true,
+		"action_summary":      true,
+		"decision":            true,
+		"reason":              true,
+		"rule_id":             true,
+		"policy_version":      true,
+		"request_hash":        true,
+		"response_hash":       true,
+		"approval_request_id": true,
+		"timestamp":           true,
+	}
+
+	for key := range record {
+		if !allowed[key] {
+			t.Fatalf("unexpected field in evidence export: %s", key)
+		}
+	}
+
+	serialized := string(body)
+	for _, term := range []string{"password", "authorization", "ssn", "raw", "payload", "request_body"} {
+		require.False(t, strings.Contains(serialized, term))
+	}
+}
+
+func keys(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for key := range m {
+		out = append(out, key)
+	}
+	return out
 }

@@ -50,7 +50,7 @@ type ToolCallResponse struct {
 
 type EvidenceResponse struct {
 	TenantID string                        `json:"tenant_id"`
-	Records  []models.ActionDecisionRecord `json:"records"`
+	Records  []models.ActionDecisionExport `json:"records"`
 }
 
 func RegisterRoutes(e *echo.Echo, deps Dependencies) {
@@ -292,9 +292,31 @@ func (d Dependencies) handleEvidence(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load evidence"})
 	}
 
+	exported := make([]models.ActionDecisionExport, 0, len(records))
+	for _, record := range records {
+		exported = append(exported, models.ActionDecisionExport{
+			DecisionID:        record.DecisionID,
+			RequestID:         record.RequestID,
+			TenantID:          record.TenantID,
+			AgentID:           record.AgentID,
+			ToolID:            record.ToolID,
+			ActionType:        record.ActionType,
+			ActionRisk:        record.ActionRisk,
+			ActionSummary:     record.ActionSummary,
+			Decision:          record.Decision,
+			Reason:            record.Reason,
+			RuleID:            record.RuleID,
+			PolicyVersion:     record.PolicyVersion,
+			RequestHash:       record.RequestHash,
+			ResponseHash:      record.ResponseHash,
+			ApprovalRequestID: record.ApprovalRequestID,
+			Timestamp:         record.CreatedAt,
+		})
+	}
+
 	return c.JSON(http.StatusOK, EvidenceResponse{
 		TenantID: tenant.TenantID,
-		Records:  records,
+		Records:  exported,
 	})
 }
 
