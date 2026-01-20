@@ -20,12 +20,14 @@ type StoreAPI interface {
 	GetAdminKeyByHash(ctx context.Context, keyHash string) (models.AdminKey, error)
 	GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error)
 	GetPolicy(ctx context.Context, tenantID string) (models.Policy, error)
+	GetRiskOverride(ctx context.Context, tenantID, actionType string) (string, error)
 	InsertADR(ctx context.Context, record models.ActionDecisionRecord) error
 	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
 	ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error)
 	UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error
 	UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error
 	UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error
+	UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error
 	MarkBootstrapComplete(ctx context.Context) error
 }
 
@@ -93,6 +95,19 @@ func (s *Store) GetPolicy(ctx context.Context, tenantID string) (models.Policy, 
 		return models.Policy{}, err
 	}
 	return policy, nil
+}
+
+func (s *Store) GetRiskOverride(ctx context.Context, tenantID, actionType string) (string, error) {
+	var risk string
+	query := `SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`
+	row := s.db.QueryRowContext(ctx, query, tenantID, actionType)
+	if err := row.Scan(&risk); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return risk, nil
 }
 
 func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecord) error {
@@ -229,6 +244,14 @@ func (s *Store) UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVe
 	}
 
 	return nil
+}
+
+func (s *Store) UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, action_type) DO UPDATE SET action_risk = $3, updated_at = $4`,
+		tenantID, actionType, actionRisk, time.Now().UTC())
+	return err
 }
 
 func (s *Store) ensureBootstrapAvailable(ctx context.Context) error {

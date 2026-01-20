@@ -34,11 +34,16 @@ type PolicyUpdateRequest struct {
 	PolicyVersion string `json:"policy_version"`
 }
 
+type RiskOverrideRequest struct {
+	ActionRisk string `json:"action_risk"`
+}
+
 func RegisterRoutes(e *echo.Echo, deps Dependencies) {
 	adminGroup := e.Group("/admin")
 	adminGroup.PUT("/tenants/:tenant_id/config", deps.handleTenantConfigUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/policy", deps.handlePolicyUpdate)
+	adminGroup.PUT("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
 	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
 }
 
@@ -111,6 +116,32 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
+	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+		return err
+	}
+
+	var payload RiskOverrideRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if !isValidRisk(payload.ActionRisk) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid action_risk"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	actionType := c.Param("action_type")
+	c.Set(telemetry.CtxTenantID, tenantID)
+	c.Set(telemetry.CtxActionType, actionType)
+	if err := d.Store.UpdateRiskOverride(c.Request().Context(), tenantID, actionType, payload.ActionRisk); err != nil {
+		return handleBootstrapError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
@@ -151,4 +182,13 @@ func handleBootstrapError(c *echo.Context, err error) error {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "bootstrap already completed"})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "update failed"})
+}
+
+func isValidRisk(value string) bool {
+	switch value {
+	case "LOW", "MEDIUM", "HIGH", "CRITICAL":
+		return true
+	default:
+		return false
+	}
 }

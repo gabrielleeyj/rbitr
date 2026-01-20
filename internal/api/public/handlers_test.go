@@ -58,6 +58,8 @@ func TestHandleToolCall(t *testing.T) {
 			},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
+					Return("", store.ErrNotFound)
 				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
 					return record.Decision == "DENY" && record.ActionType == "PAYMENT.REFUND"
 				})).Return(nil)
@@ -75,6 +77,8 @@ func TestHandleToolCall(t *testing.T) {
 			},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
+					Return("", store.ErrNotFound)
 				storeMock.On("InsertApprovalRequest", context.Background(), mock.Anything).Return(nil)
 				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
 			},
@@ -96,6 +100,8 @@ func TestHandleToolCall(t *testing.T) {
 			},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
+					Return("", store.ErrNotFound)
 				storeMock.On("GetTool", context.Background(), tenant.TenantID, "mock_internal").Return(tool, nil)
 				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
 			},

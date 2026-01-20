@@ -120,6 +120,12 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 
 	classificationResult := classification.Classify(toolID, payload.HTTPMethod, payload.Path, payload.Query, filteredHeaders)
 	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
+	if overrideRisk, err := d.Store.GetRiskOverride(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); err == nil {
+		classificationResult.ActionRisk = overrideRisk
+	} else if err != nil && err != store.ErrNotFound {
+		d.Metrics.ErrorsTotal.Inc()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "risk override lookup failed"})
+	}
 
 	if d.Policy == nil {
 		d.Metrics.ErrorsTotal.Inc()

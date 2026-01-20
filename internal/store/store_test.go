@@ -170,6 +170,44 @@ func TestStoreGetPolicy(t *testing.T) {
 	}
 }
 
+func TestStoreGetRiskOverride(t *testing.T) {
+	cases := []struct {
+		name      string
+		rows      *sqlmock.Rows
+		expectErr error
+	}{
+		{
+			name: "found",
+			rows: sqlmock.NewRows([]string{"action_risk"}).AddRow("HIGH"),
+		},
+		{
+			name:      "not found",
+			rows:      sqlmock.NewRows([]string{"action_risk"}),
+			expectErr: ErrNotFound,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)
+			mock.ExpectQuery(query).WithArgs("t1", "DATA.EXPORT").WillReturnRows(tc.rows)
+
+			st := New(db)
+			_, err = st.GetRiskOverride(context.Background(), "t1", "DATA.EXPORT")
+			if tc.expectErr != nil {
+				require.ErrorIs(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestStoreInsertADR(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -406,6 +444,23 @@ func TestStoreUpdatePolicy(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestStoreUpdateRiskOverride(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, action_type) DO UPDATE SET action_risk = $3, updated_at = $4`)).
+		WithArgs("t1", "DATA.EXPORT", "HIGH", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.UpdateRiskOverride(context.Background(), "t1", "DATA.EXPORT", "HIGH")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestStoreMarkBootstrapComplete(t *testing.T) {

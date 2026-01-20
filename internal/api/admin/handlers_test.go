@@ -282,6 +282,74 @@ func TestHandleBootstrapComplete(t *testing.T) {
 	}
 }
 
+func TestHandleRiskOverrideUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      RiskOverrideRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			payload:      RiskOverrideRequest{ActionRisk: "HIGH"},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid risk",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      RiskOverrideRequest{ActionRisk: "EXTREME"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  RiskOverrideRequest{ActionRisk: "HIGH"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("UpdateRiskOverride", context.Background(), "t1", "DATA.EXPORT", "HIGH").Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodPut,
+				testhelpers.MakeBody(tc.payload),
+				testhelpers.Params{Names: []string{"tenant_id", "action_type"}, Values: []string{"t1", "DATA.EXPORT"}},
+			)
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AdminKeyHeader, tc.adminKey)
+			}
+
+			var storeAPI store.StoreAPI = storeMock
+			deps := Dependencies{Store: storeAPI, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleRiskOverrideUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
 func newTestMetrics() *telemetry.Metrics {
 	return &telemetry.Metrics{
 		DecisionsTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total_admin"}, []string{"decision", "action_type"}),

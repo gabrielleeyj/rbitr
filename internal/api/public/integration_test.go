@@ -97,6 +97,10 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
 					AddRow("policy_demo", "t_demo", integrationPolicy, "p_v1", time.Now()))
 
+			mock.ExpectQuery(regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)).
+				WithArgs("t_demo", sqlmock.AnyArg()).
+				WillReturnError(sqlmock.ErrNoRows)
+
 			if tc.expectedDecision == "ALLOW" {
 				mock.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 					WithArgs("t_demo", "mock_internal").
