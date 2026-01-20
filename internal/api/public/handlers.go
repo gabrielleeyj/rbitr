@@ -65,6 +65,9 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 
 	tenantKey := c.Request().Header.Get(auth.TenantKeyHeader)
 	agentID := c.Request().Header.Get(auth.AgentIDHeader)
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
 
 	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
 	if err != nil {
@@ -72,10 +75,15 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	}
 
 	toolID := c.Param("tool_id")
+	c.Set(telemetry.CtxTenantID, tenant.TenantID)
+	c.Set(telemetry.CtxAgentID, agentID)
+	c.Set(telemetry.CtxToolID, toolID)
 	requestID := c.Request().Header.Get("X-Request-Id")
 	if requestID == "" {
 		requestID = uuid.NewString()
 	}
+	c.Set(telemetry.CtxRequestID, requestID)
+	c.Response().Header().Set("X-Request-Id", requestID)
 	idempotencyKey := c.Request().Header.Get("Idempotency-Key")
 
 	var payload ToolCallRequest
@@ -111,6 +119,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	requestHash := utils.HashCanonical(canonical)
 
 	classificationResult := classification.Classify(toolID, payload.HTTPMethod, payload.Path, payload.Query, filteredHeaders)
+	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
 
 	if d.Policy == nil {
 		d.Metrics.ErrorsTotal.Inc()
@@ -134,6 +143,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		decisionResult.RuleID = "rule_default_deny"
 		decisionResult.Reason = "Default deny"
 	}
+	c.Set(telemetry.CtxDecision, decisionResult.Decision)
 
 	decisionID := "d_" + uuid.NewString()
 	adr := models.ActionDecisionRecord{
@@ -268,6 +278,8 @@ func (d Dependencies) handleEvidence(c *echo.Context) error {
 	if err != nil {
 		return authError(c, err)
 	}
+	c.Set(telemetry.CtxTenantID, tenant.TenantID)
+	c.Set(telemetry.CtxAgentID, agentID)
 
 	requestedTenant := c.Param("tenant_id")
 	if tenant.TenantID != requestedTenant {

@@ -42,6 +42,7 @@ func main() {
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
 		Timeout: 15 * time.Second,
 	}))
+	e.Use(telemetry.RequestLogger())
 
 	e.GET("/healthz", func(c *echo.Context) error {
 		return c.NoContent(http.StatusOK)

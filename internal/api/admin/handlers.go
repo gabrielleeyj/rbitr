@@ -43,6 +43,9 @@ func RegisterRoutes(e *echo.Echo, deps Dependencies) {
 }
 
 func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
 	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
 		return err
 	}
@@ -52,6 +55,7 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
 	if err := d.Store.UpdateTenantConfig(c.Request().Context(), tenantID, payload.Name, payload.TenantKey); err != nil {
 		return handleBootstrapError(c, err)
 	}
@@ -59,6 +63,9 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
 	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
 		return err
 	}
@@ -73,6 +80,8 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 
 	tenantID := c.Param("tenant_id")
 	toolID := c.Param("tool_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
+	c.Set(telemetry.CtxToolID, toolID)
 	if err := d.Store.UpdateToolConfig(c.Request().Context(), tenantID, toolID, payload.BaseURL, payload.AuthType, payload.AuthValue); err != nil {
 		return handleBootstrapError(c, err)
 	}
@@ -80,6 +89,9 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
 	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
 		return err
 	}
@@ -92,6 +104,7 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
 	if err := d.Store.UpdatePolicy(c.Request().Context(), tenantID, payload.RegoModule, payload.PolicyVersion); err != nil {
 		return handleBootstrapError(c, err)
 	}
@@ -99,6 +112,9 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
 	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
 		return err
 	}
