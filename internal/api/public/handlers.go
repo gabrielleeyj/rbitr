@@ -2,6 +2,7 @@ package public
 
 import (
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
 	"strconv"
@@ -53,13 +54,15 @@ type EvidenceResponse struct {
 	Records  []models.ActionDecisionExport `json:"records"`
 }
 
-func RegisterRoutes(e *echo.Echo, deps Dependencies) {
+const decisionDeny = "DENY"
+
+func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	v1 := e.Group("/v1")
 	v1.POST("/tools/:tool_id/call", deps.handleToolCall)
 	v1.GET("/tenants/:tenant_id/evidence", deps.handleEvidence)
 }
 
-func (d Dependencies) handleToolCall(c *echo.Context) error {
+func (d *Dependencies) handleToolCall(c *echo.Context) error {
 	start := time.Now()
 	d.Metrics.GatewayRequests.Inc()
 
@@ -87,7 +90,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	idempotencyKey := c.Request().Header.Get("Idempotency-Key")
 
 	var payload ToolCallRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
 		d.Metrics.ErrorsTotal.Inc()
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
@@ -116,13 +119,13 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 		BodyHash:       bodyHash,
 		IdempotencyKey: idempotencyKey,
 	}
-	requestHash := utils.HashCanonical(canonical)
+	requestHash := utils.HashCanonical(&canonical)
 
 	classificationResult := classification.Classify(toolID, payload.HTTPMethod, payload.Path, payload.Query, filteredHeaders)
 	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
-	if overrideRisk, err := d.Store.GetRiskOverride(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); err == nil {
+	if overrideRisk, lookupErr := d.Store.GetRiskOverride(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
 		classificationResult.ActionRisk = overrideRisk
-	} else if err != nil && err != store.ErrNotFound {
+	} else if !errors.Is(lookupErr, store.ErrNotFound) {
 		d.Metrics.ErrorsTotal.Inc()
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "risk override lookup failed"})
 	}
@@ -146,7 +149,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	}
 	d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 	if decisionResult.Decision == "" {
-		decisionResult.Decision = "DENY"
+		decisionResult.Decision = decisionDeny
 		decisionResult.RuleID = "rule_default_deny"
 		decisionResult.Reason = "Default deny"
 	}
@@ -171,15 +174,15 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	}
 
 	switch decisionResult.Decision {
-	case "DENY":
-		d.Metrics.DecisionsTotal.WithLabelValues("DENY", classificationResult.ActionType).Inc()
+	case decisionDeny:
+		d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
 		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
 		}
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,
-			Decision:  "DENY",
+			Decision:  decisionDeny,
 			Reason:    decisionResult.Reason,
 		})
 	case "REQUIRE_APPROVAL":
@@ -233,7 +236,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 
 		forwardHeaders := make(map[string]string)
 		maps.Copy(forwardHeaders, filteredHeaders)
-		applyToolAuth(forwardHeaders, tool)
+		applyToolAuth(forwardHeaders, &tool)
 
 		toolStart := time.Now()
 		resp, err := d.Connector.Execute(c.Request().Context(), connector.Request{
@@ -270,7 +273,7 @@ func (d Dependencies) handleToolCall(c *echo.Context) error {
 	}
 }
 
-func (d Dependencies) handleEvidence(c *echo.Context) error {
+func (d *Dependencies) handleEvidence(c *echo.Context) error {
 	limit := 50
 	if l := c.QueryParam("limit"); l != "" {
 		if parsed, err := parsePositiveInt(l); err == nil && parsed > 0 {
@@ -299,7 +302,8 @@ func (d Dependencies) handleEvidence(c *echo.Context) error {
 	}
 
 	exported := make([]models.ActionDecisionExport, 0, len(records))
-	for _, record := range records {
+	for i := range records {
+		record := &records[i]
 		exported = append(exported, models.ActionDecisionExport{
 			DecisionID:        record.DecisionID,
 			RequestID:         record.RequestID,
@@ -327,10 +331,10 @@ func (d Dependencies) handleEvidence(c *echo.Context) error {
 }
 
 func authError(c *echo.Context, err error) error {
-	if err == auth.ErrUnauthorized {
+	if errors.Is(err, auth.ErrUnauthorized) {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
-	if err == auth.ErrForbidden {
+	if errors.Is(err, auth.ErrForbidden) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "auth error"})
@@ -347,7 +351,7 @@ func parsePositiveInt(value string) (int, error) {
 	return parsed, nil
 }
 
-func applyToolAuth(headers map[string]string, tool models.Tool) {
+func applyToolAuth(headers map[string]string, tool *models.Tool) {
 	if tool.AuthType == "bearer" && tool.AuthValue != "" {
 		headers["Authorization"] = "Bearer " + tool.AuthValue
 	}

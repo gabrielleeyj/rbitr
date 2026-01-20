@@ -2,7 +2,6 @@ package testhelpers
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/labstack/echo/v5"
@@ -19,13 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	ErrOopsie      = errors.New("oops")
-	ContextType    = reflect.TypeFor[context.Context]()
-	jsonReqHeaders = map[string]string{
+var ErrOopsie = errors.New("oops")
+
+func defaultJSONHeaders() map[string]string {
+	return map[string]string{
 		echo.HeaderContentType: echo.MIMEApplicationJSON,
 	}
-)
+}
 
 // NoopHandler is a noop echo handler.
 func NoopHandler(c *echo.Context) error {
@@ -82,9 +80,10 @@ func DoPOSTWithForm(h echo.HandlerFunc, values map[string]io.Reader) (*httptest.
 
 	for key, r := range values {
 		var fw io.Writer
+		var closer io.Closer
 
 		if x, ok := r.(io.Closer); ok {
-			defer x.Close()
+			closer = x
 		}
 
 		if x, ok := r.(*os.File); ok {
@@ -99,6 +98,9 @@ func DoPOSTWithForm(h echo.HandlerFunc, values map[string]io.Reader) (*httptest.
 
 		if _, err = io.Copy(fw, r); err != nil {
 			return nil, err
+		}
+		if closer != nil {
+			_ = closer.Close()
 		}
 	}
 
@@ -123,7 +125,7 @@ func DoPUT(h echo.HandlerFunc, body io.Reader) (*httptest.ResponseRecorder, erro
 
 // DoRequest makes a request with method and body.
 func DoRequest(h echo.HandlerFunc, method string, body io.Reader) (*httptest.ResponseRecorder, error) {
-	ctx, _, rec := MakeRequest(method, jsonReqHeaders, body)
+	ctx, _, rec := MakeRequest(method, defaultJSONHeaders(), body)
 	return rec, h(ctx)
 }
 
@@ -143,7 +145,7 @@ func MakeRequestWithParams(
 	body io.Reader,
 	params Params,
 ) (*echo.Context, *http.Request, *httptest.ResponseRecorder) {
-	ctx, req, rec := MakeRequest(method, jsonReqHeaders, body)
+	ctx, req, rec := MakeRequest(method, defaultJSONHeaders(), body)
 	pathValues := make(echo.PathValues, 0, len(params.Names))
 	for i, name := range params.Names {
 		if i >= len(params.Values) {
@@ -199,12 +201,12 @@ func AsJSON(v io.Reader) string {
 	return string(b)
 }
 
-// AddNewline adds a \n char to a byte array
+// AddNewline adds a \n char to a byte array.
 func AddNewline(data []byte) []byte {
 	return append(data, []byte("\n")...)
 }
 
-// WrapInBrackets adds [] around a byte array and then a \n char at the end
+// WrapInBrackets adds [] around a byte array and then a \n char at the end.
 func WrapInBrackets(data []byte) []byte {
 	ob := []byte("[")
 	ob = append(ob, data...)

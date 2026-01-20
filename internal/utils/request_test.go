@@ -37,8 +37,8 @@ func TestHashCanonicalStable(t *testing.T) {
 		BodyHash:       "sha256:abc",
 		IdempotencyKey: "idem",
 	}
-	first := HashCanonical(canonical)
-	second := HashCanonical(canonical)
+	first := HashCanonical(&canonical)
+	second := HashCanonical(&canonical)
 	if first != second {
 		t.Fatalf("expected stable hash, got %s and %s", first, second)
 	}

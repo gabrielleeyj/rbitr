@@ -13,11 +13,13 @@ type Config struct {
 }
 
 func Load() Config {
+	const defaultLimitBytes = 256 * 1024
+
 	return Config{
 		DatabaseURL:   getEnv("DATABASE_URL", "postgres://postgres@localhost:2345/rbitr?sslmode=disable"),
 		ListenAddr:    getEnv("LISTEN_ADDR", ":8080"),
-		BodyLimitSize: getEnvInt64("BODY_LIMIT_BYTES", 256*1024),
-		ResponseLimit: getEnvInt64("RESPONSE_LIMIT_BYTES", 256*1024),
+		BodyLimitSize: getEnvInt64("BODY_LIMIT_BYTES", defaultLimitBytes),
+		ResponseLimit: getEnvInt64("RESPONSE_LIMIT_BYTES", defaultLimitBytes),
 	}
 }
 

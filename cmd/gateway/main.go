@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -24,6 +25,11 @@ import (
 )
 
 func main() {
+	const (
+		requestTimeout  = 15 * time.Second
+		gracefulTimeout = 10 * time.Second
+	)
+
 	cfg := config.Load()
 
 	dbConn, err := db.Connect(cfg.DatabaseURL)
@@ -40,7 +46,7 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.Recover())
 	e.Use(middleware.ContextTimeoutWithConfig(middleware.ContextTimeoutConfig{
-		Timeout: 15 * time.Second,
+		Timeout: requestTimeout,
 	}))
 	e.Use(telemetry.RequestLogger())
 
@@ -49,14 +55,14 @@ func main() {
 	})
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
-	public.RegisterRoutes(e, public.Dependencies{
+	public.RegisterRoutes(e, &public.Dependencies{
 		Store:     st,
 		Policy:    policyEval,
 		Connector: restConnector,
 		Metrics:   metrics,
 		Config:    cfg,
 	})
-	admin.RegisterRoutes(e, admin.Dependencies{
+	admin.RegisterRoutes(e, &admin.Dependencies{
 		Store:   st,
 		Metrics: metrics,
 		Config:  cfg,
@@ -67,9 +73,9 @@ func main() {
 
 	sc := echo.StartConfig{
 		Address:         cfg.ListenAddr,
-		GracefulTimeout: 10 * time.Second,
+		GracefulTimeout: gracefulTimeout,
 	}
-	if err := sc.Start(ctx, e); err != nil && err != http.ErrServerClosed {
+	if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		e.Logger.Error("failed to start server", "error", err)
 	}
 }

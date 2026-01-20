@@ -10,12 +10,18 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
-var ErrNotFound = errors.New("not found")
-var ErrBootstrapComplete = errors.New("bootstrap already completed")
-var ErrAdminWriteLocked = errors.New("admin writes locked")
+var (
+	ErrNotFound          = errors.New("not found")
+	ErrBootstrapComplete = errors.New("bootstrap already completed")
+	ErrAdminWriteLocked  = errors.New("admin writes locked")
+)
 
-const bootstrapKey = "bootstrap_complete"
-const adminWriteLockKey = "admin_write_lock"
+const (
+	bootstrapKey      = "bootstrap_complete"
+	adminWriteLockKey = "admin_write_lock"
+	settingTrue       = "true"
+	settingFalse      = "false"
+)
 
 type StoreAPI interface {
 	GetTenantByKeyHash(ctx context.Context, keyHash string) (models.Tenant, error)
@@ -113,6 +119,7 @@ func (s *Store) GetRiskOverride(ctx context.Context, tenantID, actionType string
 	return risk, nil
 }
 
+//nolint:gocritic // API favors value records for test setup convenience.
 func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecord) error {
 	query := `INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
@@ -140,6 +147,7 @@ func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecor
 	return err
 }
 
+//nolint:gocritic // API favors value records for test setup convenience.
 func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error {
 	query := `INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
@@ -261,33 +269,18 @@ func (s *Store) UpdateRiskOverride(ctx context.Context, tenantID, actionType, ac
 	return err
 }
 
-func (s *Store) ensureBootstrapAvailable(ctx context.Context) error {
-	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, bootstrapKey)
-	var value string
-	if err := row.Scan(&value); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		return err
-	}
-	if value == "true" {
-		return ErrBootstrapComplete
-	}
-	return nil
-}
-
 func (s *Store) MarkBootstrapComplete(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = $3`,
-		bootstrapKey, "true", time.Now().UTC())
+		bootstrapKey, settingTrue, time.Now().UTC())
 	return err
 }
 
 func (s *Store) SetAdminWriteLock(ctx context.Context, locked bool) error {
-	value := "false"
+	value := settingFalse
 	if locked {
-		value = "true"
+		value = settingTrue
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
 		VALUES ($1, $2, $3)
@@ -305,7 +298,7 @@ func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
 		}
 		return err
 	}
-	if value == "true" {
+	if value == settingTrue {
 		return ErrAdminWriteLocked
 	}
 	return nil

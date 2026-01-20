@@ -36,10 +36,12 @@ type cachedPrepared struct {
 }
 
 func NewEvaluator(s store.StoreAPI) EvaluatorAPI {
+	const defaultCacheTTL = 5 * time.Minute
+
 	return &Evaluator{
 		store: s,
 		cache: make(map[string]cachedPrepared),
-		ttl:   5 * time.Minute,
+		ttl:   defaultCacheTTL,
 	}
 }
 
@@ -56,9 +58,9 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 	cached, ok := e.cache[cacheKey]
 	if ok && cached.module == policy.RegoModule && now.Before(cached.expiresAt) {
 		e.mu.RUnlock()
-		result, err := opa.EvaluatePrepared(ctx, cached.prepared, input)
-		if err != nil {
-			return Result{}, err
+		result, evalErr := opa.EvaluatePrepared(ctx, cached.prepared, input)
+		if evalErr != nil {
+			return Result{}, evalErr
 		}
 		return Result{
 			Decision:      result.Decision,

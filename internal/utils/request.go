@@ -7,18 +7,21 @@ import (
 	"strings"
 )
 
-var allowedHeaders = map[string]bool{
-	"content-type": true,
-	"accept":       true,
-	"user-agent":   true,
-	"x-request-id": true,
+func allowedHeaders() map[string]bool {
+	return map[string]bool{
+		"content-type": true,
+		"accept":       true,
+		"user-agent":   true,
+		"x-request-id": true,
+	}
 }
 
 func FilterHeaders(headers map[string]string) map[string]string {
 	filtered := make(map[string]string)
+	allowed := allowedHeaders()
 	for key, value := range headers {
 		lower := strings.ToLower(key)
-		if allowedHeaders[lower] {
+		if allowed[lower] {
 			filtered[lower] = value
 		}
 	}
@@ -26,15 +29,15 @@ func FilterHeaders(headers map[string]string) map[string]string {
 }
 
 type CanonicalRequest struct {
-	TenantID        string
-	AgentID         string
-	ToolID          string
-	Method          string
-	Path            string
-	Query           string
-	Headers         map[string]string
-	BodyHash        string
-	IdempotencyKey  string
+	TenantID       string
+	AgentID        string
+	ToolID         string
+	Method         string
+	Path           string
+	Query          string
+	Headers        map[string]string
+	BodyHash       string
+	IdempotencyKey string
 }
 
 func HashBody(body []byte) string {
@@ -42,7 +45,7 @@ func HashBody(body []byte) string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func HashCanonical(req CanonicalRequest) string {
+func HashCanonical(req *CanonicalRequest) string {
 	builder := strings.Builder{}
 	builder.WriteString(req.TenantID)
 	builder.WriteString("\n")

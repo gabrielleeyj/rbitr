@@ -12,7 +12,7 @@ import (
 
 const AdminKeyHeader = "X-Admin-Key"
 
-func AuthenticateAdmin(ctx context.Context, st store.StoreAPI, adminKey string, requiredScope string) (models.AdminKey, error) {
+func AuthenticateAdmin(ctx context.Context, st store.StoreAPI, adminKey, requiredScope string) (models.AdminKey, error) {
 	if adminKey == "" {
 		return models.AdminKey{}, ErrUnauthorized
 	}

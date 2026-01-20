@@ -10,11 +10,15 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
-var ErrUnauthorized = errors.New("unauthorized")
-var ErrForbidden = errors.New("forbidden")
+var (
+	ErrUnauthorized = errors.New("unauthorized")
+	ErrForbidden    = errors.New("forbidden")
+)
 
-const TenantKeyHeader = "X-Tenant-Key"
-const AgentIDHeader = "X-Agent-Id"
+const (
+	TenantKeyHeader = "X-Tenant-Key"
+	AgentIDHeader   = "X-Agent-Id"
+)
 
 func AuthenticateTenant(ctx context.Context, st store.StoreAPI, tenantKey, agentID string) (models.Tenant, error) {
 	if tenantKey == "" {

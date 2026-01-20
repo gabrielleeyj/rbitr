@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 type response struct {
@@ -24,8 +25,23 @@ func main() {
 		respondJSON(w, http.StatusOK, response{Status: "ok", Message: "role change queued"})
 	})
 
+	const (
+		readHeaderTimeout = 5 * time.Second
+		readTimeout       = 10 * time.Second
+		writeTimeout      = 10 * time.Second
+		idleTimeout       = 30 * time.Second
+	)
+
+	server := &http.Server{
+		Addr:              ":8090",
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+
 	log.Println("mock tool listening on :8090")
-	if err := http.ListenAndServe(":8090", nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("mock tool failed: %v", err)
 	}
 }

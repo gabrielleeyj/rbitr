@@ -16,9 +16,11 @@ type REST struct {
 }
 
 func NewREST(responseLimit int64) *REST {
+	const requestTimeout = 10 * time.Second
+
 	return &REST{
 		Client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: requestTimeout,
 		},
 		ResponseLimit: responseLimit,
 	}

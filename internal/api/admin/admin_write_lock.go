@@ -17,7 +17,7 @@ func (d Dependencies) handleAdminWriteLock(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 

@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -38,7 +39,7 @@ type RiskOverrideRequest struct {
 	ActionRisk string `json:"action_risk"`
 }
 
-func RegisterRoutes(e *echo.Echo, deps Dependencies) {
+func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup := e.Group("/admin")
 	adminGroup.PUT("/tenants/:tenant_id/config", deps.handleTenantConfigUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
@@ -52,7 +53,7 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 	var payload TenantConfigRequest
@@ -72,7 +73,7 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 	var payload ToolConfigRequest
@@ -98,7 +99,7 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 	var payload PolicyUpdateRequest
@@ -121,7 +122,7 @@ func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 
@@ -147,7 +148,7 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	if err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if err := requireAdminScope(c, d.Store); err != nil {
 		return err
 	}
 	if err := d.Store.MarkBootstrapComplete(c.Request().Context()); err != nil {
@@ -156,9 +157,9 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) error {
+func requireAdminScope(c *echo.Context, st store.StoreAPI) error {
 	adminKey := c.Request().Header.Get(auth.AdminKeyHeader)
-	if _, err := auth.AuthenticateAdmin(c.Request().Context(), st, adminKey, scope); err != nil {
+	if _, err := auth.AuthenticateAdmin(c.Request().Context(), st, adminKey, "admin:write"); err != nil {
 		_ = authError(c, err)
 		return err
 	}
@@ -166,10 +167,10 @@ func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) error {
 }
 
 func authError(c *echo.Context, err error) error {
-	if err == auth.ErrUnauthorized {
+	if errors.Is(err, auth.ErrUnauthorized) {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
-	if err == auth.ErrForbidden {
+	if errors.Is(err, auth.ErrForbidden) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "auth error"})
@@ -179,10 +180,10 @@ func handleBootstrapError(c *echo.Context, err error) error {
 	if err == nil {
 		return nil
 	}
-	if err == store.ErrBootstrapComplete {
+	if errors.Is(err, store.ErrBootstrapComplete) {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "bootstrap already completed"})
 	}
-	if err == store.ErrAdminWriteLocked {
+	if errors.Is(err, store.ErrAdminWriteLocked) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "update failed"})
