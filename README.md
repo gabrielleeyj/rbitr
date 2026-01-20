@@ -29,6 +29,17 @@ goose -dir migrations postgres "$DATABASE_URL" up
 
 - Bootstrap update endpoints are locked after `PUT /admin/bootstrap/complete`.
 
+## Structured Logging
+
+Implemented structured request logging using Echo/v5 request logger and wired context fields so logs include `request_id`, `tenant_id`, `agent_id`,
+`tool_id`, `action_type`, `decision`, and `latency_ms`.
+
+Additional Fields (TBD):
+
+- policy version
+- rule_id
+- request_hash
+
 ## Prometheus Metrics
 
 - `decisions_total{decision,action_type}`
