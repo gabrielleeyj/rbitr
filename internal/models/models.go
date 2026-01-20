@@ -33,13 +33,29 @@ type ActionDecisionRecord struct {
 	ActionRisk        string
 	ActionSummary     string
 	Decision          string
-	Reason            string
+	DecisionVersion   string
+	DecisionRisk      string
 	RuleID            string
+	RulePriority      int
+	Reasons           []DecisionReason
+	Constraints       map[string]any
+	Tags              []string
 	PolicyVersion     string
+	Reason            string
 	RequestHash       string
 	ResponseHash      string
 	ApprovalRequestID string
 	CreatedAt         time.Time
+}
+
+type DecisionRule struct {
+	ID       string `json:"id"`
+	Priority int    `json:"priority"`
+}
+
+type DecisionReason struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 type ActionDecisionExport struct {
@@ -52,9 +68,15 @@ type ActionDecisionExport struct {
 	ActionRisk        string    `json:"action_risk"`
 	ActionSummary     string    `json:"action_summary"`
 	Decision          string    `json:"decision"`
-	Reason            string    `json:"reason"`
+	DecisionVersion   string    `json:"decision_version"`
+	DecisionRisk      string    `json:"decision_risk"`
 	RuleID            string    `json:"rule_id"`
+	RulePriority      int       `json:"rule_priority"`
+	Reasons           []DecisionReason `json:"reasons"`
+	Constraints       map[string]any   `json:"constraints"`
+	Tags              []string         `json:"tags,omitempty"`
 	PolicyVersion     string    `json:"policy_version"`
+	Reason            string    `json:"reason"`
 	RequestHash       string    `json:"request_hash"`
 	ResponseHash      string    `json:"response_hash,omitempty"`
 	ApprovalRequestID string    `json:"approval_request_id,omitempty"`

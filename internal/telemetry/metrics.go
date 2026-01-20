@@ -9,6 +9,7 @@ type Metrics struct {
 	ErrorsTotal       prometheus.Counter
 	DecisionLatencyMs prometheus.Histogram
 	ToolLatencyMs     prometheus.Histogram
+	PolicyEvalInvalidTotal *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -39,6 +40,10 @@ func NewMetrics() *Metrics {
 			Help:    "Tool execution latency in ms.",
 			Buckets: prometheus.DefBuckets,
 		}),
+		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "policy_eval_invalid_total",
+			Help: "Total invalid policy outputs by reason.",
+		}, []string{"reason"}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -47,6 +52,7 @@ func NewMetrics() *Metrics {
 		m.ErrorsTotal,
 		m.DecisionLatencyMs,
 		m.ToolLatencyMs,
+		m.PolicyEvalInvalidTotal,
 	)
 	return m
 }

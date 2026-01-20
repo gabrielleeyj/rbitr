@@ -51,7 +51,6 @@ func TestStringArrayScan(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			var arr StringArray
 			err := arr.Scan(tc.input)
@@ -69,5 +68,5 @@ func TestStringArrayValue(t *testing.T) {
 	arr := StringArray{"one", "two"}
 	value, err := arr.Value()
 	require.NoError(t, err)
-	require.Equal(t, []string{"one", "two"}, value)
+	require.Equal(t, `{"one","two"}`, value)
 }

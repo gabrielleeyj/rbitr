@@ -17,6 +17,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/opa"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
@@ -55,6 +56,7 @@ type EvidenceResponse struct {
 }
 
 const decisionDeny = "DENY"
+const decisionInvalidReason = "policy output invalid"
 
 func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	v1 := e.Group("/v1")
@@ -135,42 +137,74 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluator not configured"})
 	}
 	policyInput := map[string]any{
-		"tenant_id":   tenant.TenantID,
-		"tool_id":     toolID,
-		"action_type": classificationResult.ActionType,
-		"action_risk": classificationResult.ActionRisk,
-		"method":      payload.HTTPMethod,
-		"path":        payload.Path,
+		"tenant_id":      tenant.TenantID,
+		"agent_id":       agentID,
+		"tool_id":        toolID,
+		"action_type":    classificationResult.ActionType,
+		"action_risk":    classificationResult.ActionRisk,
+		"policy_version": "",
+		"request": map[string]any{
+			"method": payload.HTTPMethod,
+			"path":   payload.Path,
+		},
 	}
 	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
 	if err != nil {
-		d.Metrics.ErrorsTotal.Inc()
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluation failed"})
+		if invalidReason, policyVersion, ok := policyInvalidReason(err); ok {
+			d.Metrics.ErrorsTotal.Inc()
+			d.Metrics.PolicyEvalInvalidTotal.WithLabelValues(invalidReason).Inc()
+			c.Logger().Error("policy output invalid",
+				"error", err,
+				"tenant_id", tenant.TenantID,
+				"agent_id", agentID,
+				"tool_id", toolID,
+				"policy_version", policyVersion,
+				"request_id", requestID,
+			)
+			decisionResult = policy.Result{
+				Version:       "invalid",
+				Decision:      decisionDeny,
+				Risk:          classificationResult.ActionRisk,
+				Rule:          models.DecisionRule{ID: "policy_invalid", Priority: 1000},
+				Reasons:       []models.DecisionReason{{Code: "POLICY_OUTPUT_INVALID", Message: decisionInvalidReason}},
+				Constraints:   map[string]any{},
+				PolicyVersion: policyVersion,
+			}
+		} else {
+			d.Metrics.ErrorsTotal.Inc()
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "policy evaluation failed"})
+		}
 	}
 	d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 	if decisionResult.Decision == "" {
 		decisionResult.Decision = decisionDeny
-		decisionResult.RuleID = "rule_default_deny"
-		decisionResult.Reason = "Default deny"
+		decisionResult.Rule.ID = "rule_default_deny"
+		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
 	c.Set(telemetry.CtxDecision, decisionResult.Decision)
 
 	decisionID := "d_" + uuid.NewString()
 	adr := models.ActionDecisionRecord{
-		DecisionID:    decisionID,
-		RequestID:     requestID,
-		TenantID:      tenant.TenantID,
-		AgentID:       agentID,
-		ToolID:        toolID,
-		ActionType:    classificationResult.ActionType,
-		ActionRisk:    classificationResult.ActionRisk,
-		ActionSummary: classificationResult.ActionSummary,
-		Decision:      decisionResult.Decision,
-		Reason:        decisionResult.Reason,
-		RuleID:        decisionResult.RuleID,
-		PolicyVersion: decisionResult.PolicyVersion,
-		RequestHash:   requestHash,
-		CreatedAt:     time.Now().UTC(),
+		DecisionID:      decisionID,
+		RequestID:       requestID,
+		TenantID:        tenant.TenantID,
+		AgentID:         agentID,
+		ToolID:          toolID,
+		ActionType:      classificationResult.ActionType,
+		ActionRisk:      classificationResult.ActionRisk,
+		ActionSummary:   classificationResult.ActionSummary,
+		Decision:        decisionResult.Decision,
+		DecisionVersion: decisionResult.Version,
+		DecisionRisk:    decisionResult.Risk,
+		RuleID:          decisionResult.Rule.ID,
+		RulePriority:    decisionResult.Rule.Priority,
+		Reasons:         decisionResult.Reasons,
+		Constraints:     decisionResult.Constraints,
+		Tags:            decisionResult.Tags,
+		PolicyVersion:   decisionResult.PolicyVersion,
+		Reason:          firstReasonMessage(decisionResult.Reasons),
+		RequestHash:     requestHash,
+		CreatedAt:       time.Now().UTC(),
 	}
 
 	switch decisionResult.Decision {
@@ -183,7 +217,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,
 			Decision:  decisionDeny,
-			Reason:    decisionResult.Reason,
+			Reason:    firstReasonMessage(decisionResult.Reasons),
 		})
 	case "REQUIRE_APPROVAL":
 		approvalID := "ar_" + uuid.NewString()
@@ -211,7 +245,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		return c.JSON(http.StatusConflict, ToolCallResponse{
 			RequestID:         requestID,
 			Decision:          "REQUIRE_APPROVAL",
-			Reason:            decisionResult.Reason,
+			Reason:            firstReasonMessage(decisionResult.Reasons),
 			ApprovalRequestID: approvalID,
 		})
 	case "ALLOW":
@@ -262,7 +296,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		return c.JSON(http.StatusOK, ToolCallResponse{
 			RequestID:   requestID,
 			Decision:    "ALLOW",
-			Reason:      decisionResult.Reason,
+			Reason:      firstReasonMessage(decisionResult.Reasons),
 			ToolStatus:  resp.Status,
 			ToolHeaders: resp.Headers,
 			ToolBody:    string(resp.Body),
@@ -314,9 +348,15 @@ func (d *Dependencies) handleEvidence(c *echo.Context) error {
 			ActionRisk:        record.ActionRisk,
 			ActionSummary:     record.ActionSummary,
 			Decision:          record.Decision,
-			Reason:            record.Reason,
+			DecisionVersion:   record.DecisionVersion,
+			DecisionRisk:      record.DecisionRisk,
 			RuleID:            record.RuleID,
+			RulePriority:      record.RulePriority,
+			Reasons:           record.Reasons,
+			Constraints:       record.Constraints,
+			Tags:              record.Tags,
 			PolicyVersion:     record.PolicyVersion,
+			Reason:            record.Reason,
 			RequestHash:       record.RequestHash,
 			ResponseHash:      record.ResponseHash,
 			ApprovalRequestID: record.ApprovalRequestID,
@@ -358,4 +398,22 @@ func applyToolAuth(headers map[string]string, tool *models.Tool) {
 	if tool.AuthType == "api_key" && tool.AuthValue != "" {
 		headers["X-Api-Key"] = tool.AuthValue
 	}
+}
+
+func firstReasonMessage(reasons []models.DecisionReason) string {
+	if len(reasons) == 0 {
+		return ""
+	}
+	return reasons[0].Message
+}
+
+func policyInvalidReason(err error) (string, string, bool) {
+	var outputErr policy.InvalidPolicyOutputError
+	if errors.As(err, &outputErr) {
+		return outputErr.Reason, outputErr.PolicyVersion, true
+	}
+	if errors.Is(err, opa.ErrInvalidPolicyOutput) {
+		return "schema_violation", "", true
+	}
+	return "", "", false
 }

@@ -7,9 +7,25 @@ import (
 
 const samplePolicy = `package rbitr.policy
 
-default decision := {"decision": "DENY", "rule_id": "rule_default", "reason": "default", "policy_version": "p_v1"}
+import rego.v1
 
-decision := {"decision": "ALLOW", "rule_id": "rule_allow", "reason": "allow", "policy_version": "p_v1"} if {
+default decision := {
+	"version": "2026-01-20",
+	"decision": "DENY",
+	"risk": "LOW",
+	"rule": {"id": "rule_default", "priority": 100},
+	"reasons": [{"code": "DEFAULT_DENY", "message": "default"}],
+	"constraints": {}
+}
+
+decision := {
+	"version": "2026-01-20",
+	"decision": "ALLOW",
+	"risk": "LOW",
+	"rule": {"id": "rule_allow", "priority": 10},
+	"reasons": [{"code": "ALLOW", "message": "allow"}],
+	"constraints": {}
+} if {
 	input.action_type == "TICKET.CREATE"
 }
 `

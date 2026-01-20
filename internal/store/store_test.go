@@ -214,12 +214,13 @@ func TestStoreInsertADR(t *testing.T) {
 
 	query := regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
-		action_summary, decision, reason, rule_id, policy_version, request_hash,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
 		response_hash, approval_request_id, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)
 	mock.ExpectExec(query).
 		WithArgs(
-			"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "reason", "rule", "p_v1", "hash", "resp", "ar1", sqlmock.AnyArg(),
+			"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "p_v1", "reason", "hash", "resp", "ar1", sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -234,8 +235,14 @@ func TestStoreInsertADR(t *testing.T) {
 		ActionRisk:        "LOW",
 		ActionSummary:     "summary",
 		Decision:          "ALLOW",
+		DecisionVersion:   "v1",
+		DecisionRisk:      "LOW",
 		Reason:            "reason",
 		RuleID:            "rule",
+		RulePriority:      10,
+		Reasons:           []models.DecisionReason{{Code: "R1", Message: "reason"}},
+		Constraints:       map[string]any{},
+		Tags:              []string{"tag"},
 		PolicyVersion:     "p_v1",
 		RequestHash:       "hash",
 		ResponseHash:      "resp",
@@ -281,7 +288,8 @@ func TestStoreListEvidence(t *testing.T) {
 	defer db.Close()
 
 	query := regexp.QuoteMeta(`SELECT decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
-		action_summary, decision, reason, rule_id, policy_version, request_hash,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
 		response_hash, approval_request_id, created_at
 		FROM rbitr.action_decisions
 		WHERE tenant_id = $1
@@ -289,9 +297,13 @@ func TestStoreListEvidence(t *testing.T) {
 		LIMIT $2`)
 	rows := sqlmock.NewRows([]string{
 		"decision_id", "request_id", "tenant_id", "agent_id", "tool_id", "action_type", "action_risk",
-		"action_summary", "decision", "reason", "rule_id", "policy_version", "request_hash",
+		"action_summary", "decision", "decision_version", "decision_risk", "rule_id", "rule_priority",
+		"reasons", "constraints", "tags", "policy_version", "reason", "request_hash",
 		"response_hash", "approval_request_id", "created_at",
-	}).AddRow("d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "reason", "rule", "p_v1", "hash", "resp", "ar1", time.Now())
+	}).AddRow(
+		"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10,
+		`[{"code":"R1","message":"reason"}]`, `{}`, "{tag}", "p_v1", "reason", "hash", "resp", "ar1", time.Now(),
+	)
 
 	mock.ExpectQuery(query).WithArgs("t1", 50).WillReturnRows(rows)
 

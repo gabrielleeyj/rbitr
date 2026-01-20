@@ -17,6 +17,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.ErrorsTotal)
 		prometheus.Unregister(metrics.DecisionLatencyMs)
 		prometheus.Unregister(metrics.ToolLatencyMs)
+		prometheus.Unregister(metrics.PolicyEvalInvalidTotal)
 	})
 
 	if metrics.DecisionsTotal == nil || metrics.GatewayRequests == nil {
@@ -29,6 +30,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.ErrorsTotal.Inc()
 	metrics.DecisionLatencyMs.Observe(5)
 	metrics.ToolLatencyMs.Observe(10)
+	metrics.PolicyEvalInvalidTotal.WithLabelValues("schema_violation").Inc()
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -42,6 +44,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		"errors_total":           false,
 		"decision_latency_ms":    false,
 		"tool_latency_ms":        false,
+		"policy_eval_invalid_total": false,
 	}
 	for _, family := range families {
 		if _, ok := expected[family.GetName()]; ok {

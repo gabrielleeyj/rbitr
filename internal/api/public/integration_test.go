@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
@@ -20,13 +22,31 @@ import (
 
 const integrationPolicy = `package rbitr.policy
 
-default decision := {"decision": "DENY", "rule_id": "rule_default", "reason": "default", "policy_version": "p_v1"}
+import rego.v1
 
-decision := {"decision": "ALLOW", "rule_id": "rule_allow_refund", "reason": "ok", "policy_version": "p_v1"} if {
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+	"version": "2026-01-20",
+	"decision": decision,
+	"risk": risk,
+	"rule": {"id": rule_id, "priority": priority},
+	"reasons": [{"code": code, "message": message}],
+	"constraints": {}
+} if { true }
+
+default decision := {
+	"version": "2026-01-20",
+	"decision": "DENY",
+	"risk": "LOW",
+	"rule": {"id": "rule_default", "priority": 100},
+	"reasons": [{"code": "DEFAULT_DENY", "message": "default"}],
+	"constraints": {}
+}
+
+decision := decision_obj("ALLOW", input.action_risk, "rule_allow_refund", 10, "ALLOW", "ok") if {
 	input.action_type == "PAYMENT.REFUND"
-} else := {"decision": "REQUIRE_APPROVAL", "rule_id": "rule_require_approval", "reason": "approval", "policy_version": "p_v1"} if {
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval", 50, "APPROVAL", "approval") if {
 	input.action_type == "ACCESS.ROLE_CHANGE"
-} else := {"decision": "DENY", "rule_id": "rule_deny_export", "reason": "no export", "policy_version": "p_v1"} if {
+} else := decision_obj("DENY", input.action_risk, "rule_deny_export", 100, "DENY_EXPORT", "no export") if {
 	input.action_type == "DATA.EXPORT"
 }
 `
@@ -71,6 +91,7 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 			db, sm, err := sqlmock.New()
 			require.NoError(t, err)
 			defer db.Close()
+			sm.MatchExpectationsInOrder(false)
 
 			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
 		FROM rbitr.tenant_keys tk
@@ -83,6 +104,10 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 				WithArgs("t_demo", sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"action_risk"}))
 
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
+				WithArgs("t_demo").
+				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
+					AddRow("policy_demo", "t_demo", integrationPolicy, "p_v1", time.Now()))
 			sm.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
 				WithArgs("t_demo").
 				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
@@ -116,9 +141,10 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 
 			sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
-		action_summary, decision, reason, rule_id, policy_version, request_hash,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
 		response_hash, approval_request_id, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`)).
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)).
 				WithArgs(
 					sqlmock.AnyArg(),
 					sqlmock.AnyArg(),
@@ -136,11 +162,24 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 					sqlmock.AnyArg(),
 					sqlmock.AnyArg(),
 					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
+					sqlmock.AnyArg(),
 				).
 				WillReturnResult(sqlmock.NewResult(1, 1))
 
 			storeAPI := store.New(db)
 			policyEval := policy.NewEvaluator(storeAPI)
+			classificationResult := classification.Classify("mock_internal", tc.method, tc.path, "", map[string]string{"Content-Type": "application/json"})
+			if _, evalErr := policyEval.Evaluate(context.Background(), "t_demo", map[string]any{
+				"action_type": classificationResult.ActionType,
+				"action_risk": classificationResult.ActionRisk,
+			}); evalErr != nil {
+				t.Fatalf("policy eval preflight failed: %v", evalErr)
+			}
 			connectorMock := connector.NewMockConnector(t)
 			if tc.expectToolCall {
 				connectorMock.On("Execute", mock.Anything, mock.MatchedBy(func(req connector.Request) bool {

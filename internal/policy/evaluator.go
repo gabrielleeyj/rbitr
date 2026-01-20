@@ -2,20 +2,44 @@ package policy
 
 import (
 	"context"
+	"errors"
+	"maps"
 	"sync"
 	"time"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 
+	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
 type Result struct {
+	Version       string
 	Decision      string
-	RuleID        string
+	Risk          string
+	Rule          models.DecisionRule
+	Reasons       []models.DecisionReason
+	Constraints   map[string]any
+	Tags          []string
+	PolicyVersion string
+}
+
+type InvalidPolicyOutputError struct {
 	Reason        string
 	PolicyVersion string
+	Err           error
+}
+
+func (e InvalidPolicyOutputError) Error() string {
+	if e.Err == nil {
+		return "invalid policy output"
+	}
+	return e.Err.Error()
+}
+
+func (e InvalidPolicyOutputError) Unwrap() error {
+	return e.Err
 }
 
 type EvaluatorAPI interface {
@@ -51,6 +75,10 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 		return Result{}, err
 	}
 
+	inputWithVersion := make(map[string]any, len(input)+1)
+	maps.Copy(inputWithVersion, input)
+	inputWithVersion["policy_version"] = policy.PolicyVersion
+
 	cacheKey := tenantID + ":" + policy.PolicyVersion
 	now := time.Now()
 
@@ -58,15 +86,19 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 	cached, ok := e.cache[cacheKey]
 	if ok && cached.module == policy.RegoModule && now.Before(cached.expiresAt) {
 		e.mu.RUnlock()
-		result, evalErr := opa.EvaluatePrepared(ctx, cached.prepared, input)
+		result, evalErr := opa.EvaluatePrepared(ctx, cached.prepared, inputWithVersion)
 		if evalErr != nil {
-			return Result{}, evalErr
+			return Result{}, wrapPolicyOutputError(evalErr, policy.PolicyVersion)
 		}
 		return Result{
+			Version:       result.Version,
 			Decision:      result.Decision,
-			RuleID:        result.RuleID,
-			Reason:        result.Reason,
-			PolicyVersion: result.PolicyVersion,
+			Risk:          result.Risk,
+			Rule:          models.DecisionRule{ID: result.Rule.ID, Priority: result.Rule.Priority},
+			Reasons:       toDecisionReasons(result.Reasons),
+			Constraints:   result.Constraints,
+			Tags:          result.Tags,
+			PolicyVersion: policy.PolicyVersion,
 		}, nil
 	}
 	e.mu.RUnlock()
@@ -84,15 +116,49 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 	}
 	e.mu.Unlock()
 
-	result, err := opa.EvaluatePrepared(ctx, prepared, input)
+	result, err := opa.EvaluatePrepared(ctx, prepared, inputWithVersion)
 	if err != nil {
-		return Result{}, err
+		return Result{}, wrapPolicyOutputError(err, policy.PolicyVersion)
 	}
 
 	return Result{
+		Version:       result.Version,
 		Decision:      result.Decision,
-		RuleID:        result.RuleID,
-		Reason:        result.Reason,
-		PolicyVersion: result.PolicyVersion,
+		Risk:          result.Risk,
+		Rule:          models.DecisionRule{ID: result.Rule.ID, Priority: result.Rule.Priority},
+		Reasons:       toDecisionReasons(result.Reasons),
+		Constraints:   result.Constraints,
+		Tags:          result.Tags,
+		PolicyVersion: policy.PolicyVersion,
 	}, nil
+}
+
+func toDecisionReasons(reasons []opa.Reason) []models.DecisionReason {
+	if len(reasons) == 0 {
+		return nil
+	}
+	out := make([]models.DecisionReason, 0, len(reasons))
+	for _, reason := range reasons {
+		out = append(out, models.DecisionReason{Code: reason.Code, Message: reason.Message})
+	}
+	return out
+}
+
+func wrapPolicyOutputError(err error, policyVersion string) error {
+	var outputErr opa.PolicyOutputError
+	if errors.As(err, &outputErr) {
+		return InvalidPolicyOutputError{
+			Reason:        outputErr.Reason,
+			PolicyVersion: policyVersion,
+			Err:           err,
+		}
+	}
+	if errors.Is(err, opa.ErrInvalidPolicyOutput) {
+		return InvalidPolicyOutputError{
+			Reason:        "schema_violation",
+			PolicyVersion: policyVersion,
+			Err:           err,
+		}
+	}
+	return err
 }

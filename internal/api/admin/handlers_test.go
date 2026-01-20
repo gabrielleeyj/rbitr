@@ -445,6 +445,7 @@ func newTestMetrics() *telemetry.Metrics {
 		ErrorsTotal:       prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total_admin"}),
 		DecisionLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
 		ToolLatencyMs:     prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
+		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total_admin"}, []string{"reason"}),
 	}
 }
 

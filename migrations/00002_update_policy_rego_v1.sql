@@ -3,12 +3,16 @@ UPDATE rbitr.policies
 SET rego_module = $$
 package rbitr.policy
 
-default decision := {
-    "decision": "DENY",
-    "rule_id": "rule_default_deny",
-    "reason": "Default deny",
-    "policy_version": "p_v1"
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {}
 }
+
+default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
 
 allow_actions := {
     "TICKET.CREATE",
@@ -32,27 +36,14 @@ deny_actions := {
     "CRM.DELETE"
 }
 
-decision := {
-    "decision": "ALLOW",
-    "rule_id": "rule_allow_basic_actions_v1",
-    "reason": "Policy: allow basic actions",
-    "policy_version": "p_v1"
-} if {
-    allow_actions[input.action_type]
-} else := {
-    "decision": "REQUIRE_APPROVAL",
-    "rule_id": "rule_require_approval_v1",
-    "reason": "Policy: approval required",
-    "policy_version": "p_v1"
-} if {
-    require_approval_actions[input.action_type]
-} else := {
-    "decision": "DENY",
-    "rule_id": "rule_deny_sensitive_v1",
-    "reason": "Policy: deny sensitive action",
-    "policy_version": "p_v1"
-} if {
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
     deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+    input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
 }
 $$
 WHERE policy_id = 'policy_demo' AND tenant_id = 't_demo';
@@ -62,12 +53,16 @@ UPDATE rbitr.policies
 SET rego_module = $$
 package rbitr.policy
 
-default decision = {
-    "decision": "DENY",
-    "rule_id": "rule_default_deny",
-    "reason": "Default deny",
-    "policy_version": "p_v1"
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {}
 }
+
+default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
 
 allow_actions := {
     "TICKET.CREATE",
@@ -91,27 +86,14 @@ deny_actions := {
     "CRM.DELETE"
 }
 
-decision := {
-    "decision": "ALLOW",
-    "rule_id": "rule_allow_basic_actions_v1",
-    "reason": "Policy: allow basic actions",
-    "policy_version": "p_v1"
-} {
-    allow_actions[input.action_type]
-} else := {
-    "decision": "REQUIRE_APPROVAL",
-    "rule_id": "rule_require_approval_v1",
-    "reason": "Policy: approval required",
-    "policy_version": "p_v1"
-} {
-    require_approval_actions[input.action_type]
-} else := {
-    "decision": "DENY",
-    "rule_id": "rule_deny_sensitive_v1",
-    "reason": "Policy: deny sensitive action",
-    "policy_version": "p_v1"
-} {
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
     deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+    input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
 }
 $$
 WHERE policy_id = 'policy_demo' AND tenant_id = 't_demo';

@@ -28,7 +28,16 @@ func (s *StringArray) Scan(src any) error {
 }
 
 func (s StringArray) Value() (driver.Value, error) {
-	return driver.Value([]string(s)), nil
+	if len(s) == 0 {
+		return "{}", nil
+	}
+	escaped := make([]string, 0, len(s))
+	for _, item := range s {
+		item = strings.ReplaceAll(item, `\`, `\\`)
+		item = strings.ReplaceAll(item, `"`, `\"`)
+		escaped = append(escaped, `"`+item+`"`)
+	}
+	return "{" + strings.Join(escaped, ",") + "}", nil
 }
 
 func (s *StringArray) parseTextArray(input string) error {

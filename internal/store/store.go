@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -121,12 +122,23 @@ func (s *Store) GetRiskOverride(ctx context.Context, tenantID, actionType string
 
 //nolint:gocritic // API favors value records for test setup convenience.
 func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecord) error {
+	reasonsJSON, err := json.Marshal(record.Reasons)
+	if err != nil {
+		return err
+	}
+	constraintsJSON, err := json.Marshal(record.Constraints)
+	if err != nil {
+		return err
+	}
+	tags := StringArray(record.Tags)
+
 	query := `INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
-		action_summary, decision, reason, rule_id, policy_version, request_hash,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
 		response_hash, approval_request_id, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`
-	_, err := s.db.ExecContext(ctx, query,
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
+	_, err = s.db.ExecContext(ctx, query,
 		record.DecisionID,
 		record.RequestID,
 		record.TenantID,
@@ -136,9 +148,15 @@ func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecor
 		record.ActionRisk,
 		record.ActionSummary,
 		record.Decision,
-		record.Reason,
+		record.DecisionVersion,
+		record.DecisionRisk,
 		record.RuleID,
+		record.RulePriority,
+		reasonsJSON,
+		constraintsJSON,
+		tags,
 		record.PolicyVersion,
+		record.Reason,
 		record.RequestHash,
 		record.ResponseHash,
 		record.ApprovalRequestID,
@@ -169,7 +187,8 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 
 func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error) {
 	query := `SELECT decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
-		action_summary, decision, reason, rule_id, policy_version, request_hash,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
 		response_hash, approval_request_id, created_at
 		FROM rbitr.action_decisions
 		WHERE tenant_id = $1
@@ -184,6 +203,9 @@ func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([
 	var records []models.ActionDecisionRecord
 	for rows.Next() {
 		var record models.ActionDecisionRecord
+		var reasonsJSON []byte
+		var constraintsJSON []byte
+		var tags StringArray
 		if err := rows.Scan(
 			&record.DecisionID,
 			&record.RequestID,
@@ -194,9 +216,15 @@ func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([
 			&record.ActionRisk,
 			&record.ActionSummary,
 			&record.Decision,
-			&record.Reason,
+			&record.DecisionVersion,
+			&record.DecisionRisk,
 			&record.RuleID,
+			&record.RulePriority,
+			&reasonsJSON,
+			&constraintsJSON,
+			&tags,
 			&record.PolicyVersion,
+			&record.Reason,
 			&record.RequestHash,
 			&record.ResponseHash,
 			&record.ApprovalRequestID,
@@ -204,6 +232,13 @@ func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([
 		); err != nil {
 			return nil, err
 		}
+		if err := json.Unmarshal(reasonsJSON, &record.Reasons); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(constraintsJSON, &record.Constraints); err != nil {
+			return nil, err
+		}
+		record.Tags = []string(tags)
 		records = append(records, record)
 	}
 	return records, rows.Err()
