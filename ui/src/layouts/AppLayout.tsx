@@ -1,0 +1,55 @@
+import { Outlet } from "react-router-dom";
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { Separator } from "@/components/ui/separator";
+import { AppNav } from "@/components/navigation/AppNav";
+import { TopBar } from "@/components/navigation/TopBar";
+import { AgentgatewayLogo } from "@/components/agentgateway-logo";
+import { useAdminKey } from "@/lib/auth";
+
+export function AppLayout() {
+  const { clearAdminKey } = useAdminKey();
+
+  return (
+    <SidebarProvider defaultOpen>
+      <Sidebar>
+        <SidebarHeader className="border-b">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <AgentgatewayLogo className="h-8 w-8" />
+            <div>
+              <div className="text-base font-semibold tracking-tight">rbitr</div>
+              <div className="text-xs text-muted-foreground">control plane</div>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <AppNav />
+        </SidebarContent>
+        <SidebarFooter className="border-t">
+          <div className="flex flex-col gap-2 p-3">
+            <Button variant="outline" size="sm" onClick={clearAdminKey}>
+              Clear admin key
+            </Button>
+            <ThemeToggle />
+          </div>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset>
+        <TopBar />
+        <Separator />
+        <main className="px-6 py-6">
+          <Outlet />
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
