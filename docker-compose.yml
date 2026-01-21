@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rbitr
+    ports:
+      - "2345:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rbitr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: golang:1.25.5
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/rbitr?sslmode=disable
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "go install github.com/pressly/goose/v3/cmd/goose@v3.25.0 && goose -dir /migrations postgres \"$DATABASE_URL\" up"
+      ]
+
+  gateway:
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/rbitr?sslmode=disable
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
+
+  mocktool:
+    build:
+      context: .
+      dockerfile: Dockerfile.mocktool
+    ports:
+      - "8090:8090"

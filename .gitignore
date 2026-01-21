@@ -63,6 +63,7 @@ admin-api
 *.yaml
 *.yml
 !config/ap-southeast-1/dtone/example.config.yaml
+!docker-compose.yml
 
 # Test coverage related files
 junit.xml

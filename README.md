@@ -25,14 +25,43 @@ What it focuses on:
 
 ## Getting Started (Dev)
 
+### Option A: Docker compose (API + UI + Postgres + migrate)
+
+```bash
+docker compose up --build
+```
+
+- Gateway: http://localhost:8080
+- UI: http://localhost:5173
+- Postgres: localhost:2345
+
+Demo admin key: `admin_demo_key`
+
+If you want tool calls to hit the mock tool inside compose, update the tool base URL:
+
+```bash
+curl -sS -X PUT "http://localhost:8080/admin/tenants/t_demo/tools/mock_internal" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer admin_demo_key" \
+-d '{"base_url":"http://mocktool:8090","auth_type":"","auth_value":""}'
+```
+
+### Option B: Local binaries
+
 1. Run migrations:
 
 ```bash
-export DATABASE_URL=postgres://postgres@localhost:2345/rbitr?sslmode=disable \
+export DATABASE_URL=postgres://postgres@localhost:2345/rbitr?sslmode=disable
 goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
-2. Start mock tool and gateway: go run `./cmd/mocktool` and `go run ./cmd/gateway`
+2. Start mock tool and gateway:
+
+```bash
+go run ./cmd/mocktool
+go run ./cmd/gateway
+```
+
 3. Run tests: `go test ./...`
 
 ## Information
@@ -54,7 +83,8 @@ goose -dir migrations postgres "$DATABASE_URL" up
   - tools mock_internal (`http://localhost:8090`)
   - jira (`http://localhost:8081`) in `migrations/00001_init.sql`.
 
-- Bootstrap update endpoints are locked after `PUT /admin/bootstrap/complete`.
+- Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
+- Admin auth accepts `Authorization: Bearer <admin_key>` (preferred) or `X-Admin-Key` (legacy).
 
 ## Structured Logging
 
@@ -75,6 +105,7 @@ Additional Fields (TBD):
 - `errors_total`
 - `decision_latency_ms`
 - `tool_latency_ms`
+- `policy_eval_invalid_total{reason}`
 
 ## Simulation
 
