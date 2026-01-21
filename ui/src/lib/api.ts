@@ -249,8 +249,9 @@ export function updateTool(
   });
 }
 
-export function listRiskOverrides(config: ApiConfig, tenantId: string): Promise<RiskOverride[]> {
-  return request<RiskOverride[]>(`/admin/tenants/${tenantId}/risk-overrides`, config);
+export async function listRiskOverrides(config: ApiConfig, tenantId: string): Promise<RiskOverride[]> {
+  const data = await request<RiskOverride[] | null>(`/admin/tenants/${tenantId}/risk-overrides`, config);
+  return data ?? [];
 }
 
 export function upsertRiskOverride(
@@ -286,14 +287,16 @@ export function setAdminWriteLock(config: ApiConfig, locked: boolean): Promise<v
   });
 }
 
-export function listAuditEvents(
+export async function listAuditEvents(
   config: ApiConfig,
   tenantId: string,
   limit = 50
 ): Promise<AuditEvent[]> {
-  return request<AuditEvent[]>(`/admin/tenants/${tenantId}/audit?limit=${limit}`, config);
+  const data = await request<AuditEvent[] | null>(`/admin/tenants/${tenantId}/audit?limit=${limit}`, config);
+  return data ?? [];
 }
 
-export function listAuditEventsAll(config: ApiConfig, limit = 50): Promise<AuditEvent[]> {
-  return request<AuditEvent[]>(`/admin/audit?limit=${limit}`, config);
+export async function listAuditEventsAll(config: ApiConfig, limit = 50): Promise<AuditEvent[]> {
+  const data = await request<AuditEvent[] | null>(`/admin/audit?limit=${limit}`, config);
+  return data ?? [];
 }

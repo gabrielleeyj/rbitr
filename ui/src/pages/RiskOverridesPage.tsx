@@ -26,7 +26,7 @@ export function RiskOverridesPage() {
   const refresh = async () => {
     if (!adminKey || !tenantId) return;
     const data = await listRiskOverrides({ adminKey }, tenantId);
-    setOverrides(data);
+    setOverrides(data ?? []);
   };
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function RiskOverridesPage() {
       try {
         const data = await listRiskOverrides({ adminKey }, tenantId);
         if (!mounted) return;
-        setOverrides(data);
+        setOverrides(data ?? []);
         setLoading(false);
       } catch (err) {
         if (!mounted) return;
