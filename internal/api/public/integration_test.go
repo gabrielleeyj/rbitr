@@ -104,14 +104,24 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 				WithArgs("t_demo", sqlmock.AnyArg()).
 				WillReturnRows(sqlmock.NewRows([]string{"action_risk"}))
 
-			sm.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT pv.policy_version, pv.tenant_id, pv.rego_module, pv.created_at
+		FROM rbitr.tenant_config tc
+		JOIN rbitr.policy_versions pv
+			ON pv.tenant_id = tc.tenant_id
+			AND pv.policy_version = tc.active_policy_version
+		WHERE tc.tenant_id = $1`)).
 				WithArgs("t_demo").
-				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
-					AddRow("policy_demo", "t_demo", integrationPolicy, "p_v1", time.Now()))
-			sm.ExpectQuery(regexp.QuoteMeta(`SELECT policy_id, tenant_id, rego_module, policy_version, updated_at FROM rbitr.policies WHERE tenant_id = $1`)).
+				WillReturnRows(sqlmock.NewRows([]string{"policy_version", "tenant_id", "rego_module", "created_at"}).
+					AddRow("p_v1", "t_demo", integrationPolicy, time.Now()))
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT pv.policy_version, pv.tenant_id, pv.rego_module, pv.created_at
+		FROM rbitr.tenant_config tc
+		JOIN rbitr.policy_versions pv
+			ON pv.tenant_id = tc.tenant_id
+			AND pv.policy_version = tc.active_policy_version
+		WHERE tc.tenant_id = $1`)).
 				WithArgs("t_demo").
-				WillReturnRows(sqlmock.NewRows([]string{"policy_id", "tenant_id", "rego_module", "policy_version", "updated_at"}).
-					AddRow("policy_demo", "t_demo", integrationPolicy, "p_v1", time.Now()))
+				WillReturnRows(sqlmock.NewRows([]string{"policy_version", "tenant_id", "rego_module", "created_at"}).
+					AddRow("p_v1", "t_demo", integrationPolicy, time.Now()))
 
 			if tc.expectedDecision == "ALLOW" {
 				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).

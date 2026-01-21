@@ -1,10 +1,20 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Tenant struct {
 	TenantID string
 	Name     string
+}
+
+type TenantSummary struct {
+	TenantID            string
+	Name                string
+	ActivePolicyVersion string
+	ToolCount           int
 }
 
 type Tool struct {
@@ -15,12 +25,52 @@ type Tool struct {
 	AuthValue string
 }
 
+type RiskOverride struct {
+	TenantID   string
+	ActionType string
+	ActionRisk string
+	UpdatedAt  time.Time
+}
+
 type Policy struct {
 	PolicyID      string
 	TenantID      string
 	RegoModule    string
 	PolicyVersion string
 	UpdatedAt     time.Time
+}
+
+type PolicyVersion struct {
+	TenantID      string
+	PolicyVersion string
+	RegoModule    string
+	CreatedAt     time.Time
+	CreatedBy     string
+	Notes         string
+}
+
+type TenantConfig struct {
+	TenantID            string
+	ActivePolicyVersion string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type AdminAuditEvent struct {
+	AuditEventID string
+	TenantID     string
+	ActorType    string
+	ActorID      string
+	ActorDisplay string
+	Action       string
+	ResourceType string
+	ResourceID   string
+	Before       json.RawMessage
+	After        json.RawMessage
+	RequestID    string
+	IP           string
+	UserAgent    string
+	CreatedAt    time.Time
 }
 
 type ActionDecisionRecord struct {
@@ -59,28 +109,28 @@ type DecisionReason struct {
 }
 
 type ActionDecisionExport struct {
-	DecisionID        string    `json:"decision_id"`
-	RequestID         string    `json:"request_id"`
-	TenantID          string    `json:"tenant_id"`
-	AgentID           string    `json:"agent_id"`
-	ToolID            string    `json:"tool_id"`
-	ActionType        string    `json:"action_type"`
-	ActionRisk        string    `json:"action_risk"`
-	ActionSummary     string    `json:"action_summary"`
-	Decision          string    `json:"decision"`
-	DecisionVersion   string    `json:"decision_version"`
-	DecisionRisk      string    `json:"decision_risk"`
-	RuleID            string    `json:"rule_id"`
-	RulePriority      int       `json:"rule_priority"`
+	DecisionID        string           `json:"decision_id"`
+	RequestID         string           `json:"request_id"`
+	TenantID          string           `json:"tenant_id"`
+	AgentID           string           `json:"agent_id"`
+	ToolID            string           `json:"tool_id"`
+	ActionType        string           `json:"action_type"`
+	ActionRisk        string           `json:"action_risk"`
+	ActionSummary     string           `json:"action_summary"`
+	Decision          string           `json:"decision"`
+	DecisionVersion   string           `json:"decision_version"`
+	DecisionRisk      string           `json:"decision_risk"`
+	RuleID            string           `json:"rule_id"`
+	RulePriority      int              `json:"rule_priority"`
 	Reasons           []DecisionReason `json:"reasons"`
 	Constraints       map[string]any   `json:"constraints"`
 	Tags              []string         `json:"tags,omitempty"`
-	PolicyVersion     string    `json:"policy_version"`
-	Reason            string    `json:"reason"`
-	RequestHash       string    `json:"request_hash"`
-	ResponseHash      string    `json:"response_hash,omitempty"`
-	ApprovalRequestID string    `json:"approval_request_id,omitempty"`
-	Timestamp         time.Time `json:"timestamp"`
+	PolicyVersion     string           `json:"policy_version"`
+	Reason            string           `json:"reason"`
+	RequestHash       string           `json:"request_hash"`
+	ResponseHash      string           `json:"response_hash,omitempty"`
+	ApprovalRequestID string           `json:"approval_request_id,omitempty"`
+	Timestamp         time.Time        `json:"timestamp"`
 }
 
 type ApprovalRequest struct {

@@ -43,7 +43,11 @@ func TestHandleTenantConfigUpdate(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:write"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenant", context.Background(), "t1").
+					Return(models.TenantSummary{TenantID: "t1", Name: "Tenant"}, nil)
+				storeMock.On("GetTenantKeyHash", context.Background(), "t1").Return("hash", nil)
 				storeMock.On("UpdateTenantConfig", context.Background(), "t1", "Tenant", "newkey").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -52,6 +56,9 @@ func TestHandleTenantConfigUpdate(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:write"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenant", context.Background(), "t1").
+					Return(models.TenantSummary{TenantID: "t1", Name: "Tenant"}, nil)
+				storeMock.On("GetTenantKeyHash", context.Background(), "t1").Return("hash", nil)
 				storeMock.On("UpdateTenantConfig", context.Background(), "t1", "Tenant", "newkey").Return(store.ErrAdminWriteLocked)
 			},
 			expectedCode: http.StatusForbidden,
@@ -121,7 +128,10 @@ func TestHandleToolConfigUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  ToolConfigRequest{BaseURL: "http://example", AuthType: "bearer", AuthValue: "token"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTool", context.Background(), "t1", "tool").
+					Return(models.Tool{ToolID: "tool", TenantID: "t1", BaseURL: "old", AuthType: "bearer", AuthValue: "old"}, nil)
 				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -131,6 +141,8 @@ func TestHandleToolConfigUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  ToolConfigRequest{BaseURL: "http://example", AuthType: "bearer", AuthValue: "token"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTool", context.Background(), "t1", "tool").
+					Return(models.Tool{ToolID: "tool", TenantID: "t1", BaseURL: "old", AuthType: "bearer", AuthValue: "old"}, nil)
 				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").Return(store.ErrAdminWriteLocked)
 			},
 			expectedCode: http.StatusForbidden,
@@ -199,7 +211,12 @@ func TestHandlePolicyUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  PolicyUpdateRequest{RegoModule: "module", PolicyVersion: "p_v2"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").
+					Return(models.TenantConfig{TenantID: "t1", ActivePolicyVersion: "p_old"}, nil).Once()
+				storeMock.On("GetTenantConfig", context.Background(), "t1").
+					Return(models.TenantConfig{TenantID: "t1", ActivePolicyVersion: "p_v2"}, nil).Once()
 				storeMock.On("UpdatePolicy", context.Background(), "t1", "module", "p_v2").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -209,6 +226,8 @@ func TestHandlePolicyUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  PolicyUpdateRequest{RegoModule: "module", PolicyVersion: "p_v2"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").
+					Return(models.TenantConfig{TenantID: "t1", ActivePolicyVersion: "p_old"}, nil)
 				storeMock.On("UpdatePolicy", context.Background(), "t1", "module", "p_v2").Return(store.ErrAdminWriteLocked)
 			},
 			expectedCode: http.StatusForbidden,
@@ -267,7 +286,9 @@ func TestHandleBootstrapComplete(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:write"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetBootstrapComplete", context.Background()).Return(false, nil)
 				storeMock.On("MarkBootstrapComplete", context.Background()).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -324,7 +345,9 @@ func TestHandleAdminWriteLock(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  AdminWriteLockRequest{Locked: true},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
 				storeMock.On("SetAdminWriteLock", context.Background(), true).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -388,7 +411,9 @@ func TestHandleRiskOverrideUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  RiskOverrideRequest{ActionRisk: "HIGH"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetRiskOverride", context.Background(), "t1", "DATA.EXPORT").Return("LOW", nil)
 				storeMock.On("UpdateRiskOverride", context.Background(), "t1", "DATA.EXPORT", "HIGH").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
 		},
@@ -398,6 +423,7 @@ func TestHandleRiskOverrideUpdate(t *testing.T) {
 			scopes:   []string{"admin:write"},
 			payload:  RiskOverrideRequest{ActionRisk: "HIGH"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetRiskOverride", context.Background(), "t1", "DATA.EXPORT").Return("LOW", nil)
 				storeMock.On("UpdateRiskOverride", context.Background(), "t1", "DATA.EXPORT", "HIGH").Return(store.ErrAdminWriteLocked)
 			},
 			expectedCode: http.StatusForbidden,
@@ -439,12 +465,12 @@ func TestHandleRiskOverrideUpdate(t *testing.T) {
 
 func newTestMetrics() *telemetry.Metrics {
 	return &telemetry.Metrics{
-		DecisionsTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total_admin"}, []string{"decision", "action_type"}),
-		GatewayRequests:   prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total_admin"}),
-		ToolExecTotal:     prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total_admin"}),
-		ErrorsTotal:       prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total_admin"}),
-		DecisionLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
-		ToolLatencyMs:     prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
+		DecisionsTotal:         prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total_admin"}, []string{"decision", "action_type"}),
+		GatewayRequests:        prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total_admin"}),
+		ToolExecTotal:          prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total_admin"}),
+		ErrorsTotal:            prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total_admin"}),
+		DecisionLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
+		ToolLatencyMs:          prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
 		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total_admin"}, []string{"reason"}),
 	}
 }

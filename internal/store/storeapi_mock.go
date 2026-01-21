@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	mock "github.com/stretchr/testify/mock"
@@ -36,6 +37,150 @@ type MockStoreAPI_Expecter struct {
 
 func (_m *MockStoreAPI) EXPECT() *MockStoreAPI_Expecter {
 	return &MockStoreAPI_Expecter{mock: &_m.Mock}
+}
+
+// CreatePolicyVersion provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CreatePolicyVersion(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error {
+	ret := _mock.Called(ctx, tenantID, policyVersion, regoModule, createdBy, notes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreatePolicyVersion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, policyVersion, regoModule, createdBy, notes)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_CreatePolicyVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePolicyVersion'
+type MockStoreAPI_CreatePolicyVersion_Call struct {
+	*mock.Call
+}
+
+// CreatePolicyVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - policyVersion string
+//   - regoModule string
+//   - createdBy string
+//   - notes string
+func (_e *MockStoreAPI_Expecter) CreatePolicyVersion(ctx interface{}, tenantID interface{}, policyVersion interface{}, regoModule interface{}, createdBy interface{}, notes interface{}) *MockStoreAPI_CreatePolicyVersion_Call {
+	return &MockStoreAPI_CreatePolicyVersion_Call{Call: _e.mock.On("CreatePolicyVersion", ctx, tenantID, policyVersion, regoModule, createdBy, notes)}
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersion_Call) Run(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string)) *MockStoreAPI_CreatePolicyVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersion_Call) Return(err error) *MockStoreAPI_CreatePolicyVersion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error) *MockStoreAPI_CreatePolicyVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteRiskOverride provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) DeleteRiskOverride(ctx context.Context, tenantID string, actionType string) error {
+	ret := _mock.Called(ctx, tenantID, actionType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteRiskOverride")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, actionType)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_DeleteRiskOverride_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteRiskOverride'
+type MockStoreAPI_DeleteRiskOverride_Call struct {
+	*mock.Call
+}
+
+// DeleteRiskOverride is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - actionType string
+func (_e *MockStoreAPI_Expecter) DeleteRiskOverride(ctx interface{}, tenantID interface{}, actionType interface{}) *MockStoreAPI_DeleteRiskOverride_Call {
+	return &MockStoreAPI_DeleteRiskOverride_Call{Call: _e.mock.On("DeleteRiskOverride", ctx, tenantID, actionType)}
+}
+
+func (_c *MockStoreAPI_DeleteRiskOverride_Call) Run(run func(ctx context.Context, tenantID string, actionType string)) *MockStoreAPI_DeleteRiskOverride_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteRiskOverride_Call) Return(err error) *MockStoreAPI_DeleteRiskOverride_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteRiskOverride_Call) RunAndReturn(run func(ctx context.Context, tenantID string, actionType string) error) *MockStoreAPI_DeleteRiskOverride_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // GetAdminKeyByHash provides a mock function for the type MockStoreAPI
@@ -104,6 +249,126 @@ func (_c *MockStoreAPI_GetAdminKeyByHash_Call) RunAndReturn(run func(ctx context
 	return _c
 }
 
+// GetAdminWriteLock provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetAdminWriteLock(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAdminWriteLock")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetAdminWriteLock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAdminWriteLock'
+type MockStoreAPI_GetAdminWriteLock_Call struct {
+	*mock.Call
+}
+
+// GetAdminWriteLock is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetAdminWriteLock(ctx interface{}) *MockStoreAPI_GetAdminWriteLock_Call {
+	return &MockStoreAPI_GetAdminWriteLock_Call{Call: _e.mock.On("GetAdminWriteLock", ctx)}
+}
+
+func (_c *MockStoreAPI_GetAdminWriteLock_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetAdminWriteLock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetAdminWriteLock_Call) Return(b bool, err error) *MockStoreAPI_GetAdminWriteLock_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetAdminWriteLock_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetAdminWriteLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBootstrapComplete provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetBootstrapComplete(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBootstrapComplete")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetBootstrapComplete_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBootstrapComplete'
+type MockStoreAPI_GetBootstrapComplete_Call struct {
+	*mock.Call
+}
+
+// GetBootstrapComplete is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetBootstrapComplete(ctx interface{}) *MockStoreAPI_GetBootstrapComplete_Call {
+	return &MockStoreAPI_GetBootstrapComplete_Call{Call: _e.mock.On("GetBootstrapComplete", ctx)}
+}
+
+func (_c *MockStoreAPI_GetBootstrapComplete_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetBootstrapComplete_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetBootstrapComplete_Call) Return(b bool, err error) *MockStoreAPI_GetBootstrapComplete_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetBootstrapComplete_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetBootstrapComplete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPolicy provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetPolicy(ctx context.Context, tenantID string) (models.Policy, error) {
 	ret := _mock.Called(ctx, tenantID)
@@ -166,6 +431,78 @@ func (_c *MockStoreAPI_GetPolicy_Call) Return(policy models.Policy, err error) *
 }
 
 func (_c *MockStoreAPI_GetPolicy_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.Policy, error)) *MockStoreAPI_GetPolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetPolicyVersion provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetPolicyVersion(ctx context.Context, tenantID string, policyVersion string) (models.PolicyVersion, error) {
+	ret := _mock.Called(ctx, tenantID, policyVersion)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPolicyVersion")
+	}
+
+	var r0 models.PolicyVersion
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.PolicyVersion, error)); ok {
+		return returnFunc(ctx, tenantID, policyVersion)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.PolicyVersion); ok {
+		r0 = returnFunc(ctx, tenantID, policyVersion)
+	} else {
+		r0 = ret.Get(0).(models.PolicyVersion)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, policyVersion)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetPolicyVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPolicyVersion'
+type MockStoreAPI_GetPolicyVersion_Call struct {
+	*mock.Call
+}
+
+// GetPolicyVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - policyVersion string
+func (_e *MockStoreAPI_Expecter) GetPolicyVersion(ctx interface{}, tenantID interface{}, policyVersion interface{}) *MockStoreAPI_GetPolicyVersion_Call {
+	return &MockStoreAPI_GetPolicyVersion_Call{Call: _e.mock.On("GetPolicyVersion", ctx, tenantID, policyVersion)}
+}
+
+func (_c *MockStoreAPI_GetPolicyVersion_Call) Run(run func(ctx context.Context, tenantID string, policyVersion string)) *MockStoreAPI_GetPolicyVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetPolicyVersion_Call) Return(policyVersion1 models.PolicyVersion, err error) *MockStoreAPI_GetPolicyVersion_Call {
+	_c.Call.Return(policyVersion1, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetPolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string) (models.PolicyVersion, error)) *MockStoreAPI_GetPolicyVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -242,6 +579,72 @@ func (_c *MockStoreAPI_GetRiskOverride_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// GetTenant provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTenant(ctx context.Context, tenantID string) (models.TenantSummary, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTenant")
+	}
+
+	var r0 models.TenantSummary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.TenantSummary, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.TenantSummary); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(models.TenantSummary)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTenant_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTenant'
+type MockStoreAPI_GetTenant_Call struct {
+	*mock.Call
+}
+
+// GetTenant is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetTenant(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetTenant_Call {
+	return &MockStoreAPI_GetTenant_Call{Call: _e.mock.On("GetTenant", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetTenant_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetTenant_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenant_Call) Return(tenantSummary models.TenantSummary, err error) *MockStoreAPI_GetTenant_Call {
+	_c.Call.Return(tenantSummary, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenant_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.TenantSummary, error)) *MockStoreAPI_GetTenant_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetTenantByKeyHash provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetTenantByKeyHash(ctx context.Context, keyHash string) (models.Tenant, error) {
 	ret := _mock.Called(ctx, keyHash)
@@ -304,6 +707,138 @@ func (_c *MockStoreAPI_GetTenantByKeyHash_Call) Return(tenant models.Tenant, err
 }
 
 func (_c *MockStoreAPI_GetTenantByKeyHash_Call) RunAndReturn(run func(ctx context.Context, keyHash string) (models.Tenant, error)) *MockStoreAPI_GetTenantByKeyHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTenantConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTenantConfig")
+	}
+
+	var r0 models.TenantConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.TenantConfig, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.TenantConfig); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(models.TenantConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTenantConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTenantConfig'
+type MockStoreAPI_GetTenantConfig_Call struct {
+	*mock.Call
+}
+
+// GetTenantConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetTenantConfig(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetTenantConfig_Call {
+	return &MockStoreAPI_GetTenantConfig_Call{Call: _e.mock.On("GetTenantConfig", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetTenantConfig_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetTenantConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenantConfig_Call) Return(tenantConfig models.TenantConfig, err error) *MockStoreAPI_GetTenantConfig_Call {
+	_c.Call.Return(tenantConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenantConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.TenantConfig, error)) *MockStoreAPI_GetTenantConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTenantKeyHash provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTenantKeyHash(ctx context.Context, tenantID string) (string, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTenantKeyHash")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTenantKeyHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTenantKeyHash'
+type MockStoreAPI_GetTenantKeyHash_Call struct {
+	*mock.Call
+}
+
+// GetTenantKeyHash is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetTenantKeyHash(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetTenantKeyHash_Call {
+	return &MockStoreAPI_GetTenantKeyHash_Call{Call: _e.mock.On("GetTenantKeyHash", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetTenantKeyHash_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetTenantKeyHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenantKeyHash_Call) Return(s string, err error) *MockStoreAPI_GetTenantKeyHash_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTenantKeyHash_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (string, error)) *MockStoreAPI_GetTenantKeyHash_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -494,6 +1029,137 @@ func (_c *MockStoreAPI_InsertApprovalRequest_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// InsertAuditEvent provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+	ret := _mock.Called(ctx, event)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertAuditEvent")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.AdminAuditEvent) error); ok {
+		r0 = returnFunc(ctx, event)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_InsertAuditEvent_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertAuditEvent'
+type MockStoreAPI_InsertAuditEvent_Call struct {
+	*mock.Call
+}
+
+// InsertAuditEvent is a helper method to define mock.On call
+//   - ctx context.Context
+//   - event models.AdminAuditEvent
+func (_e *MockStoreAPI_Expecter) InsertAuditEvent(ctx interface{}, event interface{}) *MockStoreAPI_InsertAuditEvent_Call {
+	return &MockStoreAPI_InsertAuditEvent_Call{Call: _e.mock.On("InsertAuditEvent", ctx, event)}
+}
+
+func (_c *MockStoreAPI_InsertAuditEvent_Call) Run(run func(ctx context.Context, event models.AdminAuditEvent)) *MockStoreAPI_InsertAuditEvent_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.AdminAuditEvent
+		if args[1] != nil {
+			arg1 = args[1].(models.AdminAuditEvent)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertAuditEvent_Call) Return(err error) *MockStoreAPI_InsertAuditEvent_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.Context, event models.AdminAuditEvent) error) *MockStoreAPI_InsertAuditEvent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAuditEvents provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error) {
+	ret := _mock.Called(ctx, tenantID, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAuditEvents")
+	}
+
+	var r0 []models.AdminAuditEvent
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) ([]models.AdminAuditEvent, error)); ok {
+		return returnFunc(ctx, tenantID, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) []models.AdminAuditEvent); ok {
+		r0 = returnFunc(ctx, tenantID, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.AdminAuditEvent)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListAuditEvents_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAuditEvents'
+type MockStoreAPI_ListAuditEvents_Call struct {
+	*mock.Call
+}
+
+// ListAuditEvents is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - limit int
+func (_e *MockStoreAPI_Expecter) ListAuditEvents(ctx interface{}, tenantID interface{}, limit interface{}) *MockStoreAPI_ListAuditEvents_Call {
+	return &MockStoreAPI_ListAuditEvents_Call{Call: _e.mock.On("ListAuditEvents", ctx, tenantID, limit)}
+}
+
+func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, tenantID string, limit int)) *MockStoreAPI_ListAuditEvents_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditEvents_Call) Return(adminAuditEvents []models.AdminAuditEvent, err error) *MockStoreAPI_ListAuditEvents_Call {
+	_c.Call.Return(adminAuditEvents, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditEvents_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEvents_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListEvidence provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error) {
 	ret := _mock.Called(ctx, tenantID, limit)
@@ -568,6 +1234,370 @@ func (_c *MockStoreAPI_ListEvidence_Call) RunAndReturn(run func(ctx context.Cont
 	return _c
 }
 
+// ListEvidenceFiltered provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListEvidenceFiltered(ctx context.Context, tenantID string, decision string, actionType string, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error) {
+	ret := _mock.Called(ctx, tenantID, decision, actionType, risk, since, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListEvidenceFiltered")
+	}
+
+	var r0 []models.ActionDecisionRecord
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, *time.Time, int) ([]models.ActionDecisionRecord, error)); ok {
+		return returnFunc(ctx, tenantID, decision, actionType, risk, since, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, *time.Time, int) []models.ActionDecisionRecord); ok {
+		r0 = returnFunc(ctx, tenantID, decision, actionType, risk, since, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.ActionDecisionRecord)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, string, *time.Time, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, decision, actionType, risk, since, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListEvidenceFiltered_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListEvidenceFiltered'
+type MockStoreAPI_ListEvidenceFiltered_Call struct {
+	*mock.Call
+}
+
+// ListEvidenceFiltered is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - decision string
+//   - actionType string
+//   - risk string
+//   - since *time.Time
+//   - limit int
+func (_e *MockStoreAPI_Expecter) ListEvidenceFiltered(ctx interface{}, tenantID interface{}, decision interface{}, actionType interface{}, risk interface{}, since interface{}, limit interface{}) *MockStoreAPI_ListEvidenceFiltered_Call {
+	return &MockStoreAPI_ListEvidenceFiltered_Call{Call: _e.mock.On("ListEvidenceFiltered", ctx, tenantID, decision, actionType, risk, since, limit)}
+}
+
+func (_c *MockStoreAPI_ListEvidenceFiltered_Call) Run(run func(ctx context.Context, tenantID string, decision string, actionType string, risk string, since *time.Time, limit int)) *MockStoreAPI_ListEvidenceFiltered_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 *time.Time
+		if args[5] != nil {
+			arg5 = args[5].(*time.Time)
+		}
+		var arg6 int
+		if args[6] != nil {
+			arg6 = args[6].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListEvidenceFiltered_Call) Return(actionDecisionRecords []models.ActionDecisionRecord, err error) *MockStoreAPI_ListEvidenceFiltered_Call {
+	_c.Call.Return(actionDecisionRecords, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListEvidenceFiltered_Call) RunAndReturn(run func(ctx context.Context, tenantID string, decision string, actionType string, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error)) *MockStoreAPI_ListEvidenceFiltered_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListPolicyVersions provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPolicyVersions")
+	}
+
+	var r0 []models.PolicyVersion
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.PolicyVersion, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.PolicyVersion); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.PolicyVersion)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListPolicyVersions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPolicyVersions'
+type MockStoreAPI_ListPolicyVersions_Call struct {
+	*mock.Call
+}
+
+// ListPolicyVersions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListPolicyVersions(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListPolicyVersions_Call {
+	return &MockStoreAPI_ListPolicyVersions_Call{Call: _e.mock.On("ListPolicyVersions", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListPolicyVersions_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListPolicyVersions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListPolicyVersions_Call) Return(policyVersions []models.PolicyVersion, err error) *MockStoreAPI_ListPolicyVersions_Call {
+	_c.Call.Return(policyVersions, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListPolicyVersions_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.PolicyVersion, error)) *MockStoreAPI_ListPolicyVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListRiskOverrides provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListRiskOverrides(ctx context.Context, tenantID string) ([]models.RiskOverride, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListRiskOverrides")
+	}
+
+	var r0 []models.RiskOverride
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.RiskOverride, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.RiskOverride); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.RiskOverride)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListRiskOverrides_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRiskOverrides'
+type MockStoreAPI_ListRiskOverrides_Call struct {
+	*mock.Call
+}
+
+// ListRiskOverrides is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListRiskOverrides(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListRiskOverrides_Call {
+	return &MockStoreAPI_ListRiskOverrides_Call{Call: _e.mock.On("ListRiskOverrides", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListRiskOverrides_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListRiskOverrides_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListRiskOverrides_Call) Return(riskOverrides []models.RiskOverride, err error) *MockStoreAPI_ListRiskOverrides_Call {
+	_c.Call.Return(riskOverrides, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListRiskOverrides_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.RiskOverride, error)) *MockStoreAPI_ListRiskOverrides_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTenants provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListTenants(ctx context.Context) ([]models.TenantSummary, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTenants")
+	}
+
+	var r0 []models.TenantSummary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]models.TenantSummary, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []models.TenantSummary); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.TenantSummary)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListTenants_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTenants'
+type MockStoreAPI_ListTenants_Call struct {
+	*mock.Call
+}
+
+// ListTenants is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) ListTenants(ctx interface{}) *MockStoreAPI_ListTenants_Call {
+	return &MockStoreAPI_ListTenants_Call{Call: _e.mock.On("ListTenants", ctx)}
+}
+
+func (_c *MockStoreAPI_ListTenants_Call) Run(run func(ctx context.Context)) *MockStoreAPI_ListTenants_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTenants_Call) Return(tenantSummarys []models.TenantSummary, err error) *MockStoreAPI_ListTenants_Call {
+	_c.Call.Return(tenantSummarys, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTenants_Call) RunAndReturn(run func(ctx context.Context) ([]models.TenantSummary, error)) *MockStoreAPI_ListTenants_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTools provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string) ([]models.Tool, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTools")
+	}
+
+	var r0 []models.Tool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.Tool, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.Tool); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.Tool)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListTools_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTools'
+type MockStoreAPI_ListTools_Call struct {
+	*mock.Call
+}
+
+// ListTools is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListTools(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListTools_Call {
+	return &MockStoreAPI_ListTools_Call{Call: _e.mock.On("ListTools", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListTools_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTools_Call) Return(tools []models.Tool, err error) *MockStoreAPI_ListTools_Call {
+	_c.Call.Return(tools, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MarkBootstrapComplete provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) MarkBootstrapComplete(ctx context.Context) error {
 	ret := _mock.Called(ctx)
@@ -615,6 +1645,132 @@ func (_c *MockStoreAPI_MarkBootstrapComplete_Call) Return(err error) *MockStoreA
 }
 
 func (_c *MockStoreAPI_MarkBootstrapComplete_Call) RunAndReturn(run func(ctx context.Context) error) *MockStoreAPI_MarkBootstrapComplete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PublishPolicyVersion provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) PublishPolicyVersion(ctx context.Context, tenantID string, policyVersion string) error {
+	ret := _mock.Called(ctx, tenantID, policyVersion)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PublishPolicyVersion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, policyVersion)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_PublishPolicyVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PublishPolicyVersion'
+type MockStoreAPI_PublishPolicyVersion_Call struct {
+	*mock.Call
+}
+
+// PublishPolicyVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - policyVersion string
+func (_e *MockStoreAPI_Expecter) PublishPolicyVersion(ctx interface{}, tenantID interface{}, policyVersion interface{}) *MockStoreAPI_PublishPolicyVersion_Call {
+	return &MockStoreAPI_PublishPolicyVersion_Call{Call: _e.mock.On("PublishPolicyVersion", ctx, tenantID, policyVersion)}
+}
+
+func (_c *MockStoreAPI_PublishPolicyVersion_Call) Run(run func(ctx context.Context, tenantID string, policyVersion string)) *MockStoreAPI_PublishPolicyVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_PublishPolicyVersion_Call) Return(err error) *MockStoreAPI_PublishPolicyVersion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_PublishPolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string) error) *MockStoreAPI_PublishPolicyVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RollbackPolicyVersion provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) RollbackPolicyVersion(ctx context.Context, tenantID string, policyVersion string) error {
+	ret := _mock.Called(ctx, tenantID, policyVersion)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RollbackPolicyVersion")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, policyVersion)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_RollbackPolicyVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RollbackPolicyVersion'
+type MockStoreAPI_RollbackPolicyVersion_Call struct {
+	*mock.Call
+}
+
+// RollbackPolicyVersion is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - policyVersion string
+func (_e *MockStoreAPI_Expecter) RollbackPolicyVersion(ctx interface{}, tenantID interface{}, policyVersion interface{}) *MockStoreAPI_RollbackPolicyVersion_Call {
+	return &MockStoreAPI_RollbackPolicyVersion_Call{Call: _e.mock.On("RollbackPolicyVersion", ctx, tenantID, policyVersion)}
+}
+
+func (_c *MockStoreAPI_RollbackPolicyVersion_Call) Run(run func(ctx context.Context, tenantID string, policyVersion string)) *MockStoreAPI_RollbackPolicyVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_RollbackPolicyVersion_Call) Return(err error) *MockStoreAPI_RollbackPolicyVersion_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_RollbackPolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string) error) *MockStoreAPI_RollbackPolicyVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
