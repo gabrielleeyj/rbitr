@@ -1,6 +1,7 @@
 import type { TenantSummary } from "@/lib/tenant";
 
 const defaultBaseUrl = "";
+const inflight = new Map<string, Promise<unknown>>();
 
 export interface ApiConfig {
   baseUrl?: string;
@@ -36,30 +37,122 @@ export interface EvidenceResponse {
   records: EvidenceRecord[];
 }
 
+export interface PolicyVersion {
+  tenant_id: string;
+  policy_version: string;
+  rego_module: string;
+  created_at: string;
+  created_by?: string;
+  notes?: string;
+}
+
+export interface PolicyVersionsResponse {
+  tenant_id: string;
+  active_policy_version: string;
+  versions: PolicyVersion[];
+}
+
+export interface PolicySimulationResponse {
+  decision: {
+    version: string;
+    decision: string;
+    risk: string;
+    rule: { id: string; priority: number };
+    reasons: { code: string; message: string }[];
+    constraints: Record<string, unknown>;
+    tags?: string[];
+  };
+}
+
+export interface ToolConfig {
+  tool_id: string;
+  tenant_id: string;
+  base_url: string;
+  auth_type: string;
+  auth_set: boolean;
+}
+
+export interface RiskOverride {
+  tenant_id: string;
+  action_type: string;
+  action_risk: string;
+  updated_at: string;
+}
+
+export interface AdminSettings {
+  admin_write_lock: boolean;
+}
+
+export interface AuditEvent {
+  audit_event_id: string;
+  tenant_id?: string;
+  actor_type: string;
+  actor_id?: string;
+  actor_display?: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  request_id?: string;
+  ip?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
 function apiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? defaultBaseUrl;
 }
 
 async function request<T>(path: string, config: ApiConfig, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${config.baseUrl ?? apiBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.adminKey}`,
-      ...init?.headers,
-    },
-  });
+  const method = init?.method?.toUpperCase() ?? "GET";
+  const url = `${config.baseUrl ?? apiBaseUrl()}${path}`;
+  const inflightKey = `${method}:${url}`;
 
-  if (!response.ok) {
+  if (method === "GET" || method === "HEAD") {
+    const existing = inflight.get(inflightKey);
+    if (existing) {
+      return existing as Promise<T>;
+    }
+  }
+
+  const requestPromise = (async () => {
+    const response = await fetch(url, {
+      ...init,
+      cache: init?.cache ?? "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.adminKey}`,
+        ...init?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Request failed: ${response.status}`);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+    if (!text) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
+  })();
+
+  if (method === "GET" || method === "HEAD") {
+    inflight.set(inflightKey, requestPromise);
+    try {
+      return await (requestPromise as Promise<T>);
+    } finally {
+      inflight.delete(inflightKey);
+    }
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
+  return requestPromise as Promise<T>;
 }
 
 export function listTenants(config: ApiConfig): Promise<TenantSummary[]> {
@@ -79,4 +172,128 @@ export function listEvidence(
   if (params.since) query.set("since", params.since);
 
   return request<EvidenceResponse>(`/admin/tenants/${tenantId}/evidence?${query.toString()}`, config);
+}
+
+export function listPolicies(config: ApiConfig, tenantId: string): Promise<PolicyVersionsResponse> {
+  return request<PolicyVersionsResponse>(`/admin/tenants/${tenantId}/policies`, config);
+}
+
+export function getPolicyVersion(
+  config: ApiConfig,
+  tenantId: string,
+  version: string
+): Promise<PolicyVersion> {
+  return request<PolicyVersion>(`/admin/tenants/${tenantId}/policies/${version}`, config);
+}
+
+export function createPolicyVersion(
+  config: ApiConfig,
+  tenantId: string,
+  payload: { policy_version: string; rego_module: string; notes?: string }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/policies`, config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function publishPolicyVersion(
+  config: ApiConfig,
+  tenantId: string,
+  version: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/policies/${version}/publish`, config, {
+    method: "PUT",
+  });
+}
+
+export function rollbackPolicyVersion(
+  config: ApiConfig,
+  tenantId: string,
+  version?: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/policies/rollback`, config, {
+    method: "PUT",
+    body: JSON.stringify({ policy_version: version ?? "" }),
+  });
+}
+
+export function simulatePolicy(
+  config: ApiConfig,
+  tenantId: string,
+  payload: { policy_version?: string; rego_module?: string; input: Record<string, unknown> }
+): Promise<PolicySimulationResponse> {
+  return request<PolicySimulationResponse>(`/admin/tenants/${tenantId}/policies/simulate`, config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listTools(config: ApiConfig, tenantId: string): Promise<ToolConfig[]> {
+  return request<ToolConfig[]>(`/admin/tenants/${tenantId}/tools`, config);
+}
+
+export function updateTool(
+  config: ApiConfig,
+  tenantId: string,
+  toolId: string,
+  payload: { base_url: string; auth_type?: string; auth_value?: string }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/tools/${toolId}`, config, {
+    method: "PUT",
+    body: JSON.stringify({
+      base_url: payload.base_url,
+      auth_type: payload.auth_type ?? "",
+      auth_value: payload.auth_value ?? "",
+    }),
+  });
+}
+
+export function listRiskOverrides(config: ApiConfig, tenantId: string): Promise<RiskOverride[]> {
+  return request<RiskOverride[]>(`/admin/tenants/${tenantId}/risk-overrides`, config);
+}
+
+export function upsertRiskOverride(
+  config: ApiConfig,
+  tenantId: string,
+  actionType: string,
+  actionRisk: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/risk-overrides/${actionType}`, config, {
+    method: "PUT",
+    body: JSON.stringify({ action_risk: actionRisk }),
+  });
+}
+
+export function deleteRiskOverride(
+  config: ApiConfig,
+  tenantId: string,
+  actionType: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/risk-overrides/${actionType}`, config, {
+    method: "DELETE",
+  });
+}
+
+export function getSettings(config: ApiConfig): Promise<AdminSettings> {
+  return request<AdminSettings>(`/admin/settings`, config);
+}
+
+export function setAdminWriteLock(config: ApiConfig, locked: boolean): Promise<void> {
+  return request<void>(`/admin/settings/admin-write-lock`, config, {
+    method: "PUT",
+    body: JSON.stringify({ locked }),
+  });
+}
+
+export function listAuditEvents(
+  config: ApiConfig,
+  tenantId: string,
+  limit = 50
+): Promise<AuditEvent[]> {
+  return request<AuditEvent[]>(`/admin/tenants/${tenantId}/audit?limit=${limit}`, config);
+}
+
+export function listAuditEventsAll(config: ApiConfig, limit = 50): Promise<AuditEvent[]> {
+  return request<AuditEvent[]>(`/admin/audit?limit=${limit}`, config);
 }

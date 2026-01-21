@@ -239,8 +239,16 @@ func (s *Store) ListPolicyVersions(ctx context.Context, tenantID string) ([]mode
 	var versions []models.PolicyVersion
 	for rows.Next() {
 		var version models.PolicyVersion
-		if err := rows.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &version.CreatedBy, &version.Notes); err != nil {
+		var createdBy sql.NullString
+		var notes sql.NullString
+		if err := rows.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &createdBy, &notes); err != nil {
 			return nil, err
+		}
+		if createdBy.Valid {
+			version.CreatedBy = createdBy.String
+		}
+		if notes.Valid {
+			version.Notes = notes.String
 		}
 		versions = append(versions, version)
 	}
@@ -253,11 +261,19 @@ func (s *Store) GetPolicyVersion(ctx context.Context, tenantID, policyVersion st
 		WHERE tenant_id = $1 AND policy_version = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, policyVersion)
 	var version models.PolicyVersion
-	if err := row.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &version.CreatedBy, &version.Notes); err != nil {
+	var createdBy sql.NullString
+	var notes sql.NullString
+	if err := row.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &createdBy, &notes); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.PolicyVersion{}, ErrNotFound
 		}
 		return models.PolicyVersion{}, err
+	}
+	if createdBy.Valid {
+		version.CreatedBy = createdBy.String
+	}
+	if notes.Valid {
+		version.Notes = notes.String
 	}
 	return version, nil
 }
@@ -719,23 +735,51 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int)
 	var events []models.AdminAuditEvent
 	for rows.Next() {
 		var event models.AdminAuditEvent
+		var tenantIDValue sql.NullString
+		var actorID sql.NullString
+		var actorDisplay sql.NullString
+		var resourceID sql.NullString
+		var requestID sql.NullString
+		var ip sql.NullString
+		var userAgent sql.NullString
 		if err := rows.Scan(
 			&event.AuditEventID,
-			&event.TenantID,
+			&tenantIDValue,
 			&event.ActorType,
-			&event.ActorID,
-			&event.ActorDisplay,
+			&actorID,
+			&actorDisplay,
 			&event.Action,
 			&event.ResourceType,
-			&event.ResourceID,
+			&resourceID,
 			&event.Before,
 			&event.After,
-			&event.RequestID,
-			&event.IP,
-			&event.UserAgent,
+			&requestID,
+			&ip,
+			&userAgent,
 			&event.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if tenantIDValue.Valid {
+			event.TenantID = tenantIDValue.String
+		}
+		if actorID.Valid {
+			event.ActorID = actorID.String
+		}
+		if actorDisplay.Valid {
+			event.ActorDisplay = actorDisplay.String
+		}
+		if resourceID.Valid {
+			event.ResourceID = resourceID.String
+		}
+		if requestID.Valid {
+			event.RequestID = requestID.String
+		}
+		if ip.Valid {
+			event.IP = ip.String
+		}
+		if userAgent.Valid {
+			event.UserAgent = userAgent.String
 		}
 		events = append(events, event)
 	}
@@ -743,23 +787,30 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int)
 }
 
 func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+	tenantID := sql.NullString{String: event.TenantID, Valid: event.TenantID != ""}
+	actorID := sql.NullString{String: event.ActorID, Valid: event.ActorID != ""}
+	actorDisplay := sql.NullString{String: event.ActorDisplay, Valid: event.ActorDisplay != ""}
+	resourceID := sql.NullString{String: event.ResourceID, Valid: event.ResourceID != ""}
+	requestID := sql.NullString{String: event.RequestID, Valid: event.RequestID != ""}
+	ip := sql.NullString{String: event.IP, Valid: event.IP != ""}
+	userAgent := sql.NullString{String: event.UserAgent, Valid: event.UserAgent != ""}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.admin_audit_events (
 		audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
 	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		event.AuditEventID,
-		event.TenantID,
+		tenantID,
 		event.ActorType,
-		event.ActorID,
-		event.ActorDisplay,
+		actorID,
+		actorDisplay,
 		event.Action,
 		event.ResourceType,
-		event.ResourceID,
+		resourceID,
 		event.Before,
 		event.After,
-		event.RequestID,
-		event.IP,
-		event.UserAgent,
+		requestID,
+		ip,
+		userAgent,
 		event.CreatedAt,
 	)
 	return err

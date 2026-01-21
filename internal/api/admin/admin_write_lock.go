@@ -36,7 +36,10 @@ func (d Dependencies) handleAdminWriteLock(c *echo.Context) error {
 	}, map[string]any{
 		"admin_write_lock": payload.Locked,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit write lock"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit write lock",
+			"detail": err.Error(),
+		})
 	}
 
 	return c.NoContent(http.StatusNoContent)

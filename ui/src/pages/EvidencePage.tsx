@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const decisions = ["ALLOW", "DENY", "REQUIRE_APPROVAL"];
 const risks = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -83,6 +84,7 @@ export function EvidencePage() {
       anchor.download = `evidence_${selectedTenant.tenant_id}.json`;
       anchor.click();
       window.URL.revokeObjectURL(url);
+      toast.success("Evidence downloaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to download evidence.");
     }
@@ -172,16 +174,24 @@ export function EvidencePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {records.map((record) => (
-              <TableRow key={record.decision_id}>
-                <TableCell>{new Date(record.timestamp).toLocaleString()}</TableCell>
-                <TableCell>{record.action_type}</TableCell>
-                <TableCell>{record.decision}</TableCell>
-                <TableCell>{record.action_risk}</TableCell>
-                <TableCell>{record.tool_id}</TableCell>
-                <TableCell>{record.rule_id}</TableCell>
+            {records.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-muted-foreground">
+                  No evidence records yet.
+                </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              records.map((record) => (
+                <TableRow key={record.decision_id}>
+                  <TableCell>{record.timestamp}</TableCell>
+                  <TableCell>{record.action_type}</TableCell>
+                  <TableCell>{record.decision}</TableCell>
+                  <TableCell>{record.action_risk}</TableCell>
+                  <TableCell>{record.tool_id}</TableCell>
+                  <TableCell>{record.rule_id}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>

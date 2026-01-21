@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ export function TenantsPage() {
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const lastLoadedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -22,11 +23,16 @@ export function TenantsPage() {
       if (!adminKey) {
         return;
       }
+      const loadKey = adminKey;
+      if (lastLoadedKeyRef.current === loadKey) {
+        return;
+      }
       try {
         const data = await listTenants({ adminKey });
         if (isMounted) {
           setTenants(data);
           setLoading(false);
+          lastLoadedKeyRef.current = loadKey;
         }
       } catch (err) {
         if (isMounted) {

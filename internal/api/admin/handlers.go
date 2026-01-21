@@ -108,7 +108,10 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 		"name":     afterName,
 		"key_hash": afterKeyHash,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit tenant config update"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit tenant config update",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -149,7 +152,10 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 		"auth_set":  payload.AuthValue != "",
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.CONFIG.UPDATE", "TOOL", toolID, beforeAudit, afterAudit); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit tool update"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit tool update",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -183,7 +189,10 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 		"active_policy_version": afterConfig.ActivePolicyVersion,
 		"rego_sha256":           utils.HashString(payload.RegoModule),
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit policy update"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit policy update",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -220,7 +229,10 @@ func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 		"action_type": actionType,
 		"action_risk": payload.ActionRisk,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit risk override update"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit risk override update",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -242,7 +254,10 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	}, map[string]any{
 		"bootstrap_complete": true,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit bootstrap completion"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit bootstrap completion",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

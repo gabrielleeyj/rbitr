@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { AppNav } from "@/components/navigation/AppNav";
 import { TopBar } from "@/components/navigation/TopBar";
 import { AgentgatewayLogo } from "@/components/agentgateway-logo";
+import { Toaster } from "@/components/ui/sonner";
 import { useAdminKey } from "@/lib/auth";
 
 export function AppLayout() {
@@ -50,6 +51,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </SidebarInset>
+      <Toaster richColors position="top-right" />
     </SidebarProvider>
   );
 }

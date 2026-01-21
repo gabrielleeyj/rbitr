@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
@@ -104,7 +106,35 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list evidence"})
 	}
-	return c.JSON(http.StatusOK, map[string]any{"tenant_id": tenantID, "records": records})
+	exported := make([]models.ActionDecisionExport, 0, len(records))
+	for i := range records {
+		record := &records[i]
+		exported = append(exported, models.ActionDecisionExport{
+			DecisionID:        record.DecisionID,
+			RequestID:         record.RequestID,
+			TenantID:          record.TenantID,
+			AgentID:           record.AgentID,
+			ToolID:            record.ToolID,
+			ActionType:        record.ActionType,
+			ActionRisk:        record.ActionRisk,
+			ActionSummary:     record.ActionSummary,
+			Decision:          record.Decision,
+			DecisionVersion:   record.DecisionVersion,
+			DecisionRisk:      record.DecisionRisk,
+			RuleID:            record.RuleID,
+			RulePriority:      record.RulePriority,
+			Reasons:           record.Reasons,
+			Constraints:       record.Constraints,
+			Tags:              record.Tags,
+			PolicyVersion:     record.PolicyVersion,
+			Reason:            record.Reason,
+			RequestHash:       record.RequestHash,
+			ResponseHash:      record.ResponseHash,
+			ApprovalRequestID: record.ApprovalRequestID,
+			Timestamp:         record.CreatedAt,
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"tenant_id": tenantID, "records": exported})
 }
 
 func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
@@ -164,7 +194,10 @@ func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	if _, err := opa.PrepareQuery(c.Request().Context(), payload.RegoModule); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "rego compilation failed"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":  "rego compilation failed",
+			"detail": err.Error(),
+		})
 	}
 
 	tenantID := c.Param("tenant_id")
@@ -177,7 +210,10 @@ func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
 		"notes":          payload.Notes,
 		"rego_sha256":    utils.HashString(payload.RegoModule),
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit policy create"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit policy create",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusCreated)
 }
@@ -205,7 +241,10 @@ func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
 	}, map[string]any{
 		"active_policy_version": after.ActivePolicyVersion,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit policy publish"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit policy publish",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -240,7 +279,10 @@ func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
 	}, map[string]any{
 		"active_policy_version": after.ActivePolicyVersion,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit policy rollback"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit policy rollback",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -282,7 +324,10 @@ func (d Dependencies) handlePolicySimulate(c *echo.Context) error {
 	engine := opa.NewEngine(regoModule)
 	result, err := engine.Evaluate(c.Request().Context(), payload.Input)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "policy evaluation failed"})
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":  "policy evaluation failed",
+			"detail": err.Error(),
+		})
 	}
 	return c.JSON(http.StatusOK, map[string]any{
 		"decision": map[string]any{
@@ -326,7 +371,10 @@ func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 		"action_type": actionType,
 		"action_risk": beforeRisk,
 	}, nil); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit override delete"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit override delete",
+			"detail": err.Error(),
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -397,6 +445,27 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 }
 
 func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, tenantID, action, resourceType, resourceID string, before, after map[string]any) error {
+	action = strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, action)
+	resourceType = strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, resourceType)
+	action = strings.ToUpper(strings.TrimSpace(action))
+	resourceType = strings.ToUpper(strings.TrimSpace(resourceType))
+	resourceID = strings.TrimSpace(resourceID)
+	if action == "" || resourceType == "" {
+		return errors.New("audit event action and resource type required")
+	}
+	if !regexp.MustCompile(`^[A-Z0-9_]+(\.[A-Z0-9_]+)*$`).MatchString(action) {
+		return errors.New("audit event action violates format constraint")
+	}
 	beforeJSON, err := marshalAuditPayload(before)
 	if err != nil {
 		return err
