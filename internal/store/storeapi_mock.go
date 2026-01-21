@@ -1087,8 +1087,8 @@ func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.
 }
 
 // ListAuditEvents provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error) {
-	ret := _mock.Called(ctx, tenantID, limit)
+func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error) {
+	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListAuditEvents")
@@ -1096,18 +1096,18 @@ func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string,
 
 	var r0 []models.AdminAuditEvent
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) ([]models.AdminAuditEvent, error)); ok {
-		return returnFunc(ctx, tenantID, limit)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) ([]models.AdminAuditEvent, error)); ok {
+		return returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) []models.AdminAuditEvent); ok {
-		r0 = returnFunc(ctx, tenantID, limit)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) []models.AdminAuditEvent); ok {
+		r0 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]models.AdminAuditEvent)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int) error); ok {
-		r1 = returnFunc(ctx, tenantID, limit)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int, string, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1123,11 +1123,15 @@ type MockStoreAPI_ListAuditEvents_Call struct {
 //   - ctx context.Context
 //   - tenantID string
 //   - limit int
-func (_e *MockStoreAPI_Expecter) ListAuditEvents(ctx interface{}, tenantID interface{}, limit interface{}) *MockStoreAPI_ListAuditEvents_Call {
-	return &MockStoreAPI_ListAuditEvents_Call{Call: _e.mock.On("ListAuditEvents", ctx, tenantID, limit)}
+//   - offset int
+//   - action string
+//   - resourceType string
+//   - actorID string
+func (_e *MockStoreAPI_Expecter) ListAuditEvents(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}, action interface{}, resourceType interface{}, actorID interface{}) *MockStoreAPI_ListAuditEvents_Call {
+	return &MockStoreAPI_ListAuditEvents_Call{Call: _e.mock.On("ListAuditEvents", ctx, tenantID, limit, offset, action, resourceType, actorID)}
 }
 
-func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, tenantID string, limit int)) *MockStoreAPI_ListAuditEvents_Call {
+func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string)) *MockStoreAPI_ListAuditEvents_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -1141,10 +1145,30 @@ func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, t
 		if args[2] != nil {
 			arg2 = args[2].(int)
 		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
 		)
 	})
 	return _c
@@ -1155,7 +1179,7 @@ func (_c *MockStoreAPI_ListAuditEvents_Call) Return(adminAuditEvents []models.Ad
 	return _c
 }
 
-func (_c *MockStoreAPI_ListAuditEvents_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEvents_Call {
+func (_c *MockStoreAPI_ListAuditEvents_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEvents_Call {
 	_c.Call.Return(run)
 	return _c
 }

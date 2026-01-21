@@ -421,10 +421,20 @@ func (d Dependencies) handleAuditList(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
 	}
-	tenantID := c.Param("tenant_id")
-	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit)
+	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list audit events"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+	}
+	tenantID := c.Param("tenant_id")
+	action := c.QueryParam("action")
+	resourceType := c.QueryParam("resource_type")
+	actorID := c.QueryParam("actor_id")
+	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to list audit events",
+			"detail": err.Error(),
+		})
 	}
 	return c.JSON(http.StatusOK, events)
 }
@@ -437,9 +447,19 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
 	}
-	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit)
+	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list audit events"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+	}
+	action := c.QueryParam("action")
+	resourceType := c.QueryParam("resource_type")
+	actorID := c.QueryParam("actor_id")
+	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit, offset, action, resourceType, actorID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to list audit events",
+			"detail": err.Error(),
+		})
 	}
 	return c.JSON(http.StatusOK, events)
 }
@@ -510,6 +530,17 @@ func parseLimit(value string) (int, error) {
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
+		return 0, errors.New("invalid")
+	}
+	return parsed, nil
+}
+
+func parseOffset(value string) (int, error) {
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
 		return 0, errors.New("invalid")
 	}
 	return parsed, nil

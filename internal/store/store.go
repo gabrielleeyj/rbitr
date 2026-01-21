@@ -56,7 +56,7 @@ type StoreAPI interface {
 	GetBootstrapComplete(ctx context.Context) (bool, error)
 	SetAdminWriteLock(ctx context.Context, locked bool) error
 	GetAdminWriteLock(ctx context.Context) (bool, error)
-	ListAuditEvents(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error)
+	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error)
 	InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error
 }
 
@@ -712,19 +712,38 @@ func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int) ([]models.AdminAuditEvent, error) {
+func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	args := []any{limit}
-	query := `SELECT audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
-		before, after, request_id, ip, user_agent, created_at
-		FROM rbitr.admin_audit_events`
+	if offset < 0 {
+		offset = 0
+	}
+	clauses := []string{"1=1"}
+	args := []any{}
 	if tenantID != "" {
-		query += ` WHERE tenant_id = $2`
+		clauses = append(clauses, fmt.Sprintf("tenant_id = $%d", len(args)+1))
 		args = append(args, tenantID)
 	}
-	query += ` ORDER BY created_at DESC LIMIT $1`
+	if action != "" {
+		clauses = append(clauses, fmt.Sprintf("action = $%d", len(args)+1))
+		args = append(args, action)
+	}
+	if resourceType != "" {
+		clauses = append(clauses, fmt.Sprintf("resource_type = $%d", len(args)+1))
+		args = append(args, resourceType)
+	}
+	if actorID != "" {
+		clauses = append(clauses, fmt.Sprintf("actor_id = $%d", len(args)+1))
+		args = append(args, actorID)
+	}
+	args = append(args, limit, offset)
+	query := fmt.Sprintf(`SELECT audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
+		before, after, request_id, ip, user_agent, created_at
+		FROM rbitr.admin_audit_events
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d`, strings.Join(clauses, " AND "), len(args)-1, len(args))
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -739,6 +758,8 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int)
 		var actorID sql.NullString
 		var actorDisplay sql.NullString
 		var resourceID sql.NullString
+		var beforeJSON []byte
+		var afterJSON []byte
 		var requestID sql.NullString
 		var ip sql.NullString
 		var userAgent sql.NullString
@@ -751,8 +772,8 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int)
 			&event.Action,
 			&event.ResourceType,
 			&resourceID,
-			&event.Before,
-			&event.After,
+			&beforeJSON,
+			&afterJSON,
 			&requestID,
 			&ip,
 			&userAgent,
@@ -771,6 +792,12 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit int)
 		}
 		if resourceID.Valid {
 			event.ResourceID = resourceID.String
+		}
+		if len(beforeJSON) > 0 {
+			event.Before = beforeJSON
+		}
+		if len(afterJSON) > 0 {
+			event.After = afterJSON
 		}
 		if requestID.Valid {
 			event.RequestID = requestID.String

@@ -290,13 +290,31 @@ export function setAdminWriteLock(config: ApiConfig, locked: boolean): Promise<v
 export async function listAuditEvents(
   config: ApiConfig,
   tenantId: string,
-  limit = 50
+  params: { limit?: number; offset?: number; action?: string; resource_type?: string; actor_id?: string } = {}
 ): Promise<AuditEvent[]> {
-  const data = await request<AuditEvent[] | null>(`/admin/tenants/${tenantId}/audit?limit=${limit}`, config);
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.action) query.set("action", params.action);
+  if (params.resource_type) query.set("resource_type", params.resource_type);
+  if (params.actor_id) query.set("actor_id", params.actor_id);
+  const data = await request<AuditEvent[] | null>(
+    `/admin/tenants/${tenantId}/audit?${query.toString()}`,
+    config
+  );
   return data ?? [];
 }
 
-export async function listAuditEventsAll(config: ApiConfig, limit = 50): Promise<AuditEvent[]> {
-  const data = await request<AuditEvent[] | null>(`/admin/audit?limit=${limit}`, config);
+export async function listAuditEventsAll(
+  config: ApiConfig,
+  params: { limit?: number; offset?: number; action?: string; resource_type?: string; actor_id?: string } = {}
+): Promise<AuditEvent[]> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.action) query.set("action", params.action);
+  if (params.resource_type) query.set("resource_type", params.resource_type);
+  if (params.actor_id) query.set("actor_id", params.actor_id);
+  const data = await request<AuditEvent[] | null>(`/admin/audit?${query.toString()}`, config);
   return data ?? [];
 }

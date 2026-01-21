@@ -701,11 +701,11 @@ func TestStoreListAuditEvents(t *testing.T) {
 		"req", "127.0.0.1", "agent", time.Now(),
 	)
 	mock.ExpectQuery("SELECT audit_event_id").
-		WithArgs(10, "t1").
+		WithArgs("t1", 10, 0).
 		WillReturnRows(rows)
 
 	st := New(db)
-	events, err := st.ListAuditEvents(context.Background(), "t1", 10)
+	events, err := st.ListAuditEvents(context.Background(), "t1", 10, 0, "", "", "")
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.NoError(t, mock.ExpectationsWereMet())

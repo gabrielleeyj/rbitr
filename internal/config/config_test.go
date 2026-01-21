@@ -40,6 +40,8 @@ func TestLoad(t *testing.T) {
 		{
 			name: "invalid limits fallback",
 			env: map[string]string{
+				"DATABASE_URL":         "",
+				"LISTEN_ADDR":          "",
 				"BODY_LIMIT_BYTES":     "nope",
 				"RESPONSE_LIMIT_BYTES": "bad",
 			},

@@ -882,7 +882,7 @@ func TestHandleAuditList(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("ListAuditEvents", context.Background(), "t1", 50).
+				storeMock.On("ListAuditEvents", context.Background(), "t1", 50, 0, "", "", "").
 					Return([]models.AdminAuditEvent{}, nil)
 			},
 			expectedCode: http.StatusOK,
@@ -940,7 +940,7 @@ func TestHandleAuditListAll(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("ListAuditEvents", context.Background(), "", 50).
+				storeMock.On("ListAuditEvents", context.Background(), "", 50, 0, "", "", "").
 					Return([]models.AdminAuditEvent{}, nil)
 			},
 			expectedCode: http.StatusOK,
