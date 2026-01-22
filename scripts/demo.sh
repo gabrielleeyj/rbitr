@@ -90,6 +90,9 @@ pretty "$evidence_resp"
 printf "\nEvidence Pack Preview Summary\n"
 if command -v jq >/dev/null 2>&1; then
   echo "$evidence_resp" | jq -r '.records[] | "- " + .decision + " " + .action_type + " (" + .reason + ")"'
+  echo ""
+  echo "Approval metadata preview:"
+  echo "$evidence_resp" | jq -r '.records[] | select(.approval_request_id != null) | "- " + .approval_request_id + " status=" + (.approval_status // "") + " decided_by=" + (.approval_decided_by // "")'
 else
   echo "Install jq for a concise summary."
 fi

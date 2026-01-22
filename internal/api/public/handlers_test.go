@@ -323,6 +323,93 @@ func TestHandleEvidence(t *testing.T) {
 	}
 }
 
+func TestHandleEvidenceIncludesApprovalMetadata(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).
+		Return(models.Tenant{TenantID: "t1"}, nil)
+	storeMock.On("ListEvidence", context.Background(), "t1", 50).
+		Return([]models.ActionDecisionRecord{
+			{
+				DecisionID:        "d1",
+				RequestID:         "r1",
+				TenantID:          "t1",
+				AgentID:           "agent",
+				ToolID:            "tool",
+				ActionType:        "PAYMENT.REFUND",
+				ActionRisk:        "HIGH",
+				ActionSummary:     "Refund",
+				Decision:          "ALLOW",
+				DecisionVersion:   "2026-01-20",
+				DecisionRisk:      "HIGH",
+				RuleID:            "rule_allow",
+				RulePriority:      10,
+				Reasons:           []models.DecisionReason{{Code: "ALLOW", Message: "ok"}},
+				Constraints:       map[string]any{},
+				PolicyVersion:     "p_v1",
+				Reason:            "ok",
+				RequestHash:       "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+				ApprovalRequestID: "ar1",
+				CreatedAt:         time.Now().UTC(),
+			},
+		}, nil)
+	storeMock.On("GetApprovalRequest", context.Background(), "t1", "ar1").
+		Return(models.ApprovalRequest{
+			ApprovalRequestID:  "ar1",
+			TenantID:           "t1",
+			AgentID:            "agent",
+			ToolID:             "tool",
+			ActionType:         "PAYMENT.REFUND",
+			RequestHash:        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+			Status:             "EXECUTED",
+			ExpiresAt:          time.Now().UTC().Add(10 * time.Minute),
+			CreatedAt:          time.Now().UTC(),
+			PolicyVersion:      "p_v1",
+			DecidedAt:          ptrTime(time.Now().UTC()),
+			DecidedBy:          "admin",
+			DecisionComment:    "approved",
+			ExecutedAt:         ptrTime(time.Now().UTC()),
+			ExecutedRequestID:  "req_exec",
+			ExecutedDecisionID: "dec_exec",
+			RequestDecisionID:  "dec_req",
+			ActionSummary:      "Refund",
+			Risk:               "HIGH",
+			RuleID:             "rule_approval",
+			Reasons:            []models.DecisionReason{{Code: "APPROVED", Message: "ok"}},
+		}, nil)
+
+	var storeAPI store.StoreAPI = storeMock
+	deps := Dependencies{
+		Store:   storeAPI,
+		Metrics: newTestMetrics(),
+		Config:  config.Config{BodyLimitSize: 256 * 1024},
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		nil,
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+	)
+	req.Header.Set(auth.AgentIDHeader, "agent")
+	req.Header.Set(auth.TenantKeyHeader, "key")
+
+	err := deps.handleEvidence(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var payload EvidenceResponse
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+	require.Len(t, payload.Records, 1)
+	record := payload.Records[0]
+	require.Equal(t, "EXECUTED", record.ApprovalStatus)
+	require.Equal(t, "admin", record.ApprovalDecidedBy)
+	require.Equal(t, "approved", record.ApprovalComment)
+	require.Equal(t, "req_exec", record.ApprovalExecutedRequestID)
+	require.Equal(t, "dec_exec", record.ApprovalExecutedDecisionID)
+	require.Equal(t, "dec_req", record.ApprovalRequestDecisionID)
+	require.NotNil(t, record.ApprovalDecidedAt)
+	require.NotNil(t, record.ApprovalExecutedAt)
+}
+
 func newTestMetrics() *telemetry.Metrics {
 	return &telemetry.Metrics{
 		DecisionsTotal:         prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total"}, []string{"decision", "action_type"}),
@@ -413,4 +500,8 @@ func keys(m map[string]any) []string {
 		out = append(out, key)
 	}
 	return out
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
 }
