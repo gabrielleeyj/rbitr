@@ -135,6 +135,61 @@ func TestEvaluatorCacheHit(t *testing.T) {
 	require.Equal(t, "rule_allow", result.Rule.ID)
 }
 
+func TestEvaluatorCacheHitInvalidOutput(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
+
+	evalIface := NewEvaluator(storeMock)
+	evaluator := evalIface.(*Evaluator)
+
+	invalidOutputPolicy := `package rbitr.policy
+
+import rego.v1
+
+decision := {
+	"decision": "ALLOW"
+}
+`
+	prepared, err := opa.PrepareQuery(context.Background(), invalidOutputPolicy)
+	require.NoError(t, err)
+
+	evaluator.cache["t1:p_v1"] = cachedPrepared{
+		prepared:  prepared,
+		module:    allowPolicy,
+		expiresAt: time.Now().Add(time.Minute),
+	}
+
+	_, err = evaluator.Evaluate(context.Background(), "t1", map[string]any{"action_type": "TICKET.CREATE"})
+	require.Error(t, err)
+	var invalidErr InvalidPolicyOutputError
+	require.ErrorAs(t, err, &invalidErr)
+	require.Equal(t, "p_v1", invalidErr.PolicyVersion)
+}
+
+func TestEvaluatorCacheKeyVersionMismatch(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p2", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v2"}, nil)
+
+	evalIface := NewEvaluator(storeMock)
+	evaluator := evalIface.(*Evaluator)
+
+	prepared, err := opa.PrepareQuery(context.Background(), invalidPolicy)
+	require.NoError(t, err)
+
+	evaluator.cache["t1:p_v1"] = cachedPrepared{
+		prepared:  prepared,
+		module:    invalidPolicy,
+		expiresAt: time.Now().Add(time.Minute),
+	}
+
+	result, err := evaluator.Evaluate(context.Background(), "t1", map[string]any{"action_type": "TICKET.CREATE"})
+	require.NoError(t, err)
+	require.Equal(t, "ALLOW", result.Decision)
+	require.Equal(t, "p_v2", result.PolicyVersion)
+}
+
 func TestEvaluatorCacheExpired(t *testing.T) {
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.On("GetPolicy", context.Background(), "t1").
