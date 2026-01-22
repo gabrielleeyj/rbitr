@@ -650,6 +650,16 @@ func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditActio
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
 	}
+	if d.Metrics != nil {
+		switch status {
+		case "APPROVED":
+			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("approved").Inc()
+		case "DENIED":
+			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("denied").Inc()
+		case "REVOKED":
+			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("revoked").Inc()
+		}
+	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, auditAction, "APPROVAL.REQUEST", approvalID, map[string]any{
 		"status":           before.Status,
 		"decided_at":       before.DecidedAt,

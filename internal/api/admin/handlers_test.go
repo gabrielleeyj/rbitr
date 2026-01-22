@@ -472,6 +472,9 @@ func newTestMetrics() *telemetry.Metrics {
 		DecisionLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
 		ToolLatencyMs:          prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
 		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total_admin"}, []string{"reason"}),
+		ApprovalsCreatedTotal:  prometheus.NewCounter(prometheus.CounterOpts{Name: "test_approvals_created_total_admin"}),
+		ApprovalsResolvedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_resolved_total_admin"}, []string{"resolution"}),
+		ApprovalsExecuteTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_execute_total_admin"}, []string{"result"}),
 	}
 }
 

@@ -3,13 +3,16 @@ package telemetry
 import "github.com/prometheus/client_golang/prometheus"
 
 type Metrics struct {
-	DecisionsTotal    *prometheus.CounterVec
-	GatewayRequests   prometheus.Counter
-	ToolExecTotal     prometheus.Counter
-	ErrorsTotal       prometheus.Counter
-	DecisionLatencyMs prometheus.Histogram
-	ToolLatencyMs     prometheus.Histogram
+	DecisionsTotal         *prometheus.CounterVec
+	GatewayRequests        prometheus.Counter
+	ToolExecTotal          prometheus.Counter
+	ErrorsTotal            prometheus.Counter
+	DecisionLatencyMs      prometheus.Histogram
+	ToolLatencyMs          prometheus.Histogram
 	PolicyEvalInvalidTotal *prometheus.CounterVec
+	ApprovalsCreatedTotal  prometheus.Counter
+	ApprovalsResolvedTotal *prometheus.CounterVec
+	ApprovalsExecuteTotal  *prometheus.CounterVec
 }
 
 func NewMetrics() *Metrics {
@@ -44,6 +47,18 @@ func NewMetrics() *Metrics {
 			Name: "policy_eval_invalid_total",
 			Help: "Total invalid policy outputs by reason.",
 		}, []string{"reason"}),
+		ApprovalsCreatedTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "approvals_created_total",
+			Help: "Total approval requests created.",
+		}),
+		ApprovalsResolvedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "approvals_resolved_total",
+			Help: "Total approvals resolved by resolution.",
+		}, []string{"resolution"}),
+		ApprovalsExecuteTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "approvals_execute_total",
+			Help: "Total approval executions by result.",
+		}, []string{"result"}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -53,6 +68,9 @@ func NewMetrics() *Metrics {
 		m.DecisionLatencyMs,
 		m.ToolLatencyMs,
 		m.PolicyEvalInvalidTotal,
+		m.ApprovalsCreatedTotal,
+		m.ApprovalsResolvedTotal,
+		m.ApprovalsExecuteTotal,
 	)
 	return m
 }
