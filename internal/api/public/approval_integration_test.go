@@ -503,3 +503,147 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 
 	require.NoError(t, sm.ExpectationsWereMet())
 }
+
+func TestApprovalResubmissionInvalidCases(t *testing.T) {
+	cases := []struct {
+		name             string
+		requestBody      string
+		approvalStatus   string
+		expiresAt        time.Time
+		token            string
+		expectedStatus   int
+		expectedError    string
+		expectExpireExec bool
+	}{
+		{
+			name:           "wrong token",
+			requestBody:    "{}",
+			approvalStatus: "APPROVED",
+			expiresAt:      time.Now().UTC().Add(5 * time.Minute),
+			token:          "wrong",
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "approval_token_invalid",
+		},
+		{
+			name:           "hash mismatch",
+			requestBody:    "{\"amount\":200}",
+			approvalStatus: "APPROVED",
+			expiresAt:      time.Now().UTC().Add(5 * time.Minute),
+			token:          "token123",
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "approval_request_hash_mismatch",
+		},
+		{
+			name:             "expired",
+			requestBody:      "{}",
+			approvalStatus:   "APPROVED",
+			expiresAt:        time.Now().UTC().Add(-1 * time.Minute),
+			token:            "token123",
+			expectedStatus:   http.StatusForbidden,
+			expectedError:    "approval_expired",
+			expectExpireExec: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, sm, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			tenantKeyHash := utils.HashString("tenant_demo_key")
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+		FROM rbitr.tenant_keys tk
+		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
+		WHERE tk.key_hash = $1`)).
+				WithArgs(tenantKeyHash).
+				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+
+			payload := ToolCallRequest{
+				HTTPMethod: "POST",
+				Path:       "/refund",
+				Query:      "",
+				Headers:    map[string]string{"Content-Type": "application/json"},
+				Body:       tc.requestBody,
+			}
+			bodyHash := utils.HashBody([]byte(payload.Body))
+			canonical := utils.CanonicalRequest{
+				TenantID: "t_demo",
+				AgentID:  "agent_demo",
+				ToolID:   "mock_internal",
+				Method:   payload.HTTPMethod,
+				Path:     payload.Path,
+				Query:    payload.Query,
+				Headers:  map[string]string{"content-type": "application/json"},
+				BodyHash: bodyHash,
+			}
+			requestHash := utils.HashCanonical(&canonical)
+			storedHash := requestHash
+			if tc.expectedError == "approval_request_hash_mismatch" {
+				storedHash = utils.HashCanonical(&utils.CanonicalRequest{
+					TenantID: "t_demo",
+					AgentID:  "agent_demo",
+					ToolID:   "mock_internal",
+					Method:   payload.HTTPMethod,
+					Path:     payload.Path,
+					Query:    payload.Query,
+					Headers:  map[string]string{"content-type": "application/json"},
+					BodyHash: utils.HashBody([]byte("{}")),
+				})
+			}
+
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE tenant_id = $1 AND approval_request_id = $2`)).
+				WithArgs("t_demo", "ar_1").
+				WillReturnRows(sqlmock.NewRows([]string{
+					"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+					"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
+					"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
+					"risk", "rule_id", "reasons",
+				}).AddRow(
+					"ar_1", "t_demo", "agent_demo", "mock_internal", "PAYMENT.REFUND", storedHash, tc.approvalStatus,
+					utils.HashString("token123"), tc.expiresAt, time.Now().UTC(), "p_v1", nil, nil, nil,
+					nil, nil, nil, "dec_req", "Refund", "HIGH", "rule_approval", nil,
+				))
+
+			if tc.expectExpireExec {
+				sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
+		SET status = 'EXPIRED', decided_at = $1
+		WHERE tenant_id = $2 AND approval_request_id = $3 AND status IN ('PENDING','APPROVED')`)).
+					WithArgs(sqlmock.AnyArg(), "t_demo", "ar_1").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			}
+
+			storeAPI := store.New(db)
+			publicDeps := Dependencies{
+				Store:   storeAPI,
+				Metrics: newTestMetrics(),
+				Config:  config.Config{BodyLimitSize: 256 * 1024, ResponseLimit: 256 * 1024},
+			}
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodPost,
+				testhelpers.MakeBody(payload),
+				testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+			)
+			req.Header.Set("X-Tenant-Key", "tenant_demo_key")
+			req.Header.Set("X-Agent-Id", "agent_demo")
+			req.Header.Set(approvalHeaderID, "ar_1")
+			req.Header.Set(approvalHeaderToken, tc.token)
+
+			err = publicDeps.handleToolCall(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedStatus, rec.Code)
+
+			var payloadResp map[string]string
+			require.NoError(t, json.NewDecoder(rec.Body).Decode(&payloadResp))
+			require.Equal(t, tc.expectedError, payloadResp["error"])
+
+			require.NoError(t, sm.ExpectationsWereMet())
+		})
+	}
+}
