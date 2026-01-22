@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -130,4 +131,38 @@ func TestRESTExecuteTransportError(t *testing.T) {
 	rest := &REST{Client: client, ResponseLimit: 64}
 	_, err := rest.Execute(context.Background(), Request{Method: http.MethodGet, URL: "http://example"})
 	require.Error(t, err)
+}
+
+type errReader struct{}
+
+func (errReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+func TestRESTExecuteBodyReadError(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := io.NopCloser(errReader{})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       body,
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	rest := &REST{Client: client, ResponseLimit: 64}
+	_, err := rest.Execute(context.Background(), Request{Method: http.MethodGet, URL: "http://example"})
+	require.Error(t, err)
+}
+
+func TestNewREST(t *testing.T) {
+	t.Parallel()
+
+	rest := NewREST(256)
+	require.NotNil(t, rest.Client)
+	require.Equal(t, int64(256), rest.ResponseLimit)
+	require.Equal(t, 10*time.Second, rest.Client.Timeout)
 }

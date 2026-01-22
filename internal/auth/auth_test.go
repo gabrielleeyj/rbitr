@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -145,6 +146,74 @@ func TestAuthenticateAdmin(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestAdminKeyFromRequest(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		headerKey string
+		headerVal string
+		expect    string
+	}{
+		{
+			name:      "bearer token",
+			headerKey: AuthorizationHeader,
+			headerVal: "Bearer token123",
+			expect:    "token123",
+		},
+		{
+			name:      "x-admin-key fallback",
+			headerKey: AdminKeyHeader,
+			headerVal: "adminkey",
+			expect:    "adminkey",
+		},
+		{
+			name:      "invalid bearer format",
+			headerKey: AuthorizationHeader,
+			headerVal: "Bearer",
+			expect:    "",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set(tc.headerKey, tc.headerVal)
+			if got := AdminKeyFromRequest(req); got != tc.expect {
+				t.Fatalf("expected %q got %q", tc.expect, got)
+			}
+		})
+	}
+}
+
+func TestBearerToken(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		value  string
+		expect string
+	}{
+		{name: "empty", value: "", expect: ""},
+		{name: "no space", value: "Bearer", expect: ""},
+		{name: "wrong scheme", value: "Token abc", expect: ""},
+		{name: "valid", value: "Bearer abc", expect: "abc"},
+		{name: "trimmed", value: "Bearer   abc ", expect: "abc"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := bearerToken(tc.value); got != tc.expect {
+				t.Fatalf("expected %q got %q", tc.expect, got)
+			}
 		})
 	}
 }

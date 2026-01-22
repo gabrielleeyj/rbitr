@@ -134,3 +134,53 @@ func TestEvaluatorCacheHit(t *testing.T) {
 	require.Equal(t, "LOW", result.Risk)
 	require.Equal(t, "rule_allow", result.Rule.ID)
 }
+
+func TestEvaluatorCacheExpired(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
+
+	evalIface := NewEvaluator(storeMock)
+	evaluator := evalIface.(*Evaluator)
+
+	prepared, err := opa.PrepareQuery(context.Background(), allowPolicy)
+	require.NoError(t, err)
+
+	evaluator.cache["t1:p_v1"] = cachedPrepared{
+		prepared:  prepared,
+		module:    allowPolicy,
+		expiresAt: time.Now().Add(-time.Minute),
+	}
+
+	result, err := evaluator.Evaluate(context.Background(), "t1", map[string]any{"action_type": "TICKET.CREATE"})
+	require.NoError(t, err)
+	require.Equal(t, "ALLOW", result.Decision)
+}
+
+func TestToDecisionReasons(t *testing.T) {
+	t.Parallel()
+
+	if got := toDecisionReasons(nil); got != nil {
+		t.Fatalf("expected nil reasons")
+	}
+
+	reasons := toDecisionReasons([]opa.Reason{{Code: "C", Message: "M"}})
+	if len(reasons) != 1 || reasons[0].Code != "C" {
+		t.Fatalf("unexpected reasons: %+v", reasons)
+	}
+}
+
+func TestWrapPolicyOutputError(t *testing.T) {
+	t.Parallel()
+
+	err := wrapPolicyOutputError(opa.PolicyOutputError{Reason: "bad_enum", Err: opa.ErrInvalidPolicyOutput}, "p_v1")
+	var invalidErr InvalidPolicyOutputError
+	require.ErrorAs(t, err, &invalidErr)
+	require.Equal(t, "bad_enum", invalidErr.Reason)
+	require.Equal(t, "p_v1", invalidErr.PolicyVersion)
+
+	err = wrapPolicyOutputError(opa.ErrInvalidPolicyOutput, "p_v2")
+	require.ErrorAs(t, err, &invalidErr)
+	require.Equal(t, "schema_violation", invalidErr.Reason)
+	require.Equal(t, "p_v2", invalidErr.PolicyVersion)
+}
