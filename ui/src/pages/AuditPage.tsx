@@ -7,7 +7,6 @@ import { listAuditEvents } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function AuditPage() {
@@ -29,20 +28,38 @@ export function AuditPage() {
   const [error, setError] = useState("");
   const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
-  const [actionFilter, setActionFilter] = useState("");
-  const [resourceTypeFilter, setResourceTypeFilter] = useState("");
-  const [actorIDFilter, setActorIDFilter] = useState("");
-  const [actionFilterInput, setActionFilterInput] = useState("");
-  const [resourceTypeFilterInput, setResourceTypeFilterInput] = useState("");
-  const [actorIDFilterInput, setActorIDFilterInput] = useState("");
+  const [actionFilter, setActionFilter] = useState("ALL");
+  const [resourceTypeFilter, setResourceTypeFilter] = useState("ALL");
+  const [actorIDFilter, setActorIDFilter] = useState("ALL");
+  const [actionFilterInput, setActionFilterInput] = useState("ALL");
+  const [resourceTypeFilterInput, setResourceTypeFilterInput] = useState("ALL");
+  const [actorIDFilterInput, setActorIDFilterInput] = useState("ALL");
   const [hasMore, setHasMore] = useState(false);
 
   const pageNumber = Math.floor(offset / limit) + 1;
   const canPrev = offset > 0;
   const canNext = hasMore;
 
+  const actionOptions = useMemo(() => {
+    const values = new Set(events.map((event) => event.action).filter(Boolean));
+    return Array.from(values).sort();
+  }, [events]);
+
+  const resourceTypeOptions = useMemo(() => {
+    const values = new Set(events.map((event) => event.resource_type).filter(Boolean));
+    return Array.from(values).sort();
+  }, [events]);
+
+  const actorOptions = useMemo(() => {
+    const values = new Set(events.map((event) => event.actor_id ?? event.actor_display).filter(Boolean));
+    return Array.from(values).sort();
+  }, [events]);
+
   const filtersActive = useMemo(
-    () => Boolean(actionFilterInput || resourceTypeFilterInput || actorIDFilterInput),
+    () =>
+      actionFilterInput !== "ALL" ||
+      resourceTypeFilterInput !== "ALL" ||
+      actorIDFilterInput !== "ALL",
     [actionFilterInput, resourceTypeFilterInput, actorIDFilterInput]
   );
 
@@ -54,9 +71,9 @@ export function AuditPage() {
       {
         limit: limit + 1,
         offset: nextOffset,
-        action: actionFilter || undefined,
-        resource_type: resourceTypeFilter || undefined,
-        actor_id: actorIDFilter || undefined,
+        action: actionFilter === "ALL" ? undefined : actionFilter,
+        resource_type: resourceTypeFilter === "ALL" ? undefined : resourceTypeFilter,
+        actor_id: actorIDFilter === "ALL" ? undefined : actorIDFilter,
       }
     );
     setHasMore(data.length > limit);
@@ -78,9 +95,9 @@ export function AuditPage() {
           {
             limit: limit + 1,
             offset,
-            action: actionFilter || undefined,
-            resource_type: resourceTypeFilter || undefined,
-            actor_id: actorIDFilter || undefined,
+            action: actionFilter === "ALL" ? undefined : actionFilter,
+            resource_type: resourceTypeFilter === "ALL" ? undefined : resourceTypeFilter,
+            actor_id: actorIDFilter === "ALL" ? undefined : actorIDFilter,
           }
         );
         if (!mounted) return;
@@ -120,27 +137,51 @@ export function AuditPage() {
           <div className="grid gap-3 md:grid-cols-4">
             <div>
               <div className="text-xs text-muted-foreground">Action</div>
-              <Input
-                value={actionFilterInput}
-                onChange={(event) => setActionFilterInput(event.target.value)}
-                placeholder="POLICY.VERSION.CREATE"
-              />
+              <Select value={actionFilterInput} onValueChange={setActionFilterInput}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All actions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {actionOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Resource type</div>
-              <Input
-                value={resourceTypeFilterInput}
-                onChange={(event) => setResourceTypeFilterInput(event.target.value)}
-                placeholder="POLICY.VERSION"
-              />
+              <Select value={resourceTypeFilterInput} onValueChange={setResourceTypeFilterInput}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All resources" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {resourceTypeOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Actor ID</div>
-              <Input
-                value={actorIDFilterInput}
-                onChange={(event) => setActorIDFilterInput(event.target.value)}
-                placeholder="admin_demo"
-              />
+              <Select value={actorIDFilterInput} onValueChange={setActorIDFilterInput}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All actors" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {actorOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-wrap items-end justify-start gap-2 md:justify-end">
               <Select
@@ -179,12 +220,12 @@ export function AuditPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setActionFilterInput("");
-                  setResourceTypeFilterInput("");
-                  setActorIDFilterInput("");
-                  setActionFilter("");
-                  setResourceTypeFilter("");
-                  setActorIDFilter("");
+                  setActionFilterInput("ALL");
+                  setResourceTypeFilterInput("ALL");
+                  setActorIDFilterInput("ALL");
+                  setActionFilter("ALL");
+                  setResourceTypeFilter("ALL");
+                  setActorIDFilter("ALL");
                   setOffset(0);
                 }}
                 disabled={!filtersActive}
@@ -194,7 +235,7 @@ export function AuditPage() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-2 border-t pt-3 md:flex-row md:items-center md:justify-between">
             <div className="text-xs text-muted-foreground">Page {pageNumber}</div>
             <div className="flex flex-wrap gap-2">
               <Button
