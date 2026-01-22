@@ -18,6 +18,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.DecisionLatencyMs)
 		prometheus.Unregister(metrics.ToolLatencyMs)
 		prometheus.Unregister(metrics.PolicyEvalInvalidTotal)
+		prometheus.Unregister(metrics.ApprovalsCreatedTotal)
+		prometheus.Unregister(metrics.ApprovalsResolvedTotal)
+		prometheus.Unregister(metrics.ApprovalsExecuteTotal)
 	})
 
 	if metrics.DecisionsTotal == nil || metrics.GatewayRequests == nil {
@@ -31,6 +34,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.DecisionLatencyMs.Observe(5)
 	metrics.ToolLatencyMs.Observe(10)
 	metrics.PolicyEvalInvalidTotal.WithLabelValues("schema_violation").Inc()
+	metrics.ApprovalsCreatedTotal.Inc()
+	metrics.ApprovalsResolvedTotal.WithLabelValues("approved").Inc()
+	metrics.ApprovalsExecuteTotal.WithLabelValues("success").Inc()
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -38,13 +44,16 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"decisions_total":        false,
-		"gateway_requests_total": false,
-		"tool_exec_total":        false,
-		"errors_total":           false,
-		"decision_latency_ms":    false,
-		"tool_latency_ms":        false,
+		"decisions_total":           false,
+		"gateway_requests_total":    false,
+		"tool_exec_total":           false,
+		"errors_total":              false,
+		"decision_latency_ms":       false,
+		"tool_latency_ms":           false,
 		"policy_eval_invalid_total": false,
+		"approvals_created_total":   false,
+		"approvals_resolved_total":  false,
+		"approvals_execute_total":   false,
 	}
 	for _, family := range families {
 		if _, ok := expected[family.GetName()]; ok {
