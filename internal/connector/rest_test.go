@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gabrielleeyj/rbitr/internal/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -117,6 +118,47 @@ func TestRESTExecuteForwardsHeaders(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, "value", gotHeader)
+}
+
+func TestRESTExecuteWithNilHeaders(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := io.NopCloser(strings.NewReader("ok"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       body,
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	rest := &REST{Client: client, ResponseLimit: 64}
+	resp, err := rest.Execute(context.Background(), Request{Method: http.MethodGet, URL: "http://example"})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.Status)
+	require.Equal(t, utils.HashBody([]byte("ok")), resp.BodyHash)
+}
+
+func TestRESTExecuteBodyHash(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := io.NopCloser(strings.NewReader("payload"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       body,
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	rest := &REST{Client: client, ResponseLimit: 64}
+	resp, err := rest.Execute(context.Background(), Request{Method: http.MethodGet, URL: "http://example"})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.BodyHash)
 }
 
 func TestRESTExecuteTransportError(t *testing.T) {
