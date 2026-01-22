@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -35,6 +36,14 @@ type PolicySimulationRequest struct {
 	Input         map[string]any `json:"input"`
 }
 
+type ApprovalDecisionRequest struct {
+	Comment string `json:"comment"`
+}
+
+type DefaultApprovalTTLRequest struct {
+	Seconds int `json:"seconds"`
+}
+
 type PolicyVersionsResponse struct {
 	TenantID            string                 `json:"tenant_id"`
 	ActivePolicyVersion string                 `json:"active_policy_version"`
@@ -42,7 +51,8 @@ type PolicyVersionsResponse struct {
 }
 
 type SettingsResponse struct {
-	AdminWriteLock bool `json:"admin_write_lock"`
+	AdminWriteLock            bool `json:"admin_write_lock"`
+	DefaultApprovalTTLSeconds int  `json:"default_approval_ttl_seconds"`
 }
 
 type ToolResponse struct {
@@ -109,7 +119,7 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 	exported := make([]models.ActionDecisionExport, 0, len(records))
 	for i := range records {
 		record := &records[i]
-		exported = append(exported, models.ActionDecisionExport{
+		export := models.ActionDecisionExport{
 			DecisionID:        record.DecisionID,
 			RequestID:         record.RequestID,
 			TenantID:          record.TenantID,
@@ -132,9 +142,77 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 			ResponseHash:      record.ResponseHash,
 			ApprovalRequestID: record.ApprovalRequestID,
 			Timestamp:         record.CreatedAt,
-		})
+		}
+		if record.ApprovalRequestID != "" {
+			if approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, record.ApprovalRequestID); err == nil {
+				export.ApprovalStatus = approval.Status
+				export.ApprovalDecidedAt = approval.DecidedAt
+				export.ApprovalDecidedBy = approval.DecidedBy
+				export.ApprovalComment = approval.DecisionComment
+				export.ApprovalExecutedAt = approval.ExecutedAt
+				export.ApprovalExecutedRequestID = approval.ExecutedRequestID
+				export.ApprovalExecutedDecisionID = approval.ExecutedDecisionID
+				export.ApprovalRequestDecisionID = approval.RequestDecisionID
+			}
+		}
+		exported = append(exported, export)
 	}
 	return c.JSON(http.StatusOK, map[string]any{"tenant_id": tenantID, "records": exported})
+}
+
+func (d Dependencies) handleApprovalsList(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+
+	tenantID := c.Param("tenant_id")
+	limit, err := parseLimit(c.QueryParam("limit"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+	}
+	offset, err := parseOffset(c.QueryParam("offset"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+	}
+	status := strings.ToUpper(strings.TrimSpace(c.QueryParam("status")))
+	if status != "" && !isApprovalStatus(status) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status"})
+	}
+
+	approvals, err := d.Store.ListApprovalRequests(c.Request().Context(), tenantID, status, limit, offset)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list approvals"})
+	}
+	return c.JSON(http.StatusOK, approvals)
+}
+
+func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+
+	tenantID := c.Param("tenant_id")
+	approvalID := c.Param("approval_request_id")
+	approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+	}
+	return c.JSON(http.StatusOK, approval)
+}
+
+func (d Dependencies) handleApprovalApprove(c *echo.Context) error {
+	return d.handleApprovalDecision(c, "APPROVED", "APPROVAL.REQUEST.APPROVE")
+}
+
+func (d Dependencies) handleApprovalDeny(c *echo.Context) error {
+	return d.handleApprovalDecision(c, "DENIED", "APPROVAL.REQUEST.DENY")
+}
+
+func (d Dependencies) handleApprovalRevoke(c *echo.Context) error {
+	return d.handleApprovalDecision(c, "REVOKED", "APPROVAL.REQUEST.REVOKE")
 }
 
 func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
@@ -410,7 +488,14 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load settings"})
 	}
-	return c.JSON(http.StatusOK, SettingsResponse{AdminWriteLock: locked})
+	defaultTTL := 900
+	if value, err := d.Store.GetDefaultApprovalTTLSeconds(c.Request().Context()); err == nil && value > 0 {
+		defaultTTL = value
+	}
+	return c.JSON(http.StatusOK, SettingsResponse{
+		AdminWriteLock:            locked,
+		DefaultApprovalTTLSeconds: defaultTTL,
+	})
 }
 
 func (d Dependencies) handleAuditList(c *echo.Context) error {
@@ -462,6 +547,105 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, events)
+}
+
+func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+
+	var payload DefaultApprovalTTLRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	if payload.Seconds < 60 || payload.Seconds > 86400 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "seconds must be between 60 and 86400"})
+	}
+
+	beforeTTL, _ := d.Store.GetDefaultApprovalTTLSeconds(c.Request().Context())
+	if err := d.Store.SetDefaultApprovalTTLSeconds(c.Request().Context(), payload.Seconds); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update default approval ttl"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.APPROVAL_TTL_DEFAULT.SET", "SETTINGS", "default_approval_ttl_seconds", map[string]any{
+		"value": beforeTTL,
+	}, map[string]any{
+		"value": payload.Seconds,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit approval ttl update",
+			"detail": err.Error(),
+		})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+
+	var payload ApprovalDecisionRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	approvalID := c.Param("approval_request_id")
+	before, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+	}
+
+	decidedAt := time.Now().UTC()
+	switch status {
+	case "APPROVED":
+		err = d.Store.ApproveApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
+	case "DENIED":
+		err = d.Store.DenyApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
+	case "REVOKED":
+		err = d.Store.RevokeApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status"})
+	}
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+		}
+		if errors.Is(err, store.ErrInvalidState) {
+			return c.JSON(http.StatusConflict, map[string]string{"error": "approval state invalid"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update approval"})
+	}
+
+	after, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, auditAction, "APPROVAL.REQUEST", approvalID, map[string]any{
+		"status":           before.Status,
+		"decided_at":       before.DecidedAt,
+		"decided_by":       before.DecidedBy,
+		"decision_comment": before.DecisionComment,
+	}, map[string]any{
+		"status":           after.Status,
+		"decided_at":       after.DecidedAt,
+		"decided_by":       after.DecidedBy,
+		"decision_comment": after.DecisionComment,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit approval decision",
+			"detail": err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, after)
 }
 
 func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, tenantID, action, resourceType, resourceID string, before, after map[string]any) error {
@@ -522,6 +706,15 @@ func marshalAuditPayload(payload map[string]any) (json.RawMessage, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func isApprovalStatus(value string) bool {
+	switch value {
+	case "PENDING", "APPROVED", "DENIED", "EXECUTED", "EXPIRED", "REVOKED":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseLimit(value string) (int, error) {

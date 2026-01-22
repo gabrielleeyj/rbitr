@@ -150,7 +150,36 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 }'
 ```
 
-Expect: HTTP 409 with approval_request_id.
+Expect: HTTP 409 with approval_request_id + approval_token.
+
+3b. Admin approves the request
+
+```bash
+curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval_request_id>/approve" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer admin_demo_key" \
+-d '{"comment":"approved in demo"}'
+```
+
+3c. Agent resubmits with approval headers
+
+```bash
+curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
+-H "Content-Type: application/json" \
+-H "X-Tenant-Key: tenant_demo_key" \
+-H "X-Agent-Id: agent_demo" \
+-H "X-Approval-Request-Id: <approval_request_id>" \
+-H "X-Approval-Token: <approval_token>" \
+-d '{
+"http_method": "POST",
+"path": "/refund",
+"query": "",
+"headers": {"Content-Type": "application/json"},
+"body": "{\"amount\":100}"
+}'
+```
+
+Expect: HTTP 200 with tool response and approval marked EXECUTED.
 
 4. Denied (DATA.EXPORT)
 

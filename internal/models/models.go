@@ -109,28 +109,36 @@ type DecisionReason struct {
 }
 
 type ActionDecisionExport struct {
-	DecisionID        string           `json:"decision_id"`
-	RequestID         string           `json:"request_id"`
-	TenantID          string           `json:"tenant_id"`
-	AgentID           string           `json:"agent_id"`
-	ToolID            string           `json:"tool_id"`
-	ActionType        string           `json:"action_type"`
-	ActionRisk        string           `json:"action_risk"`
-	ActionSummary     string           `json:"action_summary"`
-	Decision          string           `json:"decision"`
-	DecisionVersion   string           `json:"decision_version"`
-	DecisionRisk      string           `json:"decision_risk"`
-	RuleID            string           `json:"rule_id"`
-	RulePriority      int              `json:"rule_priority"`
-	Reasons           []DecisionReason `json:"reasons"`
-	Constraints       map[string]any   `json:"constraints"`
-	Tags              []string         `json:"tags,omitempty"`
-	PolicyVersion     string           `json:"policy_version"`
-	Reason            string           `json:"reason"`
-	RequestHash       string           `json:"request_hash"`
-	ResponseHash      string           `json:"response_hash,omitempty"`
-	ApprovalRequestID string           `json:"approval_request_id,omitempty"`
-	Timestamp         time.Time        `json:"timestamp"`
+	DecisionID                 string           `json:"decision_id"`
+	RequestID                  string           `json:"request_id"`
+	TenantID                   string           `json:"tenant_id"`
+	AgentID                    string           `json:"agent_id"`
+	ToolID                     string           `json:"tool_id"`
+	ActionType                 string           `json:"action_type"`
+	ActionRisk                 string           `json:"action_risk"`
+	ActionSummary              string           `json:"action_summary"`
+	Decision                   string           `json:"decision"`
+	DecisionVersion            string           `json:"decision_version"`
+	DecisionRisk               string           `json:"decision_risk"`
+	RuleID                     string           `json:"rule_id"`
+	RulePriority               int              `json:"rule_priority"`
+	Reasons                    []DecisionReason `json:"reasons"`
+	Constraints                map[string]any   `json:"constraints"`
+	Tags                       []string         `json:"tags,omitempty"`
+	PolicyVersion              string           `json:"policy_version"`
+	Reason                     string           `json:"reason"`
+	RequestHash                string           `json:"request_hash"`
+	ResponseHash               string           `json:"response_hash,omitempty"`
+	ApprovalRequestID          string           `json:"approval_request_id,omitempty"`
+	ApprovalStatus             string           `json:"approval_status,omitempty"`
+	ApprovalDecidedAt          *time.Time       `json:"approval_decided_at,omitempty"`
+	ApprovalDecidedBy          string           `json:"approval_decided_by,omitempty"`
+	ApprovalComment            string           `json:"approval_decision_comment,omitempty"`
+	ApprovalExecutedAt         *time.Time       `json:"approval_executed_at,omitempty"`
+	ApprovalExecutedRequestID  string           `json:"approval_executed_request_id,omitempty"`
+	ApprovalExecutedDecisionID string           `json:"approval_executed_decision_id,omitempty"`
+	ApprovalRequestDecisionID  string           `json:"approval_request_decision_id,omitempty"`
+	Timestamp                  time.Time        `json:"timestamp"`
 }
 
 type ApprovalRequest struct {
@@ -144,6 +152,7 @@ type ApprovalRequest struct {
 	ApprovalTokenHash  string           `json:"-"`
 	ExpiresAt          time.Time        `json:"expires_at"`
 	CreatedAt          time.Time        `json:"created_at"`
+	PolicyVersion      string           `json:"policy_version,omitempty"`
 	DecidedAt          *time.Time       `json:"decided_at,omitempty"`
 	DecidedBy          string           `json:"decided_by,omitempty"`
 	DecisionComment    string           `json:"decision_comment,omitempty"`

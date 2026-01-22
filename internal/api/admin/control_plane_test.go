@@ -830,6 +830,7 @@ func TestHandleSettingsGet(t *testing.T) {
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
+				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
 			},
 			expectedCode: http.StatusOK,
 		},
@@ -853,6 +854,78 @@ func TestHandleSettingsGet(t *testing.T) {
 
 			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
 			err := deps.handleSettingsGet(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleDefaultApprovalTTLUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      DefaultApprovalTTLRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      DefaultApprovalTTLRequest{Seconds: 900},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      DefaultApprovalTTLRequest{Seconds: 30},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  DefaultApprovalTTLRequest{Seconds: 900},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(600, nil)
+				storeMock.On("SetDefaultApprovalTTLSeconds", context.Background(), 900).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleDefaultApprovalTTLUpdate(ctx)
 			if tc.expectedErr {
 				require.Error(t, err)
 			} else {

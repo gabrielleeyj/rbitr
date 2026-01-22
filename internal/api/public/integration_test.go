@@ -131,13 +131,16 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 			}
 
 			if tc.expectApproval {
+				sm.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+					WithArgs("default_approval_ttl_seconds").
+					WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("900"))
 				sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
-		status, approval_token_hash, expires_at, created_at,
+		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
 		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`)).
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)).
 					WithArgs(
 						sqlmock.AnyArg(),
 						"t_demo",
@@ -146,7 +149,8 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 						"PENDING",
-						"",
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),

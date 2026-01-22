@@ -11,6 +11,7 @@ import { RiskOverridesPage } from "@/pages/RiskOverridesPage";
 import { ToolsPage } from "@/pages/ToolsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { AuditPage } from "@/pages/AuditPage";
+import { ApprovalsPage } from "@/pages/ApprovalsPage";
 
 export function App() {
   return (
@@ -31,6 +32,7 @@ export function App() {
             <Route path="evidence" element={<EvidencePage />} />
             <Route path="policies" element={<PoliciesPage />} />
             <Route path="risk-overrides" element={<RiskOverridesPage />} />
+            <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="audit" element={<AuditPage />} />

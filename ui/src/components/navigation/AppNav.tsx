@@ -10,6 +10,7 @@ import {
 import { NavLink } from "react-router-dom";
 import {
   Building2,
+  CheckCircle2,
   FileSearch,
   ShieldCheck,
   ShieldAlert,
@@ -22,6 +23,7 @@ import { useTenant } from "@/lib/tenant";
 const navItems = [
   { to: "/tenants", label: "Tenants", icon: Building2 },
   { to: "/evidence", label: "Evidence", icon: FileSearch },
+  { to: "/approvals", label: "Approvals", icon: CheckCircle2 },
   { to: "/policies", label: "Policies", icon: ShieldCheck },
   { to: "/risk-overrides", label: "Risk Overrides", icon: ShieldAlert },
   { to: "/tools", label: "Tools", icon: Wrench },

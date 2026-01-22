@@ -29,6 +29,14 @@ export interface EvidenceRecord {
   request_hash: string;
   response_hash?: string;
   approval_request_id?: string;
+  approval_status?: string;
+  approval_decided_at?: string;
+  approval_decided_by?: string;
+  approval_decision_comment?: string;
+  approval_executed_at?: string;
+  approval_executed_request_id?: string;
+  approval_executed_decision_id?: string;
+  approval_request_decision_id?: string;
   timestamp: string;
 }
 
@@ -81,6 +89,7 @@ export interface RiskOverride {
 
 export interface AdminSettings {
   admin_write_lock: boolean;
+  default_approval_ttl_seconds: number;
 }
 
 export interface AuditEvent {
@@ -98,6 +107,30 @@ export interface AuditEvent {
   ip?: string;
   user_agent?: string;
   created_at: string;
+}
+
+export interface ApprovalRequest {
+  approval_request_id: string;
+  tenant_id: string;
+  agent_id: string;
+  tool_id: string;
+  action_type: string;
+  request_hash: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  policy_version?: string;
+  decided_at?: string;
+  decided_by?: string;
+  decision_comment?: string;
+  executed_at?: string;
+  executed_request_id?: string;
+  executed_decision_id?: string;
+  request_decision_id?: string;
+  action_summary?: string;
+  risk?: string;
+  rule_id?: string;
+  reasons?: { code: string; message: string }[];
 }
 
 function apiBaseUrl() {
@@ -276,6 +309,78 @@ export function deleteRiskOverride(
   });
 }
 
+export async function listApprovals(
+  config: ApiConfig,
+  tenantId: string,
+  params: { status?: string; limit?: number; offset?: number } = {}
+): Promise<ApprovalRequest[]> {
+  const query = new URLSearchParams();
+  if (params.status) query.set("status", params.status);
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  const data = await request<ApprovalRequest[] | null>(
+    `/admin/tenants/${tenantId}/approvals?${query.toString()}`,
+    config
+  );
+  return data ?? [];
+}
+
+export function getApproval(
+  config: ApiConfig,
+  tenantId: string,
+  approvalRequestId: string
+): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(`/admin/tenants/${tenantId}/approvals/${approvalRequestId}`, config);
+}
+
+export function approveApproval(
+  config: ApiConfig,
+  tenantId: string,
+  approvalRequestId: string,
+  comment?: string
+): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(
+    `/admin/tenants/${tenantId}/approvals/${approvalRequestId}/approve`,
+    config,
+    {
+      method: "POST",
+      body: JSON.stringify({ comment: comment ?? "" }),
+    }
+  );
+}
+
+export function denyApproval(
+  config: ApiConfig,
+  tenantId: string,
+  approvalRequestId: string,
+  comment?: string
+): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(
+    `/admin/tenants/${tenantId}/approvals/${approvalRequestId}/deny`,
+    config,
+    {
+      method: "POST",
+      body: JSON.stringify({ comment: comment ?? "" }),
+    }
+  );
+}
+
+export function revokeApproval(
+  config: ApiConfig,
+  tenantId: string,
+  approvalRequestId: string,
+  comment?: string
+): Promise<ApprovalRequest> {
+  return request<ApprovalRequest>(
+    `/admin/tenants/${tenantId}/approvals/${approvalRequestId}/revoke`,
+    config,
+    {
+      method: "POST",
+      body: JSON.stringify({ comment: comment ?? "" }),
+    }
+  );
+}
+
 export function getSettings(config: ApiConfig): Promise<AdminSettings> {
   return request<AdminSettings>(`/admin/settings`, config);
 }
@@ -284,6 +389,13 @@ export function setAdminWriteLock(config: ApiConfig, locked: boolean): Promise<v
   return request<void>(`/admin/settings/admin-write-lock`, config, {
     method: "PUT",
     body: JSON.stringify({ locked }),
+  });
+}
+
+export function setDefaultApprovalTTL(config: ApiConfig, seconds: number): Promise<void> {
+  return request<void>(`/admin/settings/default-approval-ttl`, config, {
+    method: "PUT",
+    body: JSON.stringify({ seconds }),
   });
 }
 

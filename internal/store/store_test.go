@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"regexp"
 	"testing"
 	"time"
@@ -51,6 +52,55 @@ func TestStoreGetTenantByKeyHash(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestStoreSetDefaultApprovalTTLSeconds(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs("default_approval_ttl_seconds", "900", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.SetDefaultApprovalTTLSeconds(context.Background(), 900))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDefaultApprovalTTLSeconds(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("default_approval_ttl_seconds").
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("900"))
+
+	st := New(db)
+	value, err := st.GetDefaultApprovalTTLSeconds(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 900, value)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDefaultApprovalTTLSecondsNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("default_approval_ttl_seconds").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	_, err = st.GetDefaultApprovalTTLSeconds(context.Background())
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestStoreGetAdminKeyByHash(t *testing.T) {
@@ -664,11 +714,11 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 
 	query := regexp.QuoteMeta(`INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
-		status, approval_token_hash, expires_at, created_at,
+		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
 		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)
 	mock.ExpectExec(query).
 		WithArgs(
 			"ar1",
@@ -679,6 +729,7 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 			"hash",
 			"PENDING",
 			"",
+			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
@@ -707,6 +758,54 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 		ExpiresAt:         time.Now(),
 		CreatedAt:         time.Now(),
 	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreApproveApprovalRequest(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs("APPROVED", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.ApproveApprovalRequest(context.Background(), "t1", "ar1", "admin", "ok", time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreApproveApprovalRequestInvalidState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs("APPROVED", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT status FROM rbitr.approval_requests").
+		WithArgs("t1", "ar1").
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("DENIED"))
+
+	st := New(db)
+	err = st.ApproveApprovalRequest(context.Background(), "t1", "ar1", "admin", "ok", time.Now().UTC())
+	require.ErrorIs(t, err, ErrInvalidState)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreMarkApprovalExecuted(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), "req1", "dec1", "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.MarkApprovalExecuted(context.Background(), "t1", "ar1", "req1", "dec1", time.Now().UTC())
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

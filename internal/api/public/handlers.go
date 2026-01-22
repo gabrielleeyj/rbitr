@@ -1,6 +1,9 @@
 package public
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -41,10 +44,15 @@ type ToolCallRequest struct {
 }
 
 type ToolCallResponse struct {
+	Error             string            `json:"error,omitempty"`
 	RequestID         string            `json:"request_id"`
 	Decision          string            `json:"decision"`
 	Reason            string            `json:"reason"`
 	ApprovalRequestID string            `json:"approval_request_id,omitempty"`
+	ApprovalToken     string            `json:"approval_token,omitempty"`
+	ExpiresAt         string            `json:"expires_at,omitempty"`
+	ActionType        string            `json:"action_type,omitempty"`
+	Risk              string            `json:"risk,omitempty"`
 	ToolStatus        int               `json:"tool_status,omitempty"`
 	ToolHeaders       map[string]string `json:"tool_headers,omitempty"`
 	ToolBody          string            `json:"tool_body,omitempty"`
@@ -57,6 +65,12 @@ type EvidenceResponse struct {
 
 const decisionDeny = "DENY"
 const decisionInvalidReason = "policy output invalid"
+const approvalHeaderID = "X-Approval-Request-Id"
+const approvalHeaderToken = "X-Approval-Token"
+const defaultApprovalTTL = 15 * time.Minute
+
+var errToolNotFound = errors.New("tool not found")
+var errConnectorMissing = errors.New("connector not configured")
 
 func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	v1 := e.Group("/v1")
@@ -125,6 +139,29 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 
 	classificationResult := classification.Classify(toolID, payload.HTTPMethod, payload.Path, payload.Query, filteredHeaders)
 	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
+	approvalID := c.Request().Header.Get(approvalHeaderID)
+	approvalToken := c.Request().Header.Get(approvalHeaderToken)
+	if approvalID != "" || approvalToken != "" {
+		if approvalID == "" || approvalToken == "" {
+			d.Metrics.ErrorsTotal.Inc()
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "approval headers required"})
+		}
+		return d.handleApprovedToolCall(c, approvedToolCallParams{
+			tenantID:              tenant.TenantID,
+			agentID:               agentID,
+			toolID:                toolID,
+			requestID:             requestID,
+			requestHash:           requestHash,
+			classificationRisk:    classificationResult.ActionRisk,
+			classificationType:    classificationResult.ActionType,
+			classificationSummary: classificationResult.ActionSummary,
+			payload:               payload,
+			bodyBytes:             bodyBytes,
+			filteredHeaders:       filteredHeaders,
+			approvalID:            approvalID,
+			approvalToken:         approvalToken,
+		})
+	}
 	if overrideRisk, lookupErr := d.Store.GetRiskOverride(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
 		classificationResult.ActionRisk = overrideRisk
 	} else if !errors.Is(lookupErr, store.ErrNotFound) {
@@ -220,6 +257,17 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			Reason:    firstReasonMessage(decisionResult.Reasons),
 		})
 	case "REQUIRE_APPROVAL":
+		now := time.Now().UTC()
+		token, err := generateApprovalToken()
+		if err != nil {
+			d.Metrics.ErrorsTotal.Inc()
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate approval token"})
+		}
+		actionRisk := decisionResult.Risk
+		if actionRisk == "" {
+			actionRisk = classificationResult.ActionRisk
+		}
+		expiresAt := now.Add(approvalTTL(c.Request().Context(), d.Store, decisionResult.Constraints))
 		approvalID := "ar_" + uuid.NewString()
 		approval := models.ApprovalRequest{
 			ApprovalRequestID: approvalID,
@@ -229,8 +277,15 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			ActionType:        classificationResult.ActionType,
 			RequestHash:       requestHash,
 			Status:            "PENDING",
-			ExpiresAt:         time.Now().UTC().Add(1 * time.Hour),
-			CreatedAt:         time.Now().UTC(),
+			ApprovalTokenHash: utils.HashString(token),
+			ExpiresAt:         expiresAt,
+			CreatedAt:         now,
+			PolicyVersion:     decisionResult.PolicyVersion,
+			RequestDecisionID: decisionID,
+			ActionSummary:     classificationResult.ActionSummary,
+			Risk:              actionRisk,
+			RuleID:            decisionResult.Rule.ID,
+			Reasons:           decisionResult.Reasons,
 		}
 		adr.ApprovalRequestID = approvalID
 		d.Metrics.DecisionsTotal.WithLabelValues("REQUIRE_APPROVAL", classificationResult.ActionType).Inc()
@@ -243,44 +298,27 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
 		}
 		return c.JSON(http.StatusConflict, ToolCallResponse{
+			Error:             "approval_required",
 			RequestID:         requestID,
 			Decision:          "REQUIRE_APPROVAL",
 			Reason:            firstReasonMessage(decisionResult.Reasons),
 			ApprovalRequestID: approvalID,
+			ApprovalToken:     token,
+			ExpiresAt:         expiresAt.Format(time.RFC3339),
+			ActionType:        classificationResult.ActionType,
+			Risk:              actionRisk,
 		})
 	case "ALLOW":
-		tool, err := d.Store.GetTool(c.Request().Context(), tenant.TenantID, toolID)
-		if err != nil {
-			d.Metrics.ErrorsTotal.Inc()
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
-		}
-
-		if d.Connector == nil {
-			d.Metrics.ErrorsTotal.Inc()
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
-		}
-		url := strings.TrimRight(tool.BaseURL, "/") + payload.Path
-		if payload.Query != "" {
-			if strings.HasPrefix(payload.Query, "?") {
-				url += payload.Query
-			} else {
-				url += "?" + payload.Query
-			}
-		}
-
-		forwardHeaders := make(map[string]string)
-		maps.Copy(forwardHeaders, filteredHeaders)
-		applyToolAuth(forwardHeaders, &tool)
-
 		toolStart := time.Now()
-		resp, err := d.Connector.Execute(c.Request().Context(), connector.Request{
-			Method:  payload.HTTPMethod,
-			URL:     url,
-			Headers: forwardHeaders,
-			Body:    bodyBytes,
-		})
+		resp, err := d.executeToolCall(c.Request().Context(), tenant.TenantID, toolID, payload, bodyBytes, filteredHeaders)
 		if err != nil {
 			d.Metrics.ErrorsTotal.Inc()
+			if errors.Is(err, errToolNotFound) {
+				return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+			}
+			if errors.Is(err, errConnectorMissing) {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
+			}
 			return c.JSON(http.StatusBadGateway, map[string]string{"error": "tool execution failed"})
 		}
 		d.Metrics.ToolLatencyMs.Observe(float64(time.Since(toolStart).Milliseconds()))
@@ -305,6 +343,237 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		d.Metrics.ErrorsTotal.Inc()
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "unknown decision"})
 	}
+}
+
+type approvedToolCallParams struct {
+	tenantID              string
+	agentID               string
+	toolID                string
+	requestID             string
+	requestHash           string
+	classificationRisk    string
+	classificationType    string
+	classificationSummary string
+	payload               ToolCallRequest
+	bodyBytes             []byte
+	filteredHeaders       map[string]string
+	approvalID            string
+	approvalToken         string
+}
+
+func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedToolCallParams) error {
+	ctx := c.Request().Context()
+	approval, err := d.Store.GetApprovalRequest(ctx, params.tenantID, params.approvalID)
+	if err != nil {
+		d.Metrics.ErrorsTotal.Inc()
+		if errors.Is(err, store.ErrNotFound) {
+			return approvalError(c, http.StatusForbidden, "approval_token_invalid")
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "approval lookup failed"})
+	}
+
+	now := time.Now().UTC()
+	if approval.Status == "EXECUTED" {
+		return approvalError(c, http.StatusConflict, "approval_already_executed")
+	}
+	if approval.Status == "EXPIRED" {
+		return approvalError(c, http.StatusForbidden, "approval_expired")
+	}
+	if approval.Status != "APPROVED" {
+		return approvalError(c, http.StatusForbidden, "approval_not_approved")
+	}
+	if now.After(approval.ExpiresAt) {
+		_ = d.Store.MarkApprovalExpired(ctx, params.tenantID, params.approvalID, now)
+		return approvalError(c, http.StatusForbidden, "approval_expired")
+	}
+	if utils.HashString(params.approvalToken) != approval.ApprovalTokenHash {
+		return approvalError(c, http.StatusForbidden, "approval_token_invalid")
+	}
+	if approval.RequestHash != params.requestHash {
+		return approvalError(c, http.StatusForbidden, "approval_request_hash_mismatch")
+	}
+
+	actionType := approval.ActionType
+	if actionType == "" {
+		actionType = params.classificationType
+	}
+	actionRisk := approval.Risk
+	if actionRisk == "" {
+		actionRisk = params.classificationRisk
+	}
+	actionSummary := approval.ActionSummary
+	if actionSummary == "" {
+		actionSummary = params.classificationSummary
+	}
+	c.Set(telemetry.CtxActionType, actionType)
+	c.Set(telemetry.CtxDecision, "ALLOW")
+
+	toolStart := time.Now()
+	resp, err := d.executeToolCall(ctx, params.tenantID, params.toolID, params.payload, params.bodyBytes, params.filteredHeaders)
+	if err != nil {
+		d.Metrics.ErrorsTotal.Inc()
+		if errors.Is(err, errToolNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+		}
+		if errors.Is(err, errConnectorMissing) {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
+		}
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "tool execution failed"})
+	}
+	d.Metrics.ToolLatencyMs.Observe(float64(time.Since(toolStart).Milliseconds()))
+
+	decisionID := "d_" + uuid.NewString()
+	ruleID := approval.RuleID
+	if ruleID == "" {
+		ruleID = "approval_granted"
+	}
+	policyVersion := approval.PolicyVersion
+	if policyVersion == "" {
+		policyVersion = "unknown"
+	}
+	reasons := []models.DecisionReason{{Code: "APPROVED", Message: "Approved execution"}}
+	adr := models.ActionDecisionRecord{
+		DecisionID:        decisionID,
+		RequestID:         params.requestID,
+		TenantID:          params.tenantID,
+		AgentID:           params.agentID,
+		ToolID:            params.toolID,
+		ActionType:        actionType,
+		ActionRisk:        actionRisk,
+		ActionSummary:     actionSummary,
+		Decision:          "ALLOW",
+		DecisionVersion:   "approval_execution",
+		DecisionRisk:      actionRisk,
+		RuleID:            ruleID,
+		RulePriority:      0,
+		Reasons:           reasons,
+		Constraints:       map[string]any{},
+		Tags:              nil,
+		PolicyVersion:     policyVersion,
+		Reason:            firstReasonMessage(reasons),
+		RequestHash:       params.requestHash,
+		ResponseHash:      resp.BodyHash,
+		ApprovalRequestID: approval.ApprovalRequestID,
+		CreatedAt:         time.Now().UTC(),
+	}
+	if err := d.Store.InsertADR(ctx, adr); err != nil {
+		d.Metrics.ErrorsTotal.Inc()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
+	}
+	if err := d.Store.MarkApprovalExecuted(ctx, params.tenantID, params.approvalID, params.requestID, decisionID, time.Now().UTC()); err != nil {
+		d.Metrics.ErrorsTotal.Inc()
+		if errors.Is(err, store.ErrInvalidState) {
+			return approvalError(c, http.StatusConflict, "approval_already_executed")
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			return approvalError(c, http.StatusForbidden, "approval_token_invalid")
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update approval"})
+	}
+
+	d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", actionType).Inc()
+	d.Metrics.ToolExecTotal.Inc()
+
+	return c.JSON(http.StatusOK, ToolCallResponse{
+		RequestID:   params.requestID,
+		Decision:    "ALLOW",
+		Reason:      firstReasonMessage(reasons),
+		ToolStatus:  resp.Status,
+		ToolHeaders: resp.Headers,
+		ToolBody:    string(resp.Body),
+	})
+}
+
+func (d *Dependencies) executeToolCall(ctx context.Context, tenantID, toolID string, payload ToolCallRequest, bodyBytes []byte, filteredHeaders map[string]string) (connector.Response, error) {
+	tool, err := d.Store.GetTool(ctx, tenantID, toolID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return connector.Response{}, errToolNotFound
+		}
+		return connector.Response{}, err
+	}
+	if d.Connector == nil {
+		return connector.Response{}, errConnectorMissing
+	}
+	url := strings.TrimRight(tool.BaseURL, "/") + payload.Path
+	if payload.Query != "" {
+		if strings.HasPrefix(payload.Query, "?") {
+			url += payload.Query
+		} else {
+			url += "?" + payload.Query
+		}
+	}
+
+	forwardHeaders := make(map[string]string)
+	maps.Copy(forwardHeaders, filteredHeaders)
+	applyToolAuth(forwardHeaders, &tool)
+
+	return d.Connector.Execute(ctx, connector.Request{
+		Method:  payload.HTTPMethod,
+		URL:     url,
+		Headers: forwardHeaders,
+		Body:    bodyBytes,
+	})
+}
+
+func approvalTTL(ctx context.Context, st store.StoreAPI, constraints map[string]any) time.Duration {
+	if constraints == nil {
+		return defaultApprovalTTLFromStore(ctx, st)
+	}
+	rawApproval, ok := constraints["approval"]
+	if !ok {
+		return defaultApprovalTTLFromStore(ctx, st)
+	}
+	approval, ok := rawApproval.(map[string]any)
+	if !ok {
+		return defaultApprovalTTLFromStore(ctx, st)
+	}
+	rawTTL, ok := approval["expires_in_seconds"]
+	if !ok {
+		return defaultApprovalTTLFromStore(ctx, st)
+	}
+	switch value := rawTTL.(type) {
+	case float64:
+		if value > 0 {
+			return time.Duration(value) * time.Second
+		}
+	case int:
+		if value > 0 {
+			return time.Duration(value) * time.Second
+		}
+	case int64:
+		if value > 0 {
+			return time.Duration(value) * time.Second
+		}
+	case json.Number:
+		if parsed, err := value.Int64(); err == nil && parsed > 0 {
+			return time.Duration(parsed) * time.Second
+		}
+	}
+	return defaultApprovalTTLFromStore(ctx, st)
+}
+
+func defaultApprovalTTLFromStore(ctx context.Context, st store.StoreAPI) time.Duration {
+	if st == nil {
+		return defaultApprovalTTL
+	}
+	seconds, err := st.GetDefaultApprovalTTLSeconds(ctx)
+	if err != nil || seconds <= 0 {
+		return defaultApprovalTTL
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func generateApprovalToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func approvalError(c *echo.Context, status int, code string) error {
+	return c.JSON(status, map[string]string{"error": code})
 }
 
 func (d *Dependencies) handleEvidence(c *echo.Context) error {
@@ -338,7 +607,7 @@ func (d *Dependencies) handleEvidence(c *echo.Context) error {
 	exported := make([]models.ActionDecisionExport, 0, len(records))
 	for i := range records {
 		record := &records[i]
-		exported = append(exported, models.ActionDecisionExport{
+		export := models.ActionDecisionExport{
 			DecisionID:        record.DecisionID,
 			RequestID:         record.RequestID,
 			TenantID:          record.TenantID,
@@ -361,7 +630,20 @@ func (d *Dependencies) handleEvidence(c *echo.Context) error {
 			ResponseHash:      record.ResponseHash,
 			ApprovalRequestID: record.ApprovalRequestID,
 			Timestamp:         record.CreatedAt,
-		})
+		}
+		if record.ApprovalRequestID != "" {
+			if approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenant.TenantID, record.ApprovalRequestID); err == nil {
+				export.ApprovalStatus = approval.Status
+				export.ApprovalDecidedAt = approval.DecidedAt
+				export.ApprovalDecidedBy = approval.DecidedBy
+				export.ApprovalComment = approval.DecisionComment
+				export.ApprovalExecutedAt = approval.ExecutedAt
+				export.ApprovalExecutedRequestID = approval.ExecutedRequestID
+				export.ApprovalExecutedDecisionID = approval.ExecutedDecisionID
+				export.ApprovalRequestDecisionID = approval.RequestDecisionID
+			}
+		}
+		exported = append(exported, export)
 	}
 
 	return c.JSON(http.StatusOK, EvidenceResponse{

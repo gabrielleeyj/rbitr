@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,11 +18,13 @@ var (
 	ErrNotFound          = errors.New("not found")
 	ErrBootstrapComplete = errors.New("bootstrap already completed")
 	ErrAdminWriteLocked  = errors.New("admin writes locked")
+	ErrInvalidState      = errors.New("invalid state")
 )
 
 const (
 	bootstrapKey      = "bootstrap_complete"
 	adminWriteLockKey = "admin_write_lock"
+	defaultApprovalTTLSecondsKey = "default_approval_ttl_seconds"
 	settingTrue       = "true"
 	settingFalse      = "false"
 )
@@ -46,6 +49,13 @@ type StoreAPI interface {
 	DeleteRiskOverride(ctx context.Context, tenantID, actionType string) error
 	InsertADR(ctx context.Context, record models.ActionDecisionRecord) error
 	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
+	ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error)
+	GetApprovalRequest(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
+	ApproveApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
+	DenyApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
+	RevokeApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
+	MarkApprovalExecuted(ctx context.Context, tenantID, approvalRequestID, requestID, decisionID string, executedAt time.Time) error
+	MarkApprovalExpired(ctx context.Context, tenantID, approvalRequestID string, expiredAt time.Time) error
 	ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error)
 	ListEvidenceFiltered(ctx context.Context, tenantID, decision, actionType, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error)
 	UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error
@@ -56,6 +66,8 @@ type StoreAPI interface {
 	GetBootstrapComplete(ctx context.Context) (bool, error)
 	SetAdminWriteLock(ctx context.Context, locked bool) error
 	GetAdminWriteLock(ctx context.Context) (bool, error)
+	SetDefaultApprovalTTLSeconds(ctx context.Context, seconds int) error
+	GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error)
 	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error)
 	InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error
 }
@@ -434,11 +446,11 @@ func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecor
 func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error {
 	query := `INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
-		status, approval_token_hash, expires_at, created_at,
+		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
 		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
 	var reasonsJSON []byte
 	if len(req.Reasons) > 0 {
 		var err error
@@ -458,6 +470,7 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 		req.ApprovalTokenHash,
 		req.ExpiresAt,
 		req.CreatedAt,
+		nullableString(req.PolicyVersion),
 		req.DecidedAt,
 		nullableString(req.DecidedBy),
 		nullableString(req.DecisionComment),
@@ -471,6 +484,143 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 		reasonsJSON,
 	)
 	return err
+}
+
+func (s *Store) ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	args := []any{tenantID}
+	clauses := []string{"tenant_id = $1"}
+	if status != "" {
+		args = append(args, status)
+		clauses = append(clauses, fmt.Sprintf("status = $%d", len(args)))
+	}
+	args = append(args, limit, offset)
+
+	query := fmt.Sprintf(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE %s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d`, strings.Join(clauses, " AND "), len(args)-1, len(args))
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []models.ApprovalRequest
+	for rows.Next() {
+		approval, err := scanApprovalRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, approval)
+	}
+	return approvals, rows.Err()
+}
+
+func (s *Store) GetApprovalRequest(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE tenant_id = $1 AND approval_request_id = $2`, tenantID, approvalRequestID)
+	approval, err := scanApprovalRequest(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.ApprovalRequest{}, ErrNotFound
+		}
+		return models.ApprovalRequest{}, err
+	}
+	return approval, nil
+}
+
+func (s *Store) ApproveApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error {
+	return s.updateApprovalDecision(ctx, tenantID, approvalRequestID, "APPROVED", decidedBy, comment, decidedAt)
+}
+
+func (s *Store) DenyApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error {
+	return s.updateApprovalDecision(ctx, tenantID, approvalRequestID, "DENIED", decidedBy, comment, decidedAt)
+}
+
+func (s *Store) RevokeApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error {
+	return s.updateApprovalDecision(ctx, tenantID, approvalRequestID, "REVOKED", decidedBy, comment, decidedAt)
+}
+
+func (s *Store) MarkApprovalExecuted(ctx context.Context, tenantID, approvalRequestID, requestID, decisionID string, executedAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
+		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3
+		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'APPROVED'`,
+		executedAt, requestID, decisionID, tenantID, approvalRequestID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return s.approvalStateError(ctx, tenantID, approvalRequestID)
+	}
+	return nil
+}
+
+func (s *Store) MarkApprovalExpired(ctx context.Context, tenantID, approvalRequestID string, expiredAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
+		SET status = 'EXPIRED', decided_at = $1
+		WHERE tenant_id = $2 AND approval_request_id = $3 AND status IN ('PENDING','APPROVED')`,
+		expiredAt, tenantID, approvalRequestID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return s.approvalStateError(ctx, tenantID, approvalRequestID)
+	}
+	return nil
+}
+
+func (s *Store) updateApprovalDecision(ctx context.Context, tenantID, approvalRequestID, status, decidedBy, comment string, decidedAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
+		SET status = $1, decided_at = $2, decided_by = $3, decision_comment = $4
+		WHERE tenant_id = $5 AND approval_request_id = $6 AND status = 'PENDING'`,
+		status, decidedAt, nullableString(decidedBy), nullableString(comment), tenantID, approvalRequestID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return s.approvalStateError(ctx, tenantID, approvalRequestID)
+	}
+	return nil
+}
+
+func (s *Store) approvalStateError(ctx context.Context, tenantID, approvalRequestID string) error {
+	row := s.db.QueryRowContext(ctx, `SELECT status FROM rbitr.approval_requests WHERE tenant_id = $1 AND approval_request_id = $2`, tenantID, approvalRequestID)
+	var status string
+	if err := row.Scan(&status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return ErrInvalidState
 }
 
 func (s *Store) ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error) {
@@ -720,6 +870,34 @@ func (s *Store) GetAdminWriteLock(ctx context.Context) (bool, error) {
 	return value == settingTrue, nil
 }
 
+func (s *Store) SetDefaultApprovalTTLSeconds(ctx context.Context, seconds int) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+		defaultApprovalTTLSecondsKey,
+		strconv.Itoa(seconds),
+		time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *Store) GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, defaultApprovalTTLSecondsKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	return parsed, nil
+}
+
 func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
 	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, adminWriteLockKey)
 	var value string
@@ -872,4 +1050,94 @@ func hashKey(key string) string {
 
 func nullableString(value string) sql.NullString {
 	return sql.NullString{String: value, Valid: value != ""}
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanApprovalRequest(scanner rowScanner) (models.ApprovalRequest, error) {
+	var (
+		decidedAt          sql.NullTime
+		policyVersion      sql.NullString
+		decidedBy          sql.NullString
+		decisionComment    sql.NullString
+		executedAt         sql.NullTime
+		executedRequestID  sql.NullString
+		executedDecisionID sql.NullString
+		requestDecisionID  sql.NullString
+		actionSummary      sql.NullString
+		risk               sql.NullString
+		ruleID             sql.NullString
+		reasonsJSON        []byte
+	)
+
+	var approval models.ApprovalRequest
+	if err := scanner.Scan(
+		&approval.ApprovalRequestID,
+		&approval.TenantID,
+		&approval.AgentID,
+		&approval.ToolID,
+		&approval.ActionType,
+		&approval.RequestHash,
+		&approval.Status,
+		&approval.ApprovalTokenHash,
+		&approval.ExpiresAt,
+		&approval.CreatedAt,
+		&policyVersion,
+		&decidedAt,
+		&decidedBy,
+		&decisionComment,
+		&executedAt,
+		&executedRequestID,
+		&executedDecisionID,
+		&requestDecisionID,
+		&actionSummary,
+		&risk,
+		&ruleID,
+		&reasonsJSON,
+	); err != nil {
+		return models.ApprovalRequest{}, err
+	}
+
+	if decidedAt.Valid {
+		approval.DecidedAt = &decidedAt.Time
+	}
+	if policyVersion.Valid {
+		approval.PolicyVersion = policyVersion.String
+	}
+	if decidedBy.Valid {
+		approval.DecidedBy = decidedBy.String
+	}
+	if decisionComment.Valid {
+		approval.DecisionComment = decisionComment.String
+	}
+	if executedAt.Valid {
+		approval.ExecutedAt = &executedAt.Time
+	}
+	if executedRequestID.Valid {
+		approval.ExecutedRequestID = executedRequestID.String
+	}
+	if executedDecisionID.Valid {
+		approval.ExecutedDecisionID = executedDecisionID.String
+	}
+	if requestDecisionID.Valid {
+		approval.RequestDecisionID = requestDecisionID.String
+	}
+	if actionSummary.Valid {
+		approval.ActionSummary = actionSummary.String
+	}
+	if risk.Valid {
+		approval.Risk = risk.String
+	}
+	if ruleID.Valid {
+		approval.RuleID = ruleID.String
+	}
+	if len(reasonsJSON) > 0 {
+		if err := json.Unmarshal(reasonsJSON, &approval.Reasons); err != nil {
+			return models.ApprovalRequest{}, err
+		}
+	}
+
+	return approval, nil
 }

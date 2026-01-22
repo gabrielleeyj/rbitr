@@ -39,6 +39,87 @@ func (_m *MockStoreAPI) EXPECT() *MockStoreAPI_Expecter {
 	return &MockStoreAPI_Expecter{mock: &_m.Mock}
 }
 
+// ApproveApprovalRequest provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ApproveApprovalRequest(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ApproveApprovalRequest")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_ApproveApprovalRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ApproveApprovalRequest'
+type MockStoreAPI_ApproveApprovalRequest_Call struct {
+	*mock.Call
+}
+
+// ApproveApprovalRequest is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - decidedBy string
+//   - comment string
+//   - decidedAt time.Time
+func (_e *MockStoreAPI_Expecter) ApproveApprovalRequest(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, decidedBy interface{}, comment interface{}, decidedAt interface{}) *MockStoreAPI_ApproveApprovalRequest_Call {
+	return &MockStoreAPI_ApproveApprovalRequest_Call{Call: _e.mock.On("ApproveApprovalRequest", ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)}
+}
+
+func (_c *MockStoreAPI_ApproveApprovalRequest_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time)) *MockStoreAPI_ApproveApprovalRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ApproveApprovalRequest_Call) Return(err error) *MockStoreAPI_ApproveApprovalRequest_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ApproveApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error) *MockStoreAPI_ApproveApprovalRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreatePolicyVersion provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CreatePolicyVersion(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error {
 	ret := _mock.Called(ctx, tenantID, policyVersion, regoModule, createdBy, notes)
@@ -183,6 +264,87 @@ func (_c *MockStoreAPI_DeleteRiskOverride_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
+// DenyApprovalRequest provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) DenyApprovalRequest(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DenyApprovalRequest")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_DenyApprovalRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DenyApprovalRequest'
+type MockStoreAPI_DenyApprovalRequest_Call struct {
+	*mock.Call
+}
+
+// DenyApprovalRequest is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - decidedBy string
+//   - comment string
+//   - decidedAt time.Time
+func (_e *MockStoreAPI_Expecter) DenyApprovalRequest(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, decidedBy interface{}, comment interface{}, decidedAt interface{}) *MockStoreAPI_DenyApprovalRequest_Call {
+	return &MockStoreAPI_DenyApprovalRequest_Call{Call: _e.mock.On("DenyApprovalRequest", ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)}
+}
+
+func (_c *MockStoreAPI_DenyApprovalRequest_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time)) *MockStoreAPI_DenyApprovalRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_DenyApprovalRequest_Call) Return(err error) *MockStoreAPI_DenyApprovalRequest_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_DenyApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error) *MockStoreAPI_DenyApprovalRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAdminKeyByHash provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetAdminKeyByHash(ctx context.Context, keyHash string) (models.AdminKey, error) {
 	ret := _mock.Called(ctx, keyHash)
@@ -309,6 +471,78 @@ func (_c *MockStoreAPI_GetAdminWriteLock_Call) RunAndReturn(run func(ctx context
 	return _c
 }
 
+// GetApprovalRequest provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetApprovalRequest(ctx context.Context, tenantID string, approvalRequestID string) (models.ApprovalRequest, error) {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetApprovalRequest")
+	}
+
+	var r0 models.ApprovalRequest
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.ApprovalRequest, error)); ok {
+		return returnFunc(ctx, tenantID, approvalRequestID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.ApprovalRequest); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r0 = ret.Get(0).(models.ApprovalRequest)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetApprovalRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetApprovalRequest'
+type MockStoreAPI_GetApprovalRequest_Call struct {
+	*mock.Call
+}
+
+// GetApprovalRequest is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+func (_e *MockStoreAPI_Expecter) GetApprovalRequest(ctx interface{}, tenantID interface{}, approvalRequestID interface{}) *MockStoreAPI_GetApprovalRequest_Call {
+	return &MockStoreAPI_GetApprovalRequest_Call{Call: _e.mock.On("GetApprovalRequest", ctx, tenantID, approvalRequestID)}
+}
+
+func (_c *MockStoreAPI_GetApprovalRequest_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string)) *MockStoreAPI_GetApprovalRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetApprovalRequest_Call) Return(approvalRequest models.ApprovalRequest, err error) *MockStoreAPI_GetApprovalRequest_Call {
+	_c.Call.Return(approvalRequest, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string) (models.ApprovalRequest, error)) *MockStoreAPI_GetApprovalRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBootstrapComplete provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetBootstrapComplete(ctx context.Context) (bool, error) {
 	ret := _mock.Called(ctx)
@@ -365,6 +599,66 @@ func (_c *MockStoreAPI_GetBootstrapComplete_Call) Return(b bool, err error) *Moc
 }
 
 func (_c *MockStoreAPI_GetBootstrapComplete_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetBootstrapComplete_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDefaultApprovalTTLSeconds provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDefaultApprovalTTLSeconds")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetDefaultApprovalTTLSeconds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDefaultApprovalTTLSeconds'
+type MockStoreAPI_GetDefaultApprovalTTLSeconds_Call struct {
+	*mock.Call
+}
+
+// GetDefaultApprovalTTLSeconds is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetDefaultApprovalTTLSeconds(ctx interface{}) *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call {
+	return &MockStoreAPI_GetDefaultApprovalTTLSeconds_Call{Call: _e.mock.On("GetDefaultApprovalTTLSeconds", ctx)}
+}
+
+func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) Return(n int, err error) *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1086,6 +1380,92 @@ func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// ListApprovalRequests provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListApprovalRequests(ctx context.Context, tenantID string, status string, limit int, offset int) ([]models.ApprovalRequest, error) {
+	ret := _mock.Called(ctx, tenantID, status, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListApprovalRequests")
+	}
+
+	var r0 []models.ApprovalRequest
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, int, int) ([]models.ApprovalRequest, error)); ok {
+		return returnFunc(ctx, tenantID, status, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, int, int) []models.ApprovalRequest); ok {
+		r0 = returnFunc(ctx, tenantID, status, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.ApprovalRequest)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, int, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, status, limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListApprovalRequests_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListApprovalRequests'
+type MockStoreAPI_ListApprovalRequests_Call struct {
+	*mock.Call
+}
+
+// ListApprovalRequests is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - status string
+//   - limit int
+//   - offset int
+func (_e *MockStoreAPI_Expecter) ListApprovalRequests(ctx interface{}, tenantID interface{}, status interface{}, limit interface{}, offset interface{}) *MockStoreAPI_ListApprovalRequests_Call {
+	return &MockStoreAPI_ListApprovalRequests_Call{Call: _e.mock.On("ListApprovalRequests", ctx, tenantID, status, limit, offset)}
+}
+
+func (_c *MockStoreAPI_ListApprovalRequests_Call) Run(run func(ctx context.Context, tenantID string, status string, limit int, offset int)) *MockStoreAPI_ListApprovalRequests_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		var arg4 int
+		if args[4] != nil {
+			arg4 = args[4].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalRequests_Call) Return(approvalRequests []models.ApprovalRequest, err error) *MockStoreAPI_ListApprovalRequests_Call {
+	_c.Call.Return(approvalRequests, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalRequests_Call) RunAndReturn(run func(ctx context.Context, tenantID string, status string, limit int, offset int) ([]models.ApprovalRequest, error)) *MockStoreAPI_ListApprovalRequests_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListAuditEvents provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error) {
 	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID)
@@ -1622,6 +2002,156 @@ func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context
 	return _c
 }
 
+// MarkApprovalExecuted provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) MarkApprovalExecuted(ctx context.Context, tenantID string, approvalRequestID string, requestID string, decisionID string, executedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, requestID, decisionID, executedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarkApprovalExecuted")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, requestID, decisionID, executedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_MarkApprovalExecuted_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MarkApprovalExecuted'
+type MockStoreAPI_MarkApprovalExecuted_Call struct {
+	*mock.Call
+}
+
+// MarkApprovalExecuted is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - requestID string
+//   - decisionID string
+//   - executedAt time.Time
+func (_e *MockStoreAPI_Expecter) MarkApprovalExecuted(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, requestID interface{}, decisionID interface{}, executedAt interface{}) *MockStoreAPI_MarkApprovalExecuted_Call {
+	return &MockStoreAPI_MarkApprovalExecuted_Call{Call: _e.mock.On("MarkApprovalExecuted", ctx, tenantID, approvalRequestID, requestID, decisionID, executedAt)}
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecuted_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, requestID string, decisionID string, executedAt time.Time)) *MockStoreAPI_MarkApprovalExecuted_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecuted_Call) Return(err error) *MockStoreAPI_MarkApprovalExecuted_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecuted_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, requestID string, decisionID string, executedAt time.Time) error) *MockStoreAPI_MarkApprovalExecuted_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MarkApprovalExpired provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) MarkApprovalExpired(ctx context.Context, tenantID string, approvalRequestID string, expiredAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, expiredAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarkApprovalExpired")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, expiredAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_MarkApprovalExpired_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MarkApprovalExpired'
+type MockStoreAPI_MarkApprovalExpired_Call struct {
+	*mock.Call
+}
+
+// MarkApprovalExpired is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - expiredAt time.Time
+func (_e *MockStoreAPI_Expecter) MarkApprovalExpired(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, expiredAt interface{}) *MockStoreAPI_MarkApprovalExpired_Call {
+	return &MockStoreAPI_MarkApprovalExpired_Call{Call: _e.mock.On("MarkApprovalExpired", ctx, tenantID, approvalRequestID, expiredAt)}
+}
+
+func (_c *MockStoreAPI_MarkApprovalExpired_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, expiredAt time.Time)) *MockStoreAPI_MarkApprovalExpired_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 time.Time
+		if args[3] != nil {
+			arg3 = args[3].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExpired_Call) Return(err error) *MockStoreAPI_MarkApprovalExpired_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExpired_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, expiredAt time.Time) error) *MockStoreAPI_MarkApprovalExpired_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MarkBootstrapComplete provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) MarkBootstrapComplete(ctx context.Context) error {
 	ret := _mock.Called(ctx)
@@ -1732,6 +2262,87 @@ func (_c *MockStoreAPI_PublishPolicyVersion_Call) Return(err error) *MockStoreAP
 }
 
 func (_c *MockStoreAPI_PublishPolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string) error) *MockStoreAPI_PublishPolicyVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevokeApprovalRequest provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) RevokeApprovalRequest(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeApprovalRequest")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_RevokeApprovalRequest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeApprovalRequest'
+type MockStoreAPI_RevokeApprovalRequest_Call struct {
+	*mock.Call
+}
+
+// RevokeApprovalRequest is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - decidedBy string
+//   - comment string
+//   - decidedAt time.Time
+func (_e *MockStoreAPI_Expecter) RevokeApprovalRequest(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, decidedBy interface{}, comment interface{}, decidedAt interface{}) *MockStoreAPI_RevokeApprovalRequest_Call {
+	return &MockStoreAPI_RevokeApprovalRequest_Call{Call: _e.mock.On("RevokeApprovalRequest", ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)}
+}
+
+func (_c *MockStoreAPI_RevokeApprovalRequest_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time)) *MockStoreAPI_RevokeApprovalRequest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_RevokeApprovalRequest_Call) Return(err error) *MockStoreAPI_RevokeApprovalRequest_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_RevokeApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error) *MockStoreAPI_RevokeApprovalRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1852,6 +2463,63 @@ func (_c *MockStoreAPI_SetAdminWriteLock_Call) Return(err error) *MockStoreAPI_S
 }
 
 func (_c *MockStoreAPI_SetAdminWriteLock_Call) RunAndReturn(run func(ctx context.Context, locked bool) error) *MockStoreAPI_SetAdminWriteLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetDefaultApprovalTTLSeconds provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetDefaultApprovalTTLSeconds(ctx context.Context, seconds int) error {
+	ret := _mock.Called(ctx, seconds)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetDefaultApprovalTTLSeconds")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) error); ok {
+		r0 = returnFunc(ctx, seconds)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetDefaultApprovalTTLSeconds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetDefaultApprovalTTLSeconds'
+type MockStoreAPI_SetDefaultApprovalTTLSeconds_Call struct {
+	*mock.Call
+}
+
+// SetDefaultApprovalTTLSeconds is a helper method to define mock.On call
+//   - ctx context.Context
+//   - seconds int
+func (_e *MockStoreAPI_Expecter) SetDefaultApprovalTTLSeconds(ctx interface{}, seconds interface{}) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	return &MockStoreAPI_SetDefaultApprovalTTLSeconds_Call{Call: _e.mock.On("SetDefaultApprovalTTLSeconds", ctx, seconds)}
+}
+
+func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) Run(run func(ctx context.Context, seconds int)) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) Return(err error) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context, seconds int) error) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
 	_c.Call.Return(run)
 	return _c
 }

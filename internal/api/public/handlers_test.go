@@ -22,6 +22,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
+	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
 func TestHandleToolCall(t *testing.T) {
@@ -86,6 +87,7 @@ func TestHandleToolCall(t *testing.T) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
 					Return("", store.ErrNotFound)
+				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
 				storeMock.On("InsertApprovalRequest", context.Background(), mock.Anything).Return(nil)
 				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
 			},
@@ -94,6 +96,59 @@ func TestHandleToolCall(t *testing.T) {
 				var payload ToolCallResponse
 				require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
 				require.NotEmpty(t, payload.ApprovalRequestID)
+				require.NotEmpty(t, payload.ApprovalToken)
+				require.NotEmpty(t, payload.ExpiresAt)
+				require.Equal(t, "approval_required", payload.Error)
+			},
+		},
+		{
+			name:    "approved execution",
+			headers: map[string]string{auth.TenantKeyHeader: "key", auth.AgentIDHeader: "agent", approvalHeaderID: "ar1", approvalHeaderToken: "token123"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				bodyHash := utils.HashBody([]byte("{}"))
+				canonical := utils.CanonicalRequest{
+					TenantID: "t1",
+					AgentID:  "agent",
+					ToolID:   "mock_internal",
+					Method:   "POST",
+					Path:     "/refund",
+					Query:    "",
+					Headers:  map[string]string{"content-type": "application/json"},
+					BodyHash: bodyHash,
+				}
+				requestHash := utils.HashCanonical(&canonical)
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+				storeMock.On("GetApprovalRequest", context.Background(), "t1", "ar1").Return(models.ApprovalRequest{
+					ApprovalRequestID: "ar1",
+					TenantID:          "t1",
+					AgentID:           "agent",
+					ToolID:            "mock_internal",
+					ActionType:        "PAYMENT.REFUND",
+					RequestHash:       requestHash,
+					Status:            "APPROVED",
+					ApprovalTokenHash: utils.HashString("token123"),
+					ExpiresAt:         time.Now().UTC().Add(10 * time.Minute),
+					PolicyVersion:     "p_v1",
+					ActionSummary:     "Refund",
+					Risk:              "MEDIUM",
+					RuleID:            "rule_approval",
+				}, nil)
+				storeMock.On("GetTool", context.Background(), tenant.TenantID, "mock_internal").Return(tool, nil)
+				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+					return record.Decision == "ALLOW" && record.ApprovalRequestID == "ar1"
+				})).Return(nil)
+				storeMock.On("MarkApprovalExecuted", context.Background(), "t1", "ar1", mock.Anything, mock.Anything, mock.Anything).
+					Return(nil)
+			},
+			connectorSetup: func(connMock *connector.MockConnector) {
+				connMock.On("Execute", mock.Anything, mock.Anything).
+					Return(connector.Response{Status: http.StatusOK, Headers: map[string]string{"X-Test": "ok"}, Body: []byte("ok"), BodyHash: "sha256:abc"}, nil)
+			},
+			expectedCode: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var payload ToolCallResponse
+				require.NoError(t, json.NewDecoder(rec.Body).Decode(&payload))
+				require.Equal(t, "ALLOW", payload.Decision)
 			},
 		},
 		{
@@ -308,28 +363,36 @@ func assertEvidenceWhitelist(t *testing.T, body []byte) {
 	require.True(t, ok)
 
 	allowed := map[string]bool{
-		"decision_id":         true,
-		"request_id":          true,
-		"tenant_id":           true,
-		"agent_id":            true,
-		"tool_id":             true,
-		"action_type":         true,
-		"action_risk":         true,
-		"action_summary":      true,
-		"decision":            true,
-		"decision_version":    true,
-		"decision_risk":       true,
-		"rule_id":             true,
-		"rule_priority":       true,
-		"reasons":             true,
-		"constraints":         true,
-		"tags":                true,
-		"policy_version":      true,
-		"reason":              true,
-		"request_hash":        true,
-		"response_hash":       true,
-		"approval_request_id": true,
-		"timestamp":           true,
+		"decision_id":                   true,
+		"request_id":                    true,
+		"tenant_id":                     true,
+		"agent_id":                      true,
+		"tool_id":                       true,
+		"action_type":                   true,
+		"action_risk":                   true,
+		"action_summary":                true,
+		"decision":                      true,
+		"decision_version":              true,
+		"decision_risk":                 true,
+		"rule_id":                       true,
+		"rule_priority":                 true,
+		"reasons":                       true,
+		"constraints":                   true,
+		"tags":                          true,
+		"policy_version":                true,
+		"reason":                        true,
+		"request_hash":                  true,
+		"response_hash":                 true,
+		"approval_request_id":           true,
+		"approval_status":               true,
+		"approval_decided_at":           true,
+		"approval_decided_by":           true,
+		"approval_decision_comment":     true,
+		"approval_executed_at":          true,
+		"approval_executed_request_id":  true,
+		"approval_executed_decision_id": true,
+		"approval_request_decision_id":  true,
+		"timestamp":                     true,
 	}
 
 	for key := range record {

@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getSettings, setAdminWriteLock } from "@/lib/api";
+import { getSettings, setAdminWriteLock, setDefaultApprovalTTL } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { toast } from "sonner";
 
 export function SettingsPage() {
   const { adminKey } = useAdminKey();
   const [locked, setLocked] = useState(false);
+  const [defaultTTLMinutes, setDefaultTTLMinutes] = useState(15);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -28,6 +29,9 @@ export function SettingsPage() {
         const data = await getSettings({ adminKey });
         if (!mounted) return;
         setLocked(Boolean(data.admin_write_lock));
+        if (data.default_approval_ttl_seconds) {
+          setDefaultTTLMinutes(Math.round(data.default_approval_ttl_seconds / 60));
+        }
         setLoading(false);
       } catch (err) {
         if (!mounted) return;
@@ -50,6 +54,18 @@ export function SettingsPage() {
       toast.success("Admin write lock updated", { description: value ? "Enabled" : "Disabled" });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update write lock.");
+    }
+  };
+
+  const handleTTLUpdate = async () => {
+    if (!adminKey) return;
+    setActionError("");
+    const seconds = Math.round(defaultTTLMinutes * 60);
+    try {
+      await setDefaultApprovalTTL({ adminKey }, seconds);
+      toast.success("Default approval TTL updated", { description: `${defaultTTLMinutes} minutes` });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update TTL.");
     }
   };
 
@@ -77,6 +93,40 @@ export function SettingsPage() {
             </Label>
             <Switch id="write-lock" checked={locked} onCheckedChange={handleToggle} disabled={loading} />
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Default approval TTL</CardTitle>
+          <CardDescription>Fallback expiry used when policies do not specify a TTL.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {actionError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <Label htmlFor="approval-ttl" className="text-sm">
+              Default TTL (minutes)
+            </Label>
+            <div className="flex items-center gap-2">
+              <input
+                id="approval-ttl"
+                type="number"
+                min={1}
+                max={1440}
+                value={defaultTTLMinutes}
+                onChange={(event) => setDefaultTTLMinutes(Number(event.target.value) || 15)}
+                className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
+                disabled={loading}
+              />
+              <Button variant="outline" onClick={handleTTLUpdate} disabled={loading}>
+                Save
+              </Button>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">Min 1 minute, max 1440 minutes.</div>
         </CardContent>
       </Card>
       <Card>
