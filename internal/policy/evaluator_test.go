@@ -183,4 +183,8 @@ func TestWrapPolicyOutputError(t *testing.T) {
 	require.ErrorAs(t, err, &invalidErr)
 	require.Equal(t, "schema_violation", invalidErr.Reason)
 	require.Equal(t, "p_v2", invalidErr.PolicyVersion)
+
+	plainErr := errors.New("boom")
+	err = wrapPolicyOutputError(plainErr, "p_v3")
+	require.ErrorIs(t, err, plainErr)
 }

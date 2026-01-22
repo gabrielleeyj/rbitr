@@ -3,7 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -100,6 +103,21 @@ func TestStoreGetDefaultApprovalTTLSecondsNotFound(t *testing.T) {
 	st := New(db)
 	_, err = st.GetDefaultApprovalTTLSeconds(context.Background())
 	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDefaultApprovalTTLSecondsInvalid(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("default_approval_ttl_seconds").
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("bad"))
+
+	st := New(db)
+	_, err = st.GetDefaultApprovalTTLSeconds(context.Background())
+	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -347,6 +365,84 @@ func TestStoreListTools(t *testing.T) {
 	}
 }
 
+func TestStoreListToolsError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+	mock.ExpectQuery(query).WithArgs("t1").WillReturnError(errors.New("query failed"))
+
+	st := New(db)
+	_, err = st.ListTools(context.Background(), "t1")
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListToolsRowError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+	rows := sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value"}).
+		AddRow("tool1", "t1", "http://example", "bearer", "token").
+		RowError(0, errors.New("row error"))
+	mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(rows)
+
+	st := New(db)
+	_, err = st.ListTools(context.Background(), "t1")
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListTenantsError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT t.tenant_id, t.name, tc.active_policy_version, COALESCE(tool_counts.tool_count, 0)
+		FROM rbitr.tenants t
+		LEFT JOIN rbitr.tenant_config tc ON tc.tenant_id = t.tenant_id
+		LEFT JOIN (
+			SELECT tenant_id, COUNT(*) AS tool_count
+			FROM rbitr.tools
+			GROUP BY tenant_id
+		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		ORDER BY t.tenant_id`)
+	mock.ExpectQuery(query).WillReturnError(errors.New("query failed"))
+
+	st := New(db)
+	_, err = st.ListTenants(context.Background())
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListTenantsRowError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT t.tenant_id, t.name, tc.active_policy_version, COALESCE(tool_counts.tool_count, 0)
+		FROM rbitr.tenants t
+		LEFT JOIN rbitr.tenant_config tc ON tc.tenant_id = t.tenant_id
+		LEFT JOIN (
+			SELECT tenant_id, COUNT(*) AS tool_count
+			FROM rbitr.tools
+			GROUP BY tenant_id
+		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		ORDER BY t.tenant_id`)
+	rows := sqlmock.NewRows([]string{"tenant_id", "name", "active_policy_version", "tool_count"}).
+		AddRow("t1", "Tenant", "p_v1", 1).
+		RowError(0, errors.New("row error"))
+	mock.ExpectQuery(query).WillReturnRows(rows)
+
+	st := New(db)
+	_, err = st.ListTenants(context.Background())
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreGetPolicy(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -532,6 +628,24 @@ func TestStorePublishPolicyVersion(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStorePublishPolicyVersionNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
+		WithArgs("t1", "p_v2").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	st := New(db)
+	err = st.PublishPolicyVersion(context.Background(), "t1", "p_v2")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreRollbackPolicyVersionWithTarget(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -554,6 +668,87 @@ func TestStoreRollbackPolicyVersionWithTarget(t *testing.T) {
 
 	st := New(db)
 	require.NoError(t, st.RollbackPolicyVersion(context.Background(), "t1", "p_v1"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreRollbackPolicyVersionMissingActive(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT active_policy_version FROM rbitr.tenant_config WHERE tenant_id = $1`)).
+		WithArgs("t1").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	err = st.RollbackPolicyVersion(context.Background(), "t1", "")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreRollbackPolicyVersionMissingPrevious(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT active_policy_version FROM rbitr.tenant_config WHERE tenant_id = $1`)).
+		WithArgs("t1").
+		WillReturnRows(sqlmock.NewRows([]string{"active_policy_version"}).AddRow("p_v2"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pv.policy_version
+		FROM rbitr.policy_versions pv
+		WHERE pv.tenant_id = $1
+			AND pv.policy_version <> $2
+		ORDER BY pv.created_at DESC
+		LIMIT 1`)).
+		WithArgs("t1", "p_v2").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	err = st.RollbackPolicyVersion(context.Background(), "t1", "")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreRollbackPolicyVersionSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT active_policy_version FROM rbitr.tenant_config WHERE tenant_id = $1`)).
+		WithArgs("t1").
+		WillReturnRows(sqlmock.NewRows([]string{"active_policy_version"}).AddRow("p_v2"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pv.policy_version
+		FROM rbitr.policy_versions pv
+		WHERE pv.tenant_id = $1
+			AND pv.policy_version <> $2
+		ORDER BY pv.created_at DESC
+		LIMIT 1`)).
+		WithArgs("t1", "p_v2").
+		WillReturnRows(sqlmock.NewRows([]string{"policy_version"}).AddRow("p_v1"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
+		WithArgs("t1", "p_v1").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id) DO UPDATE SET active_policy_version = $2, updated_at = $4`)).
+		WithArgs("t1", "p_v1", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.RollbackPolicyVersion(context.Background(), "t1", "")
+	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -616,6 +811,25 @@ func TestStoreListRiskOverrides(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreListRiskOverridesError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT tenant_id, action_type, action_risk, updated_at
+		FROM rbitr.action_risk_overrides
+		WHERE tenant_id = $1
+		ORDER BY action_type`)
+	mock.ExpectQuery(query).
+		WithArgs("t1").
+		WillReturnError(errors.New("query failed"))
+
+	st := New(db)
+	_, err = st.ListRiskOverrides(context.Background(), "t1")
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreDeleteRiskOverride(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -630,6 +844,21 @@ func TestStoreDeleteRiskOverride(t *testing.T) {
 
 	st := New(db)
 	require.NoError(t, st.DeleteRiskOverride(context.Background(), "t1", "DATA.EXPORT"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreDeleteRiskOverrideLocked(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(settingTrue))
+
+	st := New(db)
+	err = st.DeleteRiskOverride(context.Background(), "t1", "DATA.EXPORT")
+	require.ErrorIs(t, err, ErrAdminWriteLocked)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -679,6 +908,52 @@ func TestStoreInsertADR(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreInsertADRError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
+		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
+		response_hash, approval_request_id, created_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)
+	mock.ExpectExec(query).
+		WithArgs(
+			"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "p_v1", "reason", "hash", "resp", "ar1", sqlmock.AnyArg(),
+		).
+		WillReturnError(errors.New("insert failed"))
+
+	st := New(db)
+	err = st.InsertADR(context.Background(), models.ActionDecisionRecord{
+		DecisionID:        "d1",
+		RequestID:         "r1",
+		TenantID:          "t1",
+		AgentID:           "a1",
+		ToolID:            "tool",
+		ActionType:        "TYPE",
+		ActionRisk:        "LOW",
+		ActionSummary:     "summary",
+		Decision:          "ALLOW",
+		DecisionVersion:   "v1",
+		DecisionRisk:      "LOW",
+		Reason:            "reason",
+		RuleID:            "rule",
+		RulePriority:      10,
+		Reasons:           []models.DecisionReason{{Code: "R1", Message: "reason"}},
+		Constraints:       map[string]any{},
+		Tags:              []string{"tag"},
+		PolicyVersion:     "p_v1",
+		RequestHash:       "hash",
+		ResponseHash:      "resp",
+		ApprovalRequestID: "ar1",
+		CreatedAt:         time.Now(),
+	})
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreListEvidenceFiltered(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -702,6 +977,59 @@ func TestStoreListEvidenceFiltered(t *testing.T) {
 
 	st := New(db)
 	records, err := st.ListEvidenceFiltered(context.Background(), "t1", "", "", "", nil, 1)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListEvidenceFilteredInvalidJSON(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{
+		"decision_id", "request_id", "tenant_id", "agent_id", "tool_id", "action_type", "action_risk",
+		"action_summary", "decision", "decision_version", "decision_risk", "rule_id", "rule_priority",
+		"reasons", "constraints", "tags", "policy_version", "reason", "request_hash",
+		"response_hash", "approval_request_id", "created_at",
+	}).AddRow(
+		"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10,
+		`[]`, `{bad`, "{tag}", "p_v1", "reason", "hash", "resp", "ar1", time.Now(),
+	)
+	mock.ExpectQuery("SELECT decision_id").
+		WithArgs("t1", 1).
+		WillReturnRows(rows)
+
+	st := New(db)
+	_, err = st.ListEvidenceFiltered(context.Background(), "t1", "", "", "", nil, 1)
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListEvidenceFilteredWithSince(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	since := time.Now().Add(-time.Hour).UTC()
+	rows := sqlmock.NewRows([]string{
+		"decision_id", "request_id", "tenant_id", "agent_id", "tool_id", "action_type", "action_risk",
+		"action_summary", "decision", "decision_version", "decision_risk", "rule_id", "rule_priority",
+		"reasons", "constraints", "tags", "policy_version", "reason", "request_hash",
+		"response_hash", "approval_request_id", "created_at",
+	}).AddRow(
+		"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10,
+		[]byte(`[]`),
+		[]byte(`{}`),
+		"{tag1}",
+		"p_v1", "reason", "hash", "resp", "ar1", time.Now(),
+	)
+	mock.ExpectQuery("SELECT decision_id").
+		WithArgs("t1", since, 1).
+		WillReturnRows(rows)
+
+	st := New(db)
+	records, err := st.ListEvidenceFiltered(context.Background(), "t1", "", "", "", &since, 1)
 	require.NoError(t, err)
 	require.Len(t, records, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -762,6 +1090,192 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreInsertApprovalRequestBadReasons(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	st := New(db)
+	err = st.InsertApprovalRequest(context.Background(), models.ApprovalRequest{
+		ApprovalRequestID: "ar1",
+		TenantID:          "t1",
+		AgentID:           "a1",
+		ToolID:            "tool",
+		ActionType:        "TYPE",
+		RequestHash:       "hash",
+		Status:            "PENDING",
+		ExpiresAt:         time.Now(),
+		CreatedAt:         time.Now(),
+		Reasons:           []models.DecisionReason{{Code: "bad", Message: string([]byte{0xff})}},
+	})
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListApprovalRequests(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+		args   []any
+		query  string
+	}{
+		{
+			name:   "no status default limit",
+			status: "",
+			args:   []any{"t1", 50, 0},
+			query:  "tenant_id = $1",
+		},
+		{
+			name:   "status filter",
+			status: "PENDING",
+			args:   []any{"t1", "PENDING", 10, 0},
+			query:  "tenant_id = $1 AND status = $2",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE ` + tc.query + `
+		ORDER BY created_at DESC
+		LIMIT $` + strconv.Itoa(len(tc.args)-1) + ` OFFSET $` + strconv.Itoa(len(tc.args)))
+			rows := sqlmock.NewRows([]string{
+				"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+				"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
+				"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
+				"action_summary", "risk", "rule_id", "reasons",
+			}).AddRow(
+				"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
+				"token", time.Now(), time.Now(), "p_v1", nil, nil,
+				nil, nil, nil, nil, nil,
+				nil, nil, nil, []byte(`[]`),
+			)
+			mock.ExpectQuery(query).WithArgs(toDriverValues(tc.args)...).WillReturnRows(rows)
+
+			st := New(db)
+			limit := 0
+			offset := -1
+			if tc.status != "" {
+				limit = 10
+				offset = 0
+			}
+			results, err := st.ListApprovalRequests(context.Background(), "t1", tc.status, limit, offset)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func toDriverValues(args []any) []driver.Value {
+	out := make([]driver.Value, 0, len(args))
+	for _, arg := range args {
+		out = append(out, arg)
+	}
+	return out
+}
+
+func TestStoreGetApprovalRequestNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE tenant_id = $1 AND approval_request_id = $2`)
+	mock.ExpectQuery(query).WithArgs("t1", "ar1").WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	_, err = st.GetApprovalRequest(context.Background(), "t1", "ar1")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreMarkApprovalExpiredInvalidState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT status FROM rbitr.approval_requests").
+		WithArgs("t1", "ar1").
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("DENIED"))
+
+	st := New(db)
+	err = st.MarkApprovalExpired(context.Background(), "t1", "ar1", time.Now().UTC())
+	require.ErrorIs(t, err, ErrInvalidState)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestScanApprovalRequestNulls(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons`)
+	rows := sqlmock.NewRows([]string{
+		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
+		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
+		"action_summary", "risk", "rule_id", "reasons",
+	}).AddRow(
+		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
+		"token", time.Now(), time.Now(), nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, []byte(`[]`),
+	)
+	mock.ExpectQuery(query).WillReturnRows(rows)
+
+	row := db.QueryRowContext(context.Background(), query)
+	approval, err := scanApprovalRequest(row)
+	require.NoError(t, err)
+	require.Equal(t, "ar1", approval.ApprovalRequestID)
+	require.Empty(t, approval.DecidedBy)
+	require.Nil(t, approval.DecidedAt)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestScanApprovalRequestInvalidReasons(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons`)
+	rows := sqlmock.NewRows([]string{
+		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
+		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
+		"action_summary", "risk", "rule_id", "reasons",
+	}).AddRow(
+		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
+		"token", time.Now(), time.Now(), nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, []byte(`{bad`),
+	)
+	mock.ExpectQuery(query).WillReturnRows(rows)
+
+	row := db.QueryRowContext(context.Background(), query)
+	_, err = scanApprovalRequest(row)
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 func TestStoreApproveApprovalRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -795,6 +1309,36 @@ func TestStoreApproveApprovalRequestInvalidState(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreDenyApprovalRequest(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs("DENIED", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.DenyApprovalRequest(context.Background(), "t1", "ar1", "admin", "no", time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreRevokeApprovalRequest(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs("REVOKED", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.RevokeApprovalRequest(context.Background(), "t1", "ar1", "admin", "revoke", time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreMarkApprovalExecuted(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -807,6 +1351,24 @@ func TestStoreMarkApprovalExecuted(t *testing.T) {
 	st := New(db)
 	err = st.MarkApprovalExecuted(context.Background(), "t1", "ar1", "req1", "dec1", time.Now().UTC())
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreMarkApprovalExecutedInvalidState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), "req1", "dec1", "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT status FROM rbitr.approval_requests").
+		WithArgs("t1", "ar1").
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("DENIED"))
+
+	st := New(db)
+	err = st.MarkApprovalExecuted(context.Background(), "t1", "ar1", "req1", "dec1", time.Now().UTC())
+	require.ErrorIs(t, err, ErrInvalidState)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -832,6 +1394,33 @@ func TestStoreListAuditEvents(t *testing.T) {
 	events, err := st.ListAuditEvents(context.Background(), "t1", 10, 0, "", "", "")
 	require.NoError(t, err)
 	require.Len(t, events, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListAuditEventsFilters(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{
+		"audit_event_id", "tenant_id", "actor_type", "actor_id", "actor_display",
+		"action", "resource_type", "resource_id", "before", "after",
+		"request_id", "ip", "user_agent", "created_at",
+	}).AddRow(
+		"ae_1", nil, "admin_key", nil, nil,
+		"POLICY.VERSION.CREATE", "POLICY", nil, nil, nil,
+		nil, nil, nil, time.Now(),
+	)
+	mock.ExpectQuery("SELECT audit_event_id").
+		WithArgs("POLICY.VERSION.CREATE", "POLICY", "admin", 10, 0).
+		WillReturnRows(rows)
+
+	st := New(db)
+	events, err := st.ListAuditEvents(context.Background(), "", 10, 0, "POLICY.VERSION.CREATE", "POLICY", "admin")
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, "", events[0].TenantID)
+	require.Equal(t, "", events[0].ActorID)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -904,6 +1493,36 @@ func TestStoreListEvidence(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreListEvidenceInvalidJSON(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
+		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
+		reasons, constraints, tags, policy_version, reason, request_hash,
+		response_hash, approval_request_id, created_at
+		FROM rbitr.action_decisions
+		WHERE tenant_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2`)
+	rows := sqlmock.NewRows([]string{
+		"decision_id", "request_id", "tenant_id", "agent_id", "tool_id", "action_type", "action_risk",
+		"action_summary", "decision", "decision_version", "decision_risk", "rule_id", "rule_priority",
+		"reasons", "constraints", "tags", "policy_version", "reason", "request_hash",
+		"response_hash", "approval_request_id", "created_at",
+	}).AddRow(
+		"d1", "r1", "t1", "a1", "tool", "TYPE", "LOW", "summary", "ALLOW", "v1", "LOW", "rule", 10,
+		`{bad`, `{}`, "{tag}", "p_v1", "reason", "hash", "resp", "ar1", time.Now(),
+	)
+	mock.ExpectQuery(query).WithArgs("t1", 50).WillReturnRows(rows)
+
+	st := New(db)
+	_, err = st.ListEvidence(context.Background(), "t1", 50)
+	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreUpdateTenantConfig(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -919,6 +1538,23 @@ func TestStoreUpdateTenantConfig(t *testing.T) {
 
 	st := New(db)
 	err = st.UpdateTenantConfig(context.Background(), "t1", "New Name", "newkey")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreUpdateTenantConfigNoKey(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenants SET name = $1 WHERE tenant_id = $2`)).
+		WithArgs("New Name", "t1").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.UpdateTenantConfig(context.Background(), "t1", "New Name", "")
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -1169,5 +1805,120 @@ func TestStoreUpdateLocked(t *testing.T) {
 			require.ErrorIs(t, err, ErrAdminWriteLocked)
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
+	}
+}
+
+func TestEnsureAdminWritesAllowed(t *testing.T) {
+	cases := []struct {
+		name      string
+		rows      *sqlmock.Rows
+		queryErr  error
+		expectErr error
+	}{
+		{
+			name:     "not set",
+			queryErr: sql.ErrNoRows,
+		},
+		{
+			name:      "locked",
+			rows:      sqlmock.NewRows([]string{"value"}).AddRow(settingTrue),
+			expectErr: ErrAdminWriteLocked,
+		},
+		{
+			name: "unlocked",
+			rows: sqlmock.NewRows([]string{"value"}).AddRow(settingFalse),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)
+			if tc.queryErr != nil {
+				mock.ExpectQuery(query).WithArgs(adminWriteLockKey).WillReturnError(tc.queryErr)
+			} else {
+				mock.ExpectQuery(query).WithArgs(adminWriteLockKey).WillReturnRows(tc.rows)
+			}
+
+			st := New(db).(*Store)
+			err = st.ensureAdminWritesAllowed(context.Background())
+			if tc.expectErr != nil {
+				require.ErrorIs(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestApprovalStateError(t *testing.T) {
+	cases := []struct {
+		name      string
+		rowErr    error
+		status    string
+		expectErr error
+	}{
+		{
+			name:      "not found",
+			rowErr:    sql.ErrNoRows,
+			expectErr: ErrNotFound,
+		},
+		{
+			name:      "invalid state",
+			status:    "APPROVED",
+			expectErr: ErrInvalidState,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT status FROM rbitr.approval_requests WHERE tenant_id = $1 AND approval_request_id = $2`)
+			if tc.rowErr != nil {
+				mock.ExpectQuery(query).WithArgs("t1", "ar1").WillReturnError(tc.rowErr)
+			} else {
+				mock.ExpectQuery(query).WithArgs("t1", "ar1").
+					WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow(tc.status))
+			}
+
+			st := New(db).(*Store)
+			err = st.approvalStateError(context.Background(), "t1", "ar1")
+			require.ErrorIs(t, err, tc.expectErr)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestNullableString(t *testing.T) {
+	cases := []struct {
+		value string
+		valid bool
+	}{
+		{value: "", valid: false},
+		{value: "ok", valid: true},
+	}
+
+	for _, tc := range cases {
+		got := nullableString(tc.value)
+		if got.Valid != tc.valid {
+			t.Fatalf("expected valid=%v got %v", tc.valid, got.Valid)
+		}
+		if got.String != tc.value {
+			t.Fatalf("expected string=%q got %q", tc.value, got.String)
+		}
+	}
+}
+
+func TestHashKey(t *testing.T) {
+	hash := hashKey("abc")
+	if hash == "" || hash == "abc" {
+		t.Fatalf("expected hashed key, got %q", hash)
 	}
 }
