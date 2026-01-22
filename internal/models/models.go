@@ -134,15 +134,27 @@ type ActionDecisionExport struct {
 }
 
 type ApprovalRequest struct {
-	ApprovalRequestID string
-	TenantID          string
-	AgentID           string
-	ToolID            string
-	ActionType        string
-	RequestHash       string
-	Status            string
-	ExpiresAt         time.Time
-	CreatedAt         time.Time
+	ApprovalRequestID  string           `json:"approval_request_id"`
+	TenantID           string           `json:"tenant_id"`
+	AgentID            string           `json:"agent_id"`
+	ToolID             string           `json:"tool_id"`
+	ActionType         string           `json:"action_type"`
+	RequestHash        string           `json:"request_hash"`
+	Status             string           `json:"status"`
+	ApprovalTokenHash  string           `json:"-"`
+	ExpiresAt          time.Time        `json:"expires_at"`
+	CreatedAt          time.Time        `json:"created_at"`
+	DecidedAt          *time.Time       `json:"decided_at,omitempty"`
+	DecidedBy          string           `json:"decided_by,omitempty"`
+	DecisionComment    string           `json:"decision_comment,omitempty"`
+	ExecutedAt         *time.Time       `json:"executed_at,omitempty"`
+	ExecutedRequestID  string           `json:"executed_request_id,omitempty"`
+	ExecutedDecisionID string           `json:"executed_decision_id,omitempty"`
+	RequestDecisionID  string           `json:"request_decision_id,omitempty"`
+	ActionSummary      string           `json:"action_summary,omitempty"`
+	Risk               string           `json:"risk,omitempty"`
+	RuleID             string           `json:"rule_id,omitempty"`
+	Reasons            []DecisionReason `json:"reasons,omitempty"`
 }
 
 type TenantKey struct {

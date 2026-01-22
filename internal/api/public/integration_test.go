@@ -133,8 +133,11 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 			if tc.expectApproval {
 				sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
-		status, expires_at, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`)).
+		status, approval_token_hash, expires_at, created_at,
+		decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id,
+		request_decision_id, action_summary, risk, rule_id, reasons
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`)).
 					WithArgs(
 						sqlmock.AnyArg(),
 						"t_demo",
@@ -143,6 +146,18 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 						"PENDING",
+						"",
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 						sqlmock.AnyArg(),
 					).

@@ -434,8 +434,19 @@ func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecor
 func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error {
 	query := `INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
-		status, expires_at, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
+		status, approval_token_hash, expires_at, created_at,
+		decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id,
+		request_decision_id, action_summary, risk, rule_id, reasons
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`
+	var reasonsJSON []byte
+	if len(req.Reasons) > 0 {
+		var err error
+		reasonsJSON, err = json.Marshal(req.Reasons)
+		if err != nil {
+			return err
+		}
+	}
 	_, err := s.db.ExecContext(ctx, query,
 		req.ApprovalRequestID,
 		req.TenantID,
@@ -444,8 +455,20 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 		req.ActionType,
 		req.RequestHash,
 		req.Status,
+		req.ApprovalTokenHash,
 		req.ExpiresAt,
 		req.CreatedAt,
+		req.DecidedAt,
+		nullableString(req.DecidedBy),
+		nullableString(req.DecisionComment),
+		req.ExecutedAt,
+		nullableString(req.ExecutedRequestID),
+		nullableString(req.ExecutedDecisionID),
+		nullableString(req.RequestDecisionID),
+		nullableString(req.ActionSummary),
+		nullableString(req.Risk),
+		nullableString(req.RuleID),
+		reasonsJSON,
 	)
 	return err
 }
@@ -845,4 +868,8 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEve
 
 func hashKey(key string) string {
 	return utils.HashString(key)
+}
+
+func nullableString(value string) sql.NullString {
+	return sql.NullString{String: value, Valid: value != ""}
 }
