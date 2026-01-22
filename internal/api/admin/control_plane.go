@@ -183,6 +183,15 @@ func (d Dependencies) handleApprovalsList(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list approvals"})
 	}
+	now := time.Now().UTC()
+	for i := range approvals {
+		if approvalExpired(&approvals[i], now) {
+			if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvals[i].ApprovalRequestID, now); err == nil {
+				approvals[i].Status = "EXPIRED"
+				approvals[i].DecidedAt = &now
+			}
+		}
+	}
 	return c.JSON(http.StatusOK, approvals)
 }
 
@@ -199,6 +208,13 @@ func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+	}
+	now := time.Now().UTC()
+	if approvalExpired(&approval, now) {
+		if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvalID, now); err == nil {
+			approval.Status = "EXPIRED"
+			approval.DecidedAt = &now
+		}
 	}
 	return c.JSON(http.StatusOK, approval)
 }
@@ -602,6 +618,12 @@ func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditActio
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
 	}
+	now := time.Now().UTC()
+	if approvalExpired(&before, now) {
+		if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvalID, now); err == nil {
+			return c.JSON(http.StatusConflict, map[string]string{"error": "approval expired"})
+		}
+	}
 
 	decidedAt := time.Now().UTC()
 	switch status {
@@ -715,6 +737,16 @@ func isApprovalStatus(value string) bool {
 	default:
 		return false
 	}
+}
+
+func approvalExpired(approval *models.ApprovalRequest, now time.Time) bool {
+	if approval == nil {
+		return false
+	}
+	if approval.Status != "PENDING" && approval.Status != "APPROVED" {
+		return false
+	}
+	return now.After(approval.ExpiresAt)
 }
 
 func parseLimit(value string) (int, error) {

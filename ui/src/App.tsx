@@ -12,6 +12,7 @@ import { ToolsPage } from "@/pages/ToolsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { ApprovalsPage } from "@/pages/ApprovalsPage";
+import { ApprovalDetailPage } from "@/pages/ApprovalDetailPage";
 
 export function App() {
   return (
@@ -33,6 +34,7 @@ export function App() {
             <Route path="policies" element={<PoliciesPage />} />
             <Route path="risk-overrides" element={<RiskOverridesPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
+            <Route path="approvals/:approvalId" element={<ApprovalDetailPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="audit" element={<AuditPage />} />

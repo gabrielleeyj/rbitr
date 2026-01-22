@@ -22,11 +22,11 @@ var (
 )
 
 const (
-	bootstrapKey      = "bootstrap_complete"
-	adminWriteLockKey = "admin_write_lock"
+	bootstrapKey                 = "bootstrap_complete"
+	adminWriteLockKey            = "admin_write_lock"
 	defaultApprovalTTLSecondsKey = "default_approval_ttl_seconds"
-	settingTrue       = "true"
-	settingFalse      = "false"
+	settingTrue                  = "true"
+	settingFalse                 = "false"
 )
 
 type StoreAPI interface {

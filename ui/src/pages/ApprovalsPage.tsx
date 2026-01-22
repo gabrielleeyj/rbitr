@@ -21,6 +21,7 @@ import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import type { ApprovalRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 const statusTabs = ["PENDING", "APPROVED", "DENIED", "EXECUTED", "EXPIRED"];
 
@@ -227,7 +228,9 @@ export function ApprovalsPage() {
                 approvals.map((approval) => (
                   <TableRow key={approval.approval_request_id}>
                     <TableCell className="font-mono text-xs">
-                      {approval.approval_request_id}
+                      <Link to={`/approvals/${approval.approval_request_id}`} className="underline-offset-4 hover:underline">
+                        {approval.approval_request_id}
+                      </Link>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm font-medium">{approval.action_type}</div>
@@ -252,6 +255,9 @@ export function ApprovalsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="ghost" asChild>
+                          <Link to={`/approvals/${approval.approval_request_id}`}>View</Link>
+                        </Button>
                         {approval.status === "PENDING" ? (
                           <>
                             <Button size="sm" onClick={() => openDialog(approval, "approve")}>
