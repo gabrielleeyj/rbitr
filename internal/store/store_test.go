@@ -1922,3 +1922,364 @@ func TestHashKey(t *testing.T) {
 		t.Fatalf("expected hashed key, got %q", hash)
 	}
 }
+
+func TestStoreGetNotificationConfig(t *testing.T) {
+	cases := []struct {
+		name      string
+		rows      *sqlmock.Rows
+		expectErr error
+	}{
+		{
+			name: "found",
+			rows: sqlmock.NewRows([]string{
+				"tenant_id", "slack_webhook_enabled", "slack_webhook_secret_ref", "slack_webhook_default_channel",
+				"slack_bot_enabled", "slack_bot_secret_ref", "slack_bot_default_channel", "slack_bot_signing_secret_ref",
+				"email_enabled", "email_provider", "email_secret_ref", "email_from", "email_default_mailing_list_id",
+				"notify_approval_expiring", "notify_token_abuse", "notify_policy_invalid", "created_at", "updated_at",
+			}).AddRow(
+				"t1", true, "env://SLACK", "C01",
+				false, nil, nil, nil,
+				false, nil, nil, nil, nil,
+				true, true, true, time.Now(), time.Now(),
+			),
+		},
+		{
+			name:      "not found",
+			rows:      sqlmock.NewRows([]string{"tenant_id"}),
+			expectErr: ErrNotFound,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
+		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
+		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
+		FROM rbitr.notification_config WHERE tenant_id = $1`)
+			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
+
+			st := New(db)
+			config, err := st.GetNotificationConfig(context.Background(), "t1")
+			if tc.expectErr != nil {
+				require.ErrorIs(t, err, tc.expectErr)
+				require.NoError(t, mock.ExpectationsWereMet())
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, "t1", config.TenantID)
+			require.True(t, config.SlackWebhookEnabled)
+			require.Equal(t, "env://SLACK", config.SlackWebhookSecretRef)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestStoreUpsertNotificationConfig(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.notification_config (
+		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
+		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
+		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	ON CONFLICT (tenant_id) DO UPDATE SET
+		slack_webhook_enabled = EXCLUDED.slack_webhook_enabled,
+		slack_webhook_secret_ref = EXCLUDED.slack_webhook_secret_ref,
+		slack_webhook_default_channel = EXCLUDED.slack_webhook_default_channel,
+		slack_bot_enabled = EXCLUDED.slack_bot_enabled,
+		slack_bot_secret_ref = EXCLUDED.slack_bot_secret_ref,
+		slack_bot_default_channel = EXCLUDED.slack_bot_default_channel,
+		slack_bot_signing_secret_ref = EXCLUDED.slack_bot_signing_secret_ref,
+		email_enabled = EXCLUDED.email_enabled,
+		email_provider = EXCLUDED.email_provider,
+		email_secret_ref = EXCLUDED.email_secret_ref,
+		email_from = EXCLUDED.email_from,
+		email_default_mailing_list_id = EXCLUDED.email_default_mailing_list_id,
+		notify_approval_expiring = EXCLUDED.notify_approval_expiring,
+		notify_token_abuse = EXCLUDED.notify_token_abuse,
+		notify_policy_invalid = EXCLUDED.notify_policy_invalid,
+		updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs(
+			"t1",
+			true,
+			sql.NullString{String: "env://SLACK", Valid: true},
+			sql.NullString{String: "C01", Valid: true},
+			false,
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			false,
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			true,
+			true,
+			true,
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.UpsertNotificationConfig(context.Background(), models.NotificationConfig{
+		TenantID:                   "t1",
+		SlackWebhookEnabled:        true,
+		SlackWebhookSecretRef:      "env://SLACK",
+		SlackWebhookDefaultChannel: "C01",
+		NotifyApprovalExpiring:     true,
+		NotifyTokenAbuse:           true,
+		NotifyPolicyInvalid:        true,
+	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListMailingLists(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT mailing_list_id, tenant_id, name, description, created_at, updated_at
+		FROM rbitr.mailing_lists
+		WHERE tenant_id = $1
+		ORDER BY created_at DESC`)
+	mock.ExpectQuery(query).
+		WithArgs("t1").
+		WillReturnRows(sqlmock.NewRows([]string{"mailing_list_id", "tenant_id", "name", "description", "created_at", "updated_at"}).
+			AddRow("ml1", "t1", "Security", "desc", time.Now(), time.Now()))
+
+	st := New(db)
+	lists, err := st.ListMailingLists(context.Background(), "t1")
+	require.NoError(t, err)
+	require.Len(t, lists, 1)
+	require.Equal(t, "Security", lists[0].Name)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetMailingListNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT mailing_list_id, tenant_id, name, description, created_at, updated_at
+		FROM rbitr.mailing_lists
+		WHERE tenant_id = $1 AND mailing_list_id = $2`)
+	mock.ExpectQuery(query).
+		WithArgs("t1", "ml1").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	_, err = st.GetMailingList(context.Background(), "t1", "ml1")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListMailingListMembers(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT mailing_list_id, email, created_at
+		FROM rbitr.mailing_list_members
+		WHERE mailing_list_id = $1
+		ORDER BY email`)
+	mock.ExpectQuery(query).
+		WithArgs("ml1").
+		WillReturnRows(sqlmock.NewRows([]string{"mailing_list_id", "email", "created_at"}).
+			AddRow("ml1", "a@example.com", time.Now()))
+
+	st := New(db)
+	members, err := st.ListMailingListMembers(context.Background(), "ml1")
+	require.NoError(t, err)
+	require.Len(t, members, 1)
+	require.Equal(t, "a@example.com", members[0].Email)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreCreateMailingList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.mailing_lists (mailing_list_id, tenant_id, name, description, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6)`)).
+		WithArgs("ml1", "t1", "Security", sql.NullString{String: "desc", Valid: true}, sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.mailing_list_members (mailing_list_id, email, created_at)
+			VALUES ($1,$2,$3)`)).
+		WithArgs("ml1", "a@example.com", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	st := New(db)
+	err = st.CreateMailingList(context.Background(), models.MailingList{
+		MailingListID: "ml1",
+		TenantID:      "t1",
+		Name:          "Security",
+		Description:   "desc",
+	}, []string{"a@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreUpdateMailingList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.mailing_lists
+		SET name = $1, description = $2, updated_at = $3
+		WHERE tenant_id = $4 AND mailing_list_id = $5`)).
+		WithArgs("Security", sql.NullString{String: "", Valid: false}, sqlmock.AnyArg(), "t1", "ml1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM rbitr.mailing_list_members WHERE mailing_list_id = $1`)).
+		WithArgs("ml1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.mailing_list_members (mailing_list_id, email, created_at)
+			VALUES ($1,$2,$3)`)).
+		WithArgs("ml1", "b@example.com", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	st := New(db)
+	err = st.UpdateMailingList(context.Background(), models.MailingList{
+		MailingListID: "ml1",
+		TenantID:      "t1",
+		Name:          "Security",
+	}, []string{"b@example.com"})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreDeleteMailingList(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM rbitr.mailing_lists WHERE tenant_id = $1 AND mailing_list_id = $2`)).
+		WithArgs("t1", "ml1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.DeleteMailingList(context.Background(), "t1", "ml1")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetNotificationSuppression(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{
+		"dedup_key", "tenant_id", "channel", "event_type", "resource_id", "severity",
+		"first_seen_at", "last_seen_at", "last_sent_at", "suppressed_until", "suppressed_count", "last_payload_hash", "updated_at",
+	}).AddRow(
+		"d1", "t1", "slack", "APPROVAL.EXPIRING", "ar1", "WARN",
+		time.Now(), time.Now(), time.Now(), time.Now(), 2, "hash", time.Now(),
+	)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
+		FROM rbitr.notification_suppressions WHERE dedup_key = $1`)).
+		WithArgs("d1").
+		WillReturnRows(rows)
+
+	st := New(db)
+	item, err := st.GetNotificationSuppression(context.Background(), "d1")
+	require.NoError(t, err)
+	require.Equal(t, "d1", item.DedupKey)
+	require.Equal(t, "ar1", item.ResourceID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetNotificationSuppressionNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
+		FROM rbitr.notification_suppressions WHERE dedup_key = $1`)).
+		WithArgs("d1").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	_, err = st.GetNotificationSuppression(context.Background(), "d1")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreUpsertNotificationSuppression(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.notification_suppressions (
+		dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until,
+		suppressed_count, last_payload_hash, updated_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	ON CONFLICT (dedup_key) DO UPDATE SET
+		tenant_id = EXCLUDED.tenant_id,
+		channel = EXCLUDED.channel,
+		event_type = EXCLUDED.event_type,
+		resource_id = EXCLUDED.resource_id,
+		severity = EXCLUDED.severity,
+		last_seen_at = EXCLUDED.last_seen_at,
+		last_sent_at = EXCLUDED.last_sent_at,
+		suppressed_until = EXCLUDED.suppressed_until,
+		suppressed_count = EXCLUDED.suppressed_count,
+		last_payload_hash = EXCLUDED.last_payload_hash,
+		updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs(
+			"d1",
+			"t1",
+			"slack",
+			"APPROVAL.EXPIRING",
+			sql.NullString{String: "ar1", Valid: true},
+			"WARN",
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			int64(2),
+			sql.NullString{String: "hash", Valid: true},
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.UpsertNotificationSuppression(context.Background(), models.NotificationSuppression{
+		DedupKey:        "d1",
+		TenantID:        "t1",
+		Channel:         "slack",
+		EventType:       "APPROVAL.EXPIRING",
+		ResourceID:      "ar1",
+		Severity:        "WARN",
+		FirstSeenAt:     time.Now(),
+		LastSeenAt:      time.Now(),
+		LastSentAt:      ptrTime(time.Now()),
+		SuppressedUntil: ptrTime(time.Now()),
+		SuppressedCount: 2,
+		LastPayloadHash: "hash",
+	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
+}
