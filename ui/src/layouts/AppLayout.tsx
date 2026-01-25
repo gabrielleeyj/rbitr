@@ -13,7 +13,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { AppNav } from "@/components/navigation/AppNav";
 import { TopBar } from "@/components/navigation/TopBar";
-import { AgentgatewayLogo } from "@/components/agentgateway-logo";
+import { GatewayLogo } from "@/components/gateway-logo";
 import { Toaster } from "@/components/ui/sonner";
 import { useAdminKey } from "@/lib/auth";
 
@@ -25,9 +25,11 @@ export function AppLayout() {
       <Sidebar>
         <SidebarHeader className="border-b">
           <div className="flex items-center gap-3 px-4 py-3">
-            <AgentgatewayLogo className="h-8 w-8" />
+            <GatewayLogo className="h-8 w-8" />
             <div>
-              <div className="text-base font-semibold tracking-tight">rbitr</div>
+              <div className="text-base font-semibold tracking-tight">
+                rbitr
+              </div>
               <div className="text-xs text-muted-foreground">control plane</div>
             </div>
           </div>
