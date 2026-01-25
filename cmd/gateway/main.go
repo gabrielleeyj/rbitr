@@ -24,12 +24,12 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 )
 
-func main() {
-	const (
-		requestTimeout  = 15 * time.Second
-		gracefulTimeout = 10 * time.Second
-	)
+const (
+	requestTimeout  = 15 * time.Second
+	gracefulTimeout = 10 * time.Second
+)
 
+func main() {
 	cfg := config.Load()
 
 	dbConn, err := db.Connect(cfg.DatabaseURL)

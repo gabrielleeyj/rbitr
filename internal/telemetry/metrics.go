@@ -3,16 +3,19 @@ package telemetry
 import "github.com/prometheus/client_golang/prometheus"
 
 type Metrics struct {
-	DecisionsTotal         *prometheus.CounterVec
-	GatewayRequests        prometheus.Counter
-	ToolExecTotal          prometheus.Counter
-	ErrorsTotal            prometheus.Counter
-	DecisionLatencyMs      prometheus.Histogram
-	ToolLatencyMs          prometheus.Histogram
-	PolicyEvalInvalidTotal *prometheus.CounterVec
-	ApprovalsCreatedTotal  prometheus.Counter
-	ApprovalsResolvedTotal *prometheus.CounterVec
-	ApprovalsExecuteTotal  *prometheus.CounterVec
+	DecisionsTotal               *prometheus.CounterVec
+	GatewayRequests              prometheus.Counter
+	ToolExecTotal                prometheus.Counter
+	ErrorsTotal                  prometheus.Counter
+	DecisionLatencyMs            prometheus.Histogram
+	ToolLatencyMs                prometheus.Histogram
+	PolicyEvalInvalidTotal       *prometheus.CounterVec
+	ApprovalsCreatedTotal        prometheus.Counter
+	ApprovalsResolvedTotal       *prometheus.CounterVec
+	ApprovalsExecuteTotal        *prometheus.CounterVec
+	NotificationsSentTotal       *prometheus.CounterVec
+	NotificationsSuppressedTotal *prometheus.CounterVec
+	NotificationsLatencyMs       *prometheus.HistogramVec
 }
 
 func NewMetrics() *Metrics {
@@ -59,6 +62,19 @@ func NewMetrics() *Metrics {
 			Name: "approvals_execute_total",
 			Help: "Total approval executions by result.",
 		}, []string{"result"}),
+		NotificationsSentTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "notifications_sent_total",
+			Help: "Total notifications sent by channel, event type, and result.",
+		}, []string{"channel", "event_type", "result"}),
+		NotificationsSuppressedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "notifications_suppressed_total",
+			Help: "Total notifications suppressed by channel and event type.",
+		}, []string{"channel", "event_type"}),
+		NotificationsLatencyMs: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "notifications_latency_ms",
+			Help:    "Notification delivery latency in ms by channel.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"channel"}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -71,6 +87,9 @@ func NewMetrics() *Metrics {
 		m.ApprovalsCreatedTotal,
 		m.ApprovalsResolvedTotal,
 		m.ApprovalsExecuteTotal,
+		m.NotificationsSentTotal,
+		m.NotificationsSuppressedTotal,
+		m.NotificationsLatencyMs,
 	)
 	return m
 }

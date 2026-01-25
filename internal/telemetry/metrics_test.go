@@ -21,6 +21,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.ApprovalsCreatedTotal)
 		prometheus.Unregister(metrics.ApprovalsResolvedTotal)
 		prometheus.Unregister(metrics.ApprovalsExecuteTotal)
+		prometheus.Unregister(metrics.NotificationsSentTotal)
+		prometheus.Unregister(metrics.NotificationsSuppressedTotal)
+		prometheus.Unregister(metrics.NotificationsLatencyMs)
 	})
 
 	if metrics.DecisionsTotal == nil || metrics.GatewayRequests == nil {
@@ -37,6 +40,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.ApprovalsCreatedTotal.Inc()
 	metrics.ApprovalsResolvedTotal.WithLabelValues("approved").Inc()
 	metrics.ApprovalsExecuteTotal.WithLabelValues("success").Inc()
+	metrics.NotificationsSentTotal.WithLabelValues("slack", "APPROVAL.EXPIRING", "sent").Inc()
+	metrics.NotificationsSuppressedTotal.WithLabelValues("slack", "APPROVAL.EXPIRING").Inc()
+	metrics.NotificationsLatencyMs.WithLabelValues("slack").Observe(5)
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -44,16 +50,19 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"decisions_total":           false,
-		"gateway_requests_total":    false,
-		"tool_exec_total":           false,
-		"errors_total":              false,
-		"decision_latency_ms":       false,
-		"tool_latency_ms":           false,
-		"policy_eval_invalid_total": false,
-		"approvals_created_total":   false,
-		"approvals_resolved_total":  false,
-		"approvals_execute_total":   false,
+		"decisions_total":                false,
+		"gateway_requests_total":         false,
+		"tool_exec_total":                false,
+		"errors_total":                   false,
+		"decision_latency_ms":            false,
+		"tool_latency_ms":                false,
+		"policy_eval_invalid_total":      false,
+		"approvals_created_total":        false,
+		"approvals_resolved_total":       false,
+		"approvals_execute_total":        false,
+		"notifications_sent_total":       false,
+		"notifications_suppressed_total": false,
+		"notifications_latency_ms":       false,
 	}
 	for _, family := range families {
 		if _, ok := expected[family.GetName()]; ok {
