@@ -120,6 +120,69 @@ func (_c *MockStoreAPI_ApproveApprovalRequest_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// CreateMailingList provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CreateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+	ret := _mock.Called(ctx, list, members)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateMailingList")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.MailingList, []string) error); ok {
+		r0 = returnFunc(ctx, list, members)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_CreateMailingList_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateMailingList'
+type MockStoreAPI_CreateMailingList_Call struct {
+	*mock.Call
+}
+
+// CreateMailingList is a helper method to define mock.On call
+//   - ctx context.Context
+//   - list models.MailingList
+//   - members []string
+func (_e *MockStoreAPI_Expecter) CreateMailingList(ctx interface{}, list interface{}, members interface{}) *MockStoreAPI_CreateMailingList_Call {
+	return &MockStoreAPI_CreateMailingList_Call{Call: _e.mock.On("CreateMailingList", ctx, list, members)}
+}
+
+func (_c *MockStoreAPI_CreateMailingList_Call) Run(run func(ctx context.Context, list models.MailingList, members []string)) *MockStoreAPI_CreateMailingList_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.MailingList
+		if args[1] != nil {
+			arg1 = args[1].(models.MailingList)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateMailingList_Call) Return(err error) *MockStoreAPI_CreateMailingList_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateMailingList_Call) RunAndReturn(run func(ctx context.Context, list models.MailingList, members []string) error) *MockStoreAPI_CreateMailingList_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreatePolicyVersion provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CreatePolicyVersion(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error {
 	ret := _mock.Called(ctx, tenantID, policyVersion, regoModule, createdBy, notes)
@@ -197,6 +260,69 @@ func (_c *MockStoreAPI_CreatePolicyVersion_Call) Return(err error) *MockStoreAPI
 }
 
 func (_c *MockStoreAPI_CreatePolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error) *MockStoreAPI_CreatePolicyVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteMailingList provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) DeleteMailingList(ctx context.Context, tenantID string, mailingListID string) error {
+	ret := _mock.Called(ctx, tenantID, mailingListID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteMailingList")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, mailingListID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_DeleteMailingList_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteMailingList'
+type MockStoreAPI_DeleteMailingList_Call struct {
+	*mock.Call
+}
+
+// DeleteMailingList is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - mailingListID string
+func (_e *MockStoreAPI_Expecter) DeleteMailingList(ctx interface{}, tenantID interface{}, mailingListID interface{}) *MockStoreAPI_DeleteMailingList_Call {
+	return &MockStoreAPI_DeleteMailingList_Call{Call: _e.mock.On("DeleteMailingList", ctx, tenantID, mailingListID)}
+}
+
+func (_c *MockStoreAPI_DeleteMailingList_Call) Run(run func(ctx context.Context, tenantID string, mailingListID string)) *MockStoreAPI_DeleteMailingList_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteMailingList_Call) Return(err error) *MockStoreAPI_DeleteMailingList_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteMailingList_Call) RunAndReturn(run func(ctx context.Context, tenantID string, mailingListID string) error) *MockStoreAPI_DeleteMailingList_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -659,6 +785,210 @@ func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) Return(n int, err erro
 }
 
 func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetMailingList provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetMailingList(ctx context.Context, tenantID string, mailingListID string) (models.MailingList, error) {
+	ret := _mock.Called(ctx, tenantID, mailingListID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMailingList")
+	}
+
+	var r0 models.MailingList
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.MailingList, error)); ok {
+		return returnFunc(ctx, tenantID, mailingListID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.MailingList); ok {
+		r0 = returnFunc(ctx, tenantID, mailingListID)
+	} else {
+		r0 = ret.Get(0).(models.MailingList)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, mailingListID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetMailingList_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMailingList'
+type MockStoreAPI_GetMailingList_Call struct {
+	*mock.Call
+}
+
+// GetMailingList is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - mailingListID string
+func (_e *MockStoreAPI_Expecter) GetMailingList(ctx interface{}, tenantID interface{}, mailingListID interface{}) *MockStoreAPI_GetMailingList_Call {
+	return &MockStoreAPI_GetMailingList_Call{Call: _e.mock.On("GetMailingList", ctx, tenantID, mailingListID)}
+}
+
+func (_c *MockStoreAPI_GetMailingList_Call) Run(run func(ctx context.Context, tenantID string, mailingListID string)) *MockStoreAPI_GetMailingList_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetMailingList_Call) Return(mailingList models.MailingList, err error) *MockStoreAPI_GetMailingList_Call {
+	_c.Call.Return(mailingList, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetMailingList_Call) RunAndReturn(run func(ctx context.Context, tenantID string, mailingListID string) (models.MailingList, error)) *MockStoreAPI_GetMailingList_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetNotificationConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetNotificationConfig")
+	}
+
+	var r0 models.NotificationConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.NotificationConfig, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.NotificationConfig); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(models.NotificationConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetNotificationConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetNotificationConfig'
+type MockStoreAPI_GetNotificationConfig_Call struct {
+	*mock.Call
+}
+
+// GetNotificationConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetNotificationConfig(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetNotificationConfig_Call {
+	return &MockStoreAPI_GetNotificationConfig_Call{Call: _e.mock.On("GetNotificationConfig", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetNotificationConfig_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetNotificationConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetNotificationConfig_Call) Return(notificationConfig models.NotificationConfig, err error) *MockStoreAPI_GetNotificationConfig_Call {
+	_c.Call.Return(notificationConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetNotificationConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.NotificationConfig, error)) *MockStoreAPI_GetNotificationConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetNotificationSuppression provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error) {
+	ret := _mock.Called(ctx, dedupKey)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetNotificationSuppression")
+	}
+
+	var r0 models.NotificationSuppression
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.NotificationSuppression, error)); ok {
+		return returnFunc(ctx, dedupKey)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.NotificationSuppression); ok {
+		r0 = returnFunc(ctx, dedupKey)
+	} else {
+		r0 = ret.Get(0).(models.NotificationSuppression)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, dedupKey)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetNotificationSuppression_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetNotificationSuppression'
+type MockStoreAPI_GetNotificationSuppression_Call struct {
+	*mock.Call
+}
+
+// GetNotificationSuppression is a helper method to define mock.On call
+//   - ctx context.Context
+//   - dedupKey string
+func (_e *MockStoreAPI_Expecter) GetNotificationSuppression(ctx interface{}, dedupKey interface{}) *MockStoreAPI_GetNotificationSuppression_Call {
+	return &MockStoreAPI_GetNotificationSuppression_Call{Call: _e.mock.On("GetNotificationSuppression", ctx, dedupKey)}
+}
+
+func (_c *MockStoreAPI_GetNotificationSuppression_Call) Run(run func(ctx context.Context, dedupKey string)) *MockStoreAPI_GetNotificationSuppression_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetNotificationSuppression_Call) Return(notificationSuppression models.NotificationSuppression, err error) *MockStoreAPI_GetNotificationSuppression_Call {
+	_c.Call.Return(notificationSuppression, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetNotificationSuppression_Call) RunAndReturn(run func(ctx context.Context, dedupKey string) (models.NotificationSuppression, error)) *MockStoreAPI_GetNotificationSuppression_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1736,6 +2066,142 @@ func (_c *MockStoreAPI_ListEvidenceFiltered_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// ListMailingListMembers provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListMailingListMembers(ctx context.Context, mailingListID string) ([]models.MailingListMember, error) {
+	ret := _mock.Called(ctx, mailingListID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListMailingListMembers")
+	}
+
+	var r0 []models.MailingListMember
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.MailingListMember, error)); ok {
+		return returnFunc(ctx, mailingListID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.MailingListMember); ok {
+		r0 = returnFunc(ctx, mailingListID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.MailingListMember)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, mailingListID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListMailingListMembers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListMailingListMembers'
+type MockStoreAPI_ListMailingListMembers_Call struct {
+	*mock.Call
+}
+
+// ListMailingListMembers is a helper method to define mock.On call
+//   - ctx context.Context
+//   - mailingListID string
+func (_e *MockStoreAPI_Expecter) ListMailingListMembers(ctx interface{}, mailingListID interface{}) *MockStoreAPI_ListMailingListMembers_Call {
+	return &MockStoreAPI_ListMailingListMembers_Call{Call: _e.mock.On("ListMailingListMembers", ctx, mailingListID)}
+}
+
+func (_c *MockStoreAPI_ListMailingListMembers_Call) Run(run func(ctx context.Context, mailingListID string)) *MockStoreAPI_ListMailingListMembers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListMailingListMembers_Call) Return(mailingListMembers []models.MailingListMember, err error) *MockStoreAPI_ListMailingListMembers_Call {
+	_c.Call.Return(mailingListMembers, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListMailingListMembers_Call) RunAndReturn(run func(ctx context.Context, mailingListID string) ([]models.MailingListMember, error)) *MockStoreAPI_ListMailingListMembers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListMailingLists provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListMailingLists(ctx context.Context, tenantID string) ([]models.MailingList, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListMailingLists")
+	}
+
+	var r0 []models.MailingList
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.MailingList, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.MailingList); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.MailingList)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListMailingLists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListMailingLists'
+type MockStoreAPI_ListMailingLists_Call struct {
+	*mock.Call
+}
+
+// ListMailingLists is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListMailingLists(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListMailingLists_Call {
+	return &MockStoreAPI_ListMailingLists_Call{Call: _e.mock.On("ListMailingLists", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListMailingLists_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListMailingLists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListMailingLists_Call) Return(mailingLists []models.MailingList, err error) *MockStoreAPI_ListMailingLists_Call {
+	_c.Call.Return(mailingLists, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListMailingLists_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.MailingList, error)) *MockStoreAPI_ListMailingLists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListPolicyVersions provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error) {
 	ret := _mock.Called(ctx, tenantID)
@@ -2524,6 +2990,69 @@ func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(
 	return _c
 }
 
+// UpdateMailingList provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+	ret := _mock.Called(ctx, list, members)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateMailingList")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.MailingList, []string) error); ok {
+		r0 = returnFunc(ctx, list, members)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpdateMailingList_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateMailingList'
+type MockStoreAPI_UpdateMailingList_Call struct {
+	*mock.Call
+}
+
+// UpdateMailingList is a helper method to define mock.On call
+//   - ctx context.Context
+//   - list models.MailingList
+//   - members []string
+func (_e *MockStoreAPI_Expecter) UpdateMailingList(ctx interface{}, list interface{}, members interface{}) *MockStoreAPI_UpdateMailingList_Call {
+	return &MockStoreAPI_UpdateMailingList_Call{Call: _e.mock.On("UpdateMailingList", ctx, list, members)}
+}
+
+func (_c *MockStoreAPI_UpdateMailingList_Call) Run(run func(ctx context.Context, list models.MailingList, members []string)) *MockStoreAPI_UpdateMailingList_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.MailingList
+		if args[1] != nil {
+			arg1 = args[1].(models.MailingList)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateMailingList_Call) Return(err error) *MockStoreAPI_UpdateMailingList_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateMailingList_Call) RunAndReturn(run func(ctx context.Context, list models.MailingList, members []string) error) *MockStoreAPI_UpdateMailingList_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdatePolicy provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) UpdatePolicy(ctx context.Context, tenantID string, regoModule string, policyVersion string) error {
 	ret := _mock.Called(ctx, tenantID, regoModule, policyVersion)
@@ -2808,6 +3337,120 @@ func (_c *MockStoreAPI_UpdateToolConfig_Call) Return(err error) *MockStoreAPI_Up
 }
 
 func (_c *MockStoreAPI_UpdateToolConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string) error) *MockStoreAPI_UpdateToolConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpsertNotificationConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error {
+	ret := _mock.Called(ctx, config)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpsertNotificationConfig")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.NotificationConfig) error); ok {
+		r0 = returnFunc(ctx, config)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpsertNotificationConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertNotificationConfig'
+type MockStoreAPI_UpsertNotificationConfig_Call struct {
+	*mock.Call
+}
+
+// UpsertNotificationConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - config models.NotificationConfig
+func (_e *MockStoreAPI_Expecter) UpsertNotificationConfig(ctx interface{}, config interface{}) *MockStoreAPI_UpsertNotificationConfig_Call {
+	return &MockStoreAPI_UpsertNotificationConfig_Call{Call: _e.mock.On("UpsertNotificationConfig", ctx, config)}
+}
+
+func (_c *MockStoreAPI_UpsertNotificationConfig_Call) Run(run func(ctx context.Context, config models.NotificationConfig)) *MockStoreAPI_UpsertNotificationConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.NotificationConfig
+		if args[1] != nil {
+			arg1 = args[1].(models.NotificationConfig)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertNotificationConfig_Call) Return(err error) *MockStoreAPI_UpsertNotificationConfig_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertNotificationConfig_Call) RunAndReturn(run func(ctx context.Context, config models.NotificationConfig) error) *MockStoreAPI_UpsertNotificationConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpsertNotificationSuppression provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error {
+	ret := _mock.Called(ctx, suppression)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpsertNotificationSuppression")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.NotificationSuppression) error); ok {
+		r0 = returnFunc(ctx, suppression)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpsertNotificationSuppression_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertNotificationSuppression'
+type MockStoreAPI_UpsertNotificationSuppression_Call struct {
+	*mock.Call
+}
+
+// UpsertNotificationSuppression is a helper method to define mock.On call
+//   - ctx context.Context
+//   - suppression models.NotificationSuppression
+func (_e *MockStoreAPI_Expecter) UpsertNotificationSuppression(ctx interface{}, suppression interface{}) *MockStoreAPI_UpsertNotificationSuppression_Call {
+	return &MockStoreAPI_UpsertNotificationSuppression_Call{Call: _e.mock.On("UpsertNotificationSuppression", ctx, suppression)}
+}
+
+func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Run(run func(ctx context.Context, suppression models.NotificationSuppression)) *MockStoreAPI_UpsertNotificationSuppression_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.NotificationSuppression
+		if args[1] != nil {
+			arg1 = args[1].(models.NotificationSuppression)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Return(err error) *MockStoreAPI_UpsertNotificationSuppression_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) RunAndReturn(run func(ctx context.Context, suppression models.NotificationSuppression) error) *MockStoreAPI_UpsertNotificationSuppression_Call {
 	_c.Call.Return(run)
 	return _c
 }

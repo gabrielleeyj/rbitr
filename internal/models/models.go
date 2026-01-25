@@ -176,3 +176,55 @@ type AdminKey struct {
 	KeyHash    string
 	Scopes     []string
 }
+
+type NotificationConfig struct {
+	TenantID                   string    `json:"tenant_id"`
+	SlackWebhookEnabled        bool      `json:"slack_webhook_enabled"`
+	SlackWebhookSecretRef      string    `json:"-"`
+	SlackWebhookDefaultChannel string    `json:"slack_webhook_default_channel"`
+	SlackBotEnabled            bool      `json:"slack_bot_enabled"`
+	SlackBotSecretRef          string    `json:"-"`
+	SlackBotDefaultChannel     string    `json:"slack_bot_default_channel"`
+	SlackBotSigningSecretRef   string    `json:"-"`
+	EmailEnabled               bool      `json:"email_enabled"`
+	EmailProvider              string    `json:"email_provider"`
+	EmailSecretRef             string    `json:"-"`
+	EmailFrom                  string    `json:"email_from"`
+	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
+	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
+	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
+	NotifyPolicyInvalid        bool      `json:"notify_policy_invalid"`
+	CreatedAt                  time.Time `json:"created_at"`
+	UpdatedAt                  time.Time `json:"updated_at"`
+}
+
+type MailingList struct {
+	MailingListID string    `json:"mailing_list_id"`
+	TenantID      string    `json:"tenant_id"`
+	Name          string    `json:"name"`
+	Description   string    `json:"description"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type MailingListMember struct {
+	MailingListID string    `json:"mailing_list_id"`
+	Email         string    `json:"email"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type NotificationSuppression struct {
+	DedupKey        string     `json:"dedup_key"`
+	TenantID        string     `json:"tenant_id"`
+	Channel         string     `json:"channel"`
+	EventType       string     `json:"event_type"`
+	ResourceID      string     `json:"resource_id"`
+	Severity        string     `json:"severity"`
+	FirstSeenAt     time.Time  `json:"first_seen_at"`
+	LastSeenAt      time.Time  `json:"last_seen_at"`
+	LastSentAt      *time.Time `json:"last_sent_at"`
+	SuppressedUntil *time.Time `json:"suppressed_until"`
+	SuppressedCount int64      `json:"suppressed_count"`
+	LastPayloadHash string     `json:"last_payload_hash"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}

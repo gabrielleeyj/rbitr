@@ -70,6 +70,16 @@ type StoreAPI interface {
 	GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error)
 	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error)
 	InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error
+	GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error)
+	UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error
+	ListMailingLists(ctx context.Context, tenantID string) ([]models.MailingList, error)
+	GetMailingList(ctx context.Context, tenantID, mailingListID string) (models.MailingList, error)
+	ListMailingListMembers(ctx context.Context, mailingListID string) ([]models.MailingListMember, error)
+	CreateMailingList(ctx context.Context, list models.MailingList, members []string) error
+	UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error
+	DeleteMailingList(ctx context.Context, tenantID, mailingListID string) error
+	GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error)
+	UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error
 }
 
 // Store wraps database operations.
@@ -1040,6 +1050,344 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEve
 		ip,
 		userAgent,
 		event.CreatedAt,
+	)
+	return err
+}
+
+func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error) {
+	query := `SELECT tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
+		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
+		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
+		FROM rbitr.notification_config WHERE tenant_id = $1`
+	row := s.db.QueryRowContext(ctx, query, tenantID)
+	var config models.NotificationConfig
+	var webhookRef sql.NullString
+	var webhookChannel sql.NullString
+	var botRef sql.NullString
+	var botChannel sql.NullString
+	var botSigningRef sql.NullString
+	var emailProvider sql.NullString
+	var emailRef sql.NullString
+	var emailFrom sql.NullString
+	var emailListID sql.NullString
+	if err := row.Scan(
+		&config.TenantID,
+		&config.SlackWebhookEnabled,
+		&webhookRef,
+		&webhookChannel,
+		&config.SlackBotEnabled,
+		&botRef,
+		&botChannel,
+		&botSigningRef,
+		&config.EmailEnabled,
+		&emailProvider,
+		&emailRef,
+		&emailFrom,
+		&emailListID,
+		&config.NotifyApprovalExpiring,
+		&config.NotifyTokenAbuse,
+		&config.NotifyPolicyInvalid,
+		&config.CreatedAt,
+		&config.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.NotificationConfig{}, ErrNotFound
+		}
+		return models.NotificationConfig{}, err
+	}
+	if webhookRef.Valid {
+		config.SlackWebhookSecretRef = webhookRef.String
+	}
+	if webhookChannel.Valid {
+		config.SlackWebhookDefaultChannel = webhookChannel.String
+	}
+	if botRef.Valid {
+		config.SlackBotSecretRef = botRef.String
+	}
+	if botChannel.Valid {
+		config.SlackBotDefaultChannel = botChannel.String
+	}
+	if botSigningRef.Valid {
+		config.SlackBotSigningSecretRef = botSigningRef.String
+	}
+	if emailProvider.Valid {
+		config.EmailProvider = emailProvider.String
+	}
+	if emailRef.Valid {
+		config.EmailSecretRef = emailRef.String
+	}
+	if emailFrom.Valid {
+		config.EmailFrom = emailFrom.String
+	}
+	if emailListID.Valid {
+		config.EmailDefaultMailingListID = emailListID.String
+	}
+	return config, nil
+}
+
+func (s *Store) UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.notification_config (
+		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
+		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
+		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	ON CONFLICT (tenant_id) DO UPDATE SET
+		slack_webhook_enabled = EXCLUDED.slack_webhook_enabled,
+		slack_webhook_secret_ref = EXCLUDED.slack_webhook_secret_ref,
+		slack_webhook_default_channel = EXCLUDED.slack_webhook_default_channel,
+		slack_bot_enabled = EXCLUDED.slack_bot_enabled,
+		slack_bot_secret_ref = EXCLUDED.slack_bot_secret_ref,
+		slack_bot_default_channel = EXCLUDED.slack_bot_default_channel,
+		slack_bot_signing_secret_ref = EXCLUDED.slack_bot_signing_secret_ref,
+		email_enabled = EXCLUDED.email_enabled,
+		email_provider = EXCLUDED.email_provider,
+		email_secret_ref = EXCLUDED.email_secret_ref,
+		email_from = EXCLUDED.email_from,
+		email_default_mailing_list_id = EXCLUDED.email_default_mailing_list_id,
+		notify_approval_expiring = EXCLUDED.notify_approval_expiring,
+		notify_token_abuse = EXCLUDED.notify_token_abuse,
+		notify_policy_invalid = EXCLUDED.notify_policy_invalid,
+		updated_at = EXCLUDED.updated_at`,
+		config.TenantID,
+		config.SlackWebhookEnabled,
+		nullableString(config.SlackWebhookSecretRef),
+		nullableString(config.SlackWebhookDefaultChannel),
+		config.SlackBotEnabled,
+		nullableString(config.SlackBotSecretRef),
+		nullableString(config.SlackBotDefaultChannel),
+		nullableString(config.SlackBotSigningSecretRef),
+		config.EmailEnabled,
+		nullableString(config.EmailProvider),
+		nullableString(config.EmailSecretRef),
+		nullableString(config.EmailFrom),
+		nullableString(config.EmailDefaultMailingListID),
+		config.NotifyApprovalExpiring,
+		config.NotifyTokenAbuse,
+		config.NotifyPolicyInvalid,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *Store) ListMailingLists(ctx context.Context, tenantID string) ([]models.MailingList, error) {
+	query := `SELECT mailing_list_id, tenant_id, name, description, created_at, updated_at
+		FROM rbitr.mailing_lists
+		WHERE tenant_id = $1
+		ORDER BY created_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lists []models.MailingList
+	for rows.Next() {
+		var list models.MailingList
+		var description sql.NullString
+		if err := rows.Scan(&list.MailingListID, &list.TenantID, &list.Name, &description, &list.CreatedAt, &list.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if description.Valid {
+			list.Description = description.String
+		}
+		lists = append(lists, list)
+	}
+	return lists, rows.Err()
+}
+
+func (s *Store) GetMailingList(ctx context.Context, tenantID, mailingListID string) (models.MailingList, error) {
+	query := `SELECT mailing_list_id, tenant_id, name, description, created_at, updated_at
+		FROM rbitr.mailing_lists
+		WHERE tenant_id = $1 AND mailing_list_id = $2`
+	row := s.db.QueryRowContext(ctx, query, tenantID, mailingListID)
+	var list models.MailingList
+	var description sql.NullString
+	if err := row.Scan(&list.MailingListID, &list.TenantID, &list.Name, &description, &list.CreatedAt, &list.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.MailingList{}, ErrNotFound
+		}
+		return models.MailingList{}, err
+	}
+	if description.Valid {
+		list.Description = description.String
+	}
+	return list, nil
+}
+
+func (s *Store) ListMailingListMembers(ctx context.Context, mailingListID string) ([]models.MailingListMember, error) {
+	query := `SELECT mailing_list_id, email, created_at
+		FROM rbitr.mailing_list_members
+		WHERE mailing_list_id = $1
+		ORDER BY email`
+	rows, err := s.db.QueryContext(ctx, query, mailingListID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members []models.MailingListMember
+	for rows.Next() {
+		var member models.MailingListMember
+		if err := rows.Scan(&member.MailingListID, &member.Email, &member.CreatedAt); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+	return members, rows.Err()
+}
+
+func (s *Store) CreateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `INSERT INTO rbitr.mailing_lists (mailing_list_id, tenant_id, name, description, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6)`,
+		list.MailingListID,
+		list.TenantID,
+		list.Name,
+		nullableString(list.Description),
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		return err
+	}
+
+	for _, email := range members {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO rbitr.mailing_list_members (mailing_list_id, email, created_at)
+			VALUES ($1,$2,$3)`,
+			list.MailingListID,
+			email,
+			time.Now().UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `UPDATE rbitr.mailing_lists
+		SET name = $1, description = $2, updated_at = $3
+		WHERE tenant_id = $4 AND mailing_list_id = $5`,
+		list.Name,
+		nullableString(list.Description),
+		time.Now().UTC(),
+		list.TenantID,
+		list.MailingListID,
+	)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM rbitr.mailing_list_members WHERE mailing_list_id = $1`, list.MailingListID); err != nil {
+		return err
+	}
+	for _, email := range members {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO rbitr.mailing_list_members (mailing_list_id, email, created_at)
+			VALUES ($1,$2,$3)`,
+			list.MailingListID,
+			email,
+			time.Now().UTC(),
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) DeleteMailingList(ctx context.Context, tenantID, mailingListID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM rbitr.mailing_lists WHERE tenant_id = $1 AND mailing_list_id = $2`, tenantID, mailingListID)
+	return err
+}
+
+func (s *Store) GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error) {
+	query := `SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
+		FROM rbitr.notification_suppressions WHERE dedup_key = $1`
+	row := s.db.QueryRowContext(ctx, query, dedupKey)
+	var suppression models.NotificationSuppression
+	var resourceID sql.NullString
+	var lastSentAt sql.NullTime
+	var suppressedUntil sql.NullTime
+	var lastPayloadHash sql.NullString
+	if err := row.Scan(
+		&suppression.DedupKey,
+		&suppression.TenantID,
+		&suppression.Channel,
+		&suppression.EventType,
+		&resourceID,
+		&suppression.Severity,
+		&suppression.FirstSeenAt,
+		&suppression.LastSeenAt,
+		&lastSentAt,
+		&suppressedUntil,
+		&suppression.SuppressedCount,
+		&lastPayloadHash,
+		&suppression.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.NotificationSuppression{}, ErrNotFound
+		}
+		return models.NotificationSuppression{}, err
+	}
+	if resourceID.Valid {
+		suppression.ResourceID = resourceID.String
+	}
+	if lastSentAt.Valid {
+		suppression.LastSentAt = &lastSentAt.Time
+	}
+	if suppressedUntil.Valid {
+		suppression.SuppressedUntil = &suppressedUntil.Time
+	}
+	if lastPayloadHash.Valid {
+		suppression.LastPayloadHash = lastPayloadHash.String
+	}
+	return suppression, nil
+}
+
+func (s *Store) UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.notification_suppressions (
+		dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until,
+		suppressed_count, last_payload_hash, updated_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	ON CONFLICT (dedup_key) DO UPDATE SET
+		tenant_id = EXCLUDED.tenant_id,
+		channel = EXCLUDED.channel,
+		event_type = EXCLUDED.event_type,
+		resource_id = EXCLUDED.resource_id,
+		severity = EXCLUDED.severity,
+		last_seen_at = EXCLUDED.last_seen_at,
+		last_sent_at = EXCLUDED.last_sent_at,
+		suppressed_until = EXCLUDED.suppressed_until,
+		suppressed_count = EXCLUDED.suppressed_count,
+		last_payload_hash = EXCLUDED.last_payload_hash,
+		updated_at = EXCLUDED.updated_at`,
+		suppression.DedupKey,
+		suppression.TenantID,
+		suppression.Channel,
+		suppression.EventType,
+		nullableString(suppression.ResourceID),
+		suppression.Severity,
+		suppression.FirstSeenAt,
+		suppression.LastSeenAt,
+		suppression.LastSentAt,
+		suppression.SuppressedUntil,
+		suppression.SuppressedCount,
+		nullableString(suppression.LastPayloadHash),
+		time.Now().UTC(),
 	)
 	return err
 }
