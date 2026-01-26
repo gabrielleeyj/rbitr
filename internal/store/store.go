@@ -80,6 +80,10 @@ type StoreAPI interface {
 	DeleteMailingList(ctx context.Context, tenantID, mailingListID string) error
 	GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error)
 	UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error
+	ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error)
+	ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error)
+	TryAdvisoryLock(ctx context.Context, key int64) (bool, error)
+	ReleaseAdvisoryLock(ctx context.Context, key int64) error
 }
 
 // Store wraps database operations.
@@ -1390,6 +1394,78 @@ func (s *Store) UpsertNotificationSuppression(ctx context.Context, suppression m
 		time.Now().UTC(),
 	)
 	return err
+}
+
+func (s *Store) ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error) {
+	cutoff := now.Add(window)
+	query := `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE status IN ('PENDING','APPROVED')
+			AND expires_at > $1
+			AND expires_at <= $2
+		ORDER BY expires_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, now, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []models.ApprovalRequest
+	for rows.Next() {
+		approval, err := scanApprovalRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, approval)
+	}
+	return approvals, rows.Err()
+}
+
+func (s *Store) ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error) {
+	query := `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE status IN ('PENDING','APPROVED')
+			AND expires_at <= $1
+		ORDER BY expires_at ASC`
+	rows, err := s.db.QueryContext(ctx, query, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var approvals []models.ApprovalRequest
+	for rows.Next() {
+		approval, err := scanApprovalRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		approvals = append(approvals, approval)
+	}
+	return approvals, rows.Err()
+}
+
+func (s *Store) TryAdvisoryLock(ctx context.Context, key int64) (bool, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, key)
+	var ok bool
+	if err := row.Scan(&ok); err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
+func (s *Store) ReleaseAdvisoryLock(ctx context.Context, key int64) error {
+	row := s.db.QueryRowContext(ctx, `SELECT pg_advisory_unlock($1)`, key)
+	var ok bool
+	if err := row.Scan(&ok); err != nil {
+		return err
+	}
+	return nil
 }
 
 func hashKey(key string) string {

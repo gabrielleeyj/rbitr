@@ -1796,6 +1796,148 @@ func (_c *MockStoreAPI_ListApprovalRequests_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// ListApprovalsExpired provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error) {
+	ret := _mock.Called(ctx, now)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListApprovalsExpired")
+	}
+
+	var r0 []models.ApprovalRequest
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) ([]models.ApprovalRequest, error)); ok {
+		return returnFunc(ctx, now)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) []models.ApprovalRequest); ok {
+		r0 = returnFunc(ctx, now)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.ApprovalRequest)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time) error); ok {
+		r1 = returnFunc(ctx, now)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListApprovalsExpired_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListApprovalsExpired'
+type MockStoreAPI_ListApprovalsExpired_Call struct {
+	*mock.Call
+}
+
+// ListApprovalsExpired is a helper method to define mock.On call
+//   - ctx context.Context
+//   - now time.Time
+func (_e *MockStoreAPI_Expecter) ListApprovalsExpired(ctx interface{}, now interface{}) *MockStoreAPI_ListApprovalsExpired_Call {
+	return &MockStoreAPI_ListApprovalsExpired_Call{Call: _e.mock.On("ListApprovalsExpired", ctx, now)}
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpired_Call) Run(run func(ctx context.Context, now time.Time)) *MockStoreAPI_ListApprovalsExpired_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpired_Call) Return(approvalRequests []models.ApprovalRequest, err error) *MockStoreAPI_ListApprovalsExpired_Call {
+	_c.Call.Return(approvalRequests, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpired_Call) RunAndReturn(run func(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error)) *MockStoreAPI_ListApprovalsExpired_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListApprovalsExpiring provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error) {
+	ret := _mock.Called(ctx, now, window)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListApprovalsExpiring")
+	}
+
+	var r0 []models.ApprovalRequest
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, time.Duration) ([]models.ApprovalRequest, error)); ok {
+		return returnFunc(ctx, now, window)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time, time.Duration) []models.ApprovalRequest); ok {
+		r0 = returnFunc(ctx, now, window)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.ApprovalRequest)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time, time.Duration) error); ok {
+		r1 = returnFunc(ctx, now, window)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListApprovalsExpiring_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListApprovalsExpiring'
+type MockStoreAPI_ListApprovalsExpiring_Call struct {
+	*mock.Call
+}
+
+// ListApprovalsExpiring is a helper method to define mock.On call
+//   - ctx context.Context
+//   - now time.Time
+//   - window time.Duration
+func (_e *MockStoreAPI_Expecter) ListApprovalsExpiring(ctx interface{}, now interface{}, window interface{}) *MockStoreAPI_ListApprovalsExpiring_Call {
+	return &MockStoreAPI_ListApprovalsExpiring_Call{Call: _e.mock.On("ListApprovalsExpiring", ctx, now, window)}
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpiring_Call) Run(run func(ctx context.Context, now time.Time, window time.Duration)) *MockStoreAPI_ListApprovalsExpiring_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		var arg2 time.Duration
+		if args[2] != nil {
+			arg2 = args[2].(time.Duration)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpiring_Call) Return(approvalRequests []models.ApprovalRequest, err error) *MockStoreAPI_ListApprovalsExpiring_Call {
+	_c.Call.Return(approvalRequests, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListApprovalsExpiring_Call) RunAndReturn(run func(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error)) *MockStoreAPI_ListApprovalsExpiring_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListAuditEvents provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error) {
 	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID)
@@ -2732,6 +2874,63 @@ func (_c *MockStoreAPI_PublishPolicyVersion_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// ReleaseAdvisoryLock provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ReleaseAdvisoryLock(ctx context.Context, key int64) error {
+	ret := _mock.Called(ctx, key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReleaseAdvisoryLock")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int64) error); ok {
+		r0 = returnFunc(ctx, key)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_ReleaseAdvisoryLock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReleaseAdvisoryLock'
+type MockStoreAPI_ReleaseAdvisoryLock_Call struct {
+	*mock.Call
+}
+
+// ReleaseAdvisoryLock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - key int64
+func (_e *MockStoreAPI_Expecter) ReleaseAdvisoryLock(ctx interface{}, key interface{}) *MockStoreAPI_ReleaseAdvisoryLock_Call {
+	return &MockStoreAPI_ReleaseAdvisoryLock_Call{Call: _e.mock.On("ReleaseAdvisoryLock", ctx, key)}
+}
+
+func (_c *MockStoreAPI_ReleaseAdvisoryLock_Call) Run(run func(ctx context.Context, key int64)) *MockStoreAPI_ReleaseAdvisoryLock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int64
+		if args[1] != nil {
+			arg1 = args[1].(int64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ReleaseAdvisoryLock_Call) Return(err error) *MockStoreAPI_ReleaseAdvisoryLock_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ReleaseAdvisoryLock_Call) RunAndReturn(run func(ctx context.Context, key int64) error) *MockStoreAPI_ReleaseAdvisoryLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeApprovalRequest provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) RevokeApprovalRequest(ctx context.Context, tenantID string, approvalRequestID string, decidedBy string, comment string, decidedAt time.Time) error {
 	ret := _mock.Called(ctx, tenantID, approvalRequestID, decidedBy, comment, decidedAt)
@@ -2986,6 +3185,72 @@ func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) Return(err error) *Moc
 }
 
 func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context, seconds int) error) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TryAdvisoryLock provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) TryAdvisoryLock(ctx context.Context, key int64) (bool, error) {
+	ret := _mock.Called(ctx, key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TryAdvisoryLock")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int64) (bool, error)); ok {
+		return returnFunc(ctx, key)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int64) bool); ok {
+		r0 = returnFunc(ctx, key)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, int64) error); ok {
+		r1 = returnFunc(ctx, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_TryAdvisoryLock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TryAdvisoryLock'
+type MockStoreAPI_TryAdvisoryLock_Call struct {
+	*mock.Call
+}
+
+// TryAdvisoryLock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - key int64
+func (_e *MockStoreAPI_Expecter) TryAdvisoryLock(ctx interface{}, key interface{}) *MockStoreAPI_TryAdvisoryLock_Call {
+	return &MockStoreAPI_TryAdvisoryLock_Call{Call: _e.mock.On("TryAdvisoryLock", ctx, key)}
+}
+
+func (_c *MockStoreAPI_TryAdvisoryLock_Call) Run(run func(ctx context.Context, key int64)) *MockStoreAPI_TryAdvisoryLock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int64
+		if args[1] != nil {
+			arg1 = args[1].(int64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_TryAdvisoryLock_Call) Return(b bool, err error) *MockStoreAPI_TryAdvisoryLock_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_TryAdvisoryLock_Call) RunAndReturn(run func(ctx context.Context, key int64) (bool, error)) *MockStoreAPI_TryAdvisoryLock_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -2283,3 +2283,102 @@ func TestStoreUpsertNotificationSuppression(t *testing.T) {
 func ptrTime(value time.Time) *time.Time {
 	return &value
 }
+
+func TestStoreListApprovalsExpiring(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	cutoff := now.Add(5 * time.Minute)
+	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE status IN ('PENDING','APPROVED')
+			AND expires_at > $1
+			AND expires_at <= $2
+		ORDER BY expires_at ASC`)
+	rows := sqlmock.NewRows([]string{
+		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
+		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
+		"action_summary", "risk", "rule_id", "reasons",
+	}).AddRow(
+		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
+		"token", now.Add(2*time.Minute), now, "p_v1", nil, nil,
+		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`[]`),
+	)
+	mock.ExpectQuery(query).WithArgs(now, cutoff).WillReturnRows(rows)
+
+	st := New(db)
+	items, err := st.ListApprovalsExpiring(context.Background(), now, 5*time.Minute)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListApprovalsExpired(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	now := time.Now().UTC()
+	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+		risk, rule_id, reasons
+		FROM rbitr.approval_requests
+		WHERE status IN ('PENDING','APPROVED')
+			AND expires_at <= $1
+		ORDER BY expires_at ASC`)
+	rows := sqlmock.NewRows([]string{
+		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
+		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
+		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
+		"action_summary", "risk", "rule_id", "reasons",
+	}).AddRow(
+		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
+		"token", now.Add(-time.Minute), now, "p_v1", nil, nil,
+		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`[]`),
+	)
+	mock.ExpectQuery(query).WithArgs(now).WillReturnRows(rows)
+
+	st := New(db)
+	items, err := st.ListApprovalsExpired(context.Background(), now)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreTryAdvisoryLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_try_advisory_lock($1)`)).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_try_advisory_lock"}).AddRow(true))
+
+	st := New(db)
+	ok, err := st.TryAdvisoryLock(context.Background(), 42)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreReleaseAdvisoryLock(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT pg_advisory_unlock($1)`)).
+		WithArgs(int64(42)).
+		WillReturnRows(sqlmock.NewRows([]string{"pg_advisory_unlock"}).AddRow(true))
+
+	st := New(db)
+	err = st.ReleaseAdvisoryLock(context.Background(), 42)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
