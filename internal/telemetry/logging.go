@@ -12,6 +12,7 @@ const (
 	CtxToolID     = "tool_id"
 	CtxActionType = "action_type"
 	CtxDecision   = "decision"
+	CtxAdminID    = "admin_id"
 )
 
 func RequestLogger() echo.MiddlewareFunc {
@@ -23,18 +24,22 @@ func RequestLogger() echo.MiddlewareFunc {
 		HandleError: true,
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			logger := c.Logger()
-			logger.Info(
-				"request",
+			fields := []any{
 				"method", v.Method,
 				"uri", v.URI,
 				"status", v.Status,
 				"latency_ms", v.Latency.Milliseconds(),
-				"request_id", getContextString(c, CtxRequestID),
-				"tenant_id", getContextString(c, CtxTenantID),
-				"agent_id", getContextString(c, CtxAgentID),
-				"tool_id", getContextString(c, CtxToolID),
-				"action_type", getContextString(c, CtxActionType),
-				"decision", getContextString(c, CtxDecision),
+			}
+			appendIfValue(&fields, "request_id", getContextString(c, CtxRequestID))
+			appendIfValue(&fields, "tenant_id", getContextString(c, CtxTenantID))
+			appendIfValue(&fields, "agent_id", getContextString(c, CtxAgentID))
+			appendIfValue(&fields, "tool_id", getContextString(c, CtxToolID))
+			appendIfValue(&fields, "action_type", getContextString(c, CtxActionType))
+			appendIfValue(&fields, "decision", getContextString(c, CtxDecision))
+			appendIfValue(&fields, "admin_id", getContextString(c, CtxAdminID))
+			logger.Info(
+				"request",
+				fields...,
 			)
 			return nil
 		},
@@ -48,4 +53,11 @@ func getContextString(c *echo.Context, key string) string {
 		}
 	}
 	return ""
+}
+
+func appendIfValue(fields *[]any, key, value string) {
+	if value == "" {
+		return
+	}
+	*fields = append(*fields, key, value)
 }
