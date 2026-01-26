@@ -51,6 +51,7 @@ type StoreAPI interface {
 	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
 	ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error)
 	GetApprovalRequest(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
+	CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error)
 	ApproveApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
 	DenyApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
 	RevokeApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
@@ -557,6 +558,19 @@ func (s *Store) GetApprovalRequest(ctx context.Context, tenantID, approvalReques
 		return models.ApprovalRequest{}, err
 	}
 	return approval, nil
+}
+
+func (s *Store) CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT COUNT(*)
+		FROM rbitr.approval_requests
+		WHERE tenant_id = $1
+		AND status = 'PENDING'
+		AND expires_at > $2`, tenantID, now)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (s *Store) ApproveApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error {

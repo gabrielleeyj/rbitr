@@ -10,15 +10,17 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
 type Dependencies struct {
-	Store   store.StoreAPI
-	Metrics *telemetry.Metrics
-	Config  config.Config
+	Store         store.StoreAPI
+	Notifications *notifications.Service
+	Metrics       *telemetry.Metrics
+	Config        config.Config
 }
 
 type TenantConfigRequest struct {
@@ -60,11 +62,22 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.DELETE("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideDelete)
 	adminGroup.GET("/tenants/:tenant_id/approvals", deps.handleApprovalsList)
 	adminGroup.GET("/tenants/:tenant_id/approvals/:approval_request_id", deps.handleApprovalDetail)
+	adminGroup.GET("/tenants/:tenant_id/approvals/pending-count", deps.handleApprovalsPendingCount)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/approve", deps.handleApprovalApprove)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/deny", deps.handleApprovalDeny)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
 	adminGroup.GET("/tenants/:tenant_id/tools", deps.handleToolsList)
 	adminGroup.GET("/tenants/:tenant_id/audit", deps.handleAuditList)
+	adminGroup.GET("/tenants/:tenant_id/notifications", deps.handleNotificationConfigGet)
+	adminGroup.PUT("/tenants/:tenant_id/notifications", deps.handleNotificationConfigUpdate)
+	adminGroup.PUT("/tenants/:tenant_id/notifications/slack-secret-ref", deps.handleNotificationSlackSecretRefSet)
+	adminGroup.PUT("/tenants/:tenant_id/notifications/email-secret-ref", deps.handleNotificationEmailSecretRefSet)
+	adminGroup.POST("/tenants/:tenant_id/notifications/test/slack", deps.handleNotificationTestSlack)
+	adminGroup.POST("/tenants/:tenant_id/notifications/test/email", deps.handleNotificationTestEmail)
+	adminGroup.GET("/tenants/:tenant_id/mailing-lists", deps.handleMailingListsList)
+	adminGroup.POST("/tenants/:tenant_id/mailing-lists", deps.handleMailingListCreate)
+	adminGroup.PUT("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListUpdate)
+	adminGroup.DELETE("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListDelete)
 	adminGroup.GET("/audit", deps.handleAuditListAll)
 	adminGroup.GET("/settings", deps.handleSettingsGet)
 	adminGroup.PUT("/settings/default-approval-ttl", deps.handleDefaultApprovalTTLUpdate)
@@ -274,6 +287,9 @@ func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) (models
 	if err != nil {
 		_ = authError(c, err)
 		return models.AdminKey{}, err
+	}
+	if key.AdminKeyID != "" {
+		c.Set(telemetry.CtxAdminID, key.AdminKeyID)
 	}
 	return key, nil
 }

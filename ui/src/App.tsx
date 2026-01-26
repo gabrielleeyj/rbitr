@@ -13,6 +13,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { ApprovalsPage } from "@/pages/ApprovalsPage";
 import { ApprovalDetailPage } from "@/pages/ApprovalDetailPage";
+import { NotificationsPage } from "@/pages/NotificationsPage";
 
 export function App() {
   return (
@@ -37,6 +38,7 @@ export function App() {
             <Route path="approvals/:approvalId" element={<ApprovalDetailPage />} />
             <Route path="tools" element={<ToolsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="audit" element={<AuditPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

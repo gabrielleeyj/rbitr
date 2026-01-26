@@ -92,6 +92,34 @@ export interface AdminSettings {
   default_approval_ttl_seconds: number;
 }
 
+export interface NotificationConfig {
+  tenant_id: string;
+  slack_webhook_enabled: boolean;
+  slack_webhook_configured: boolean;
+  slack_webhook_default_channel?: string;
+  slack_bot_enabled: boolean;
+  slack_bot_configured: boolean;
+  slack_bot_default_channel?: string;
+  email_enabled: boolean;
+  email_configured: boolean;
+  email_provider?: string;
+  email_from?: string;
+  email_default_mailing_list_id?: string;
+  notify_approval_expiring: boolean;
+  notify_token_abuse: boolean;
+  notify_policy_invalid: boolean;
+  updated_at?: string;
+}
+
+export interface MailingList {
+  mailing_list_id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface AuditEvent {
   audit_event_id: string;
   tenant_id?: string;
@@ -131,6 +159,11 @@ export interface ApprovalRequest {
   risk?: string;
   rule_id?: string;
   reasons?: { code: string; message: string }[];
+}
+
+export interface PendingApprovalsCount {
+  tenant_id: string;
+  pending_count: number;
 }
 
 function apiBaseUrl() {
@@ -325,6 +358,16 @@ export async function listApprovals(
   return data ?? [];
 }
 
+export function getPendingApprovalsCount(
+  config: ApiConfig,
+  tenantId: string
+): Promise<PendingApprovalsCount> {
+  return request<PendingApprovalsCount>(
+    `/admin/tenants/${tenantId}/approvals/pending-count`,
+    config
+  );
+}
+
 export function getApproval(
   config: ApiConfig,
   tenantId: string,
@@ -429,4 +472,79 @@ export async function listAuditEventsAll(
   if (params.actor_id) query.set("actor_id", params.actor_id);
   const data = await request<AuditEvent[] | null>(`/admin/audit?${query.toString()}`, config);
   return data ?? [];
+}
+
+export function getNotificationConfig(config: ApiConfig, tenantId: string): Promise<NotificationConfig> {
+  return request<NotificationConfig>(`/admin/tenants/${tenantId}/notifications`, config);
+}
+
+export function updateNotificationConfig(
+  config: ApiConfig,
+  tenantId: string,
+  payload: Omit<NotificationConfig, "tenant_id" | "slack_webhook_configured" | "slack_bot_configured" | "email_configured" | "updated_at">
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setSlackSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/slack-secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function setEmailSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/email-secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function sendSlackTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/test/slack`, config, { method: "POST" });
+}
+
+export function sendEmailTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/test/email`, config, { method: "POST" });
+}
+
+export async function listMailingLists(config: ApiConfig, tenantId: string): Promise<MailingList[]> {
+  const data = await request<MailingList[] | null>(`/admin/tenants/${tenantId}/mailing-lists`, config);
+  return data ?? [];
+}
+
+export function createMailingList(
+  config: ApiConfig,
+  tenantId: string,
+  payload: { name: string; description?: string; members: string[] }
+): Promise<MailingList> {
+  return request<MailingList>(`/admin/tenants/${tenantId}/mailing-lists`, config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateMailingList(
+  config: ApiConfig,
+  tenantId: string,
+  mailingListId: string,
+  payload: { name: string; description?: string; members: string[] }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/mailing-lists/${mailingListId}`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteMailingList(
+  config: ApiConfig,
+  tenantId: string,
+  mailingListId: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/mailing-lists/${mailingListId}`, config, {
+    method: "DELETE",
+  });
 }

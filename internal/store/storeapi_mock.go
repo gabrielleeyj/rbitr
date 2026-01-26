@@ -120,6 +120,78 @@ func (_c *MockStoreAPI_ApproveApprovalRequest_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// CountPendingApprovals provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error) {
+	ret := _mock.Called(ctx, tenantID, now)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPendingApprovals")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) (int, error)); ok {
+		return returnFunc(ctx, tenantID, now)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) int); ok {
+		r0 = returnFunc(ctx, tenantID, now)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, tenantID, now)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_CountPendingApprovals_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPendingApprovals'
+type MockStoreAPI_CountPendingApprovals_Call struct {
+	*mock.Call
+}
+
+// CountPendingApprovals is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - now time.Time
+func (_e *MockStoreAPI_Expecter) CountPendingApprovals(ctx interface{}, tenantID interface{}, now interface{}) *MockStoreAPI_CountPendingApprovals_Call {
+	return &MockStoreAPI_CountPendingApprovals_Call{Call: _e.mock.On("CountPendingApprovals", ctx, tenantID, now)}
+}
+
+func (_c *MockStoreAPI_CountPendingApprovals_Call) Run(run func(ctx context.Context, tenantID string, now time.Time)) *MockStoreAPI_CountPendingApprovals_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CountPendingApprovals_Call) Return(n int, err error) *MockStoreAPI_CountPendingApprovals_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CountPendingApprovals_Call) RunAndReturn(run func(ctx context.Context, tenantID string, now time.Time) (int, error)) *MockStoreAPI_CountPendingApprovals_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateMailingList provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CreateMailingList(ctx context.Context, list models.MailingList, members []string) error {
 	ret := _mock.Called(ctx, list, members)

@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Wrench,
   Settings,
+  BellRing,
   ClipboardList,
 } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
@@ -28,6 +29,7 @@ const navItems = [
   { to: "/risk-overrides", label: "Risk Overrides", icon: ShieldAlert },
   { to: "/tools", label: "Tools", icon: Wrench },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/notifications", label: "Notifications", icon: BellRing },
   { to: "/audit", label: "Audit", icon: ClipboardList },
 ];
 

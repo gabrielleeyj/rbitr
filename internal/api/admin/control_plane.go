@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
@@ -42,6 +43,49 @@ type ApprovalDecisionRequest struct {
 
 type DefaultApprovalTTLRequest struct {
 	Seconds int `json:"seconds"`
+}
+
+type NotificationConfigRequest struct {
+	SlackWebhookEnabled        bool   `json:"slack_webhook_enabled"`
+	SlackWebhookDefaultChannel string `json:"slack_webhook_default_channel"`
+	SlackBotEnabled            bool   `json:"slack_bot_enabled"`
+	SlackBotDefaultChannel     string `json:"slack_bot_default_channel"`
+	EmailEnabled               bool   `json:"email_enabled"`
+	EmailProvider              string `json:"email_provider"`
+	EmailFrom                  string `json:"email_from"`
+	EmailDefaultMailingListID  string `json:"email_default_mailing_list_id"`
+	NotifyApprovalExpiring     bool   `json:"notify_approval_expiring"`
+	NotifyTokenAbuse           bool   `json:"notify_token_abuse"`
+	NotifyPolicyInvalid        bool   `json:"notify_policy_invalid"`
+}
+
+type NotificationConfigResponse struct {
+	TenantID                   string    `json:"tenant_id"`
+	SlackWebhookEnabled        bool      `json:"slack_webhook_enabled"`
+	SlackWebhookConfigured     bool      `json:"slack_webhook_configured"`
+	SlackWebhookDefaultChannel string    `json:"slack_webhook_default_channel"`
+	SlackBotEnabled            bool      `json:"slack_bot_enabled"`
+	SlackBotConfigured         bool      `json:"slack_bot_configured"`
+	SlackBotDefaultChannel     string    `json:"slack_bot_default_channel"`
+	EmailEnabled               bool      `json:"email_enabled"`
+	EmailConfigured            bool      `json:"email_configured"`
+	EmailProvider              string    `json:"email_provider"`
+	EmailFrom                  string    `json:"email_from"`
+	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
+	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
+	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
+	NotifyPolicyInvalid        bool      `json:"notify_policy_invalid"`
+	UpdatedAt                  time.Time `json:"updated_at"`
+}
+
+type SecretRefRequest struct {
+	SecretRef string `json:"secret_ref"`
+}
+
+type MailingListRequest struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Members     []string `json:"members"`
 }
 
 type PolicyVersionsResponse struct {
@@ -193,6 +237,21 @@ func (d Dependencies) handleApprovalsList(c *echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, approvals)
+}
+
+func (d Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	count, err := d.Store.CountPendingApprovals(c.Request().Context(), tenantID, time.Now().UTC())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load pending approvals"})
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"tenant_id":     tenantID,
+		"pending_count": count,
+	})
 }
 
 func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
@@ -565,6 +624,322 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 	return c.JSON(http.StatusOK, events)
 }
 
+func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "notification config not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	return c.JSON(http.StatusOK, NotificationConfigResponse{
+		TenantID:                   config.TenantID,
+		SlackWebhookEnabled:        config.SlackWebhookEnabled,
+		SlackWebhookConfigured:     config.SlackWebhookSecretRef != "",
+		SlackWebhookDefaultChannel: config.SlackWebhookDefaultChannel,
+		SlackBotEnabled:            config.SlackBotEnabled,
+		SlackBotConfigured:         config.SlackBotSecretRef != "",
+		SlackBotDefaultChannel:     config.SlackBotDefaultChannel,
+		EmailEnabled:               config.EmailEnabled,
+		EmailConfigured:            config.EmailSecretRef != "",
+		EmailProvider:              config.EmailProvider,
+		EmailFrom:                  config.EmailFrom,
+		EmailDefaultMailingListID:  config.EmailDefaultMailingListID,
+		NotifyApprovalExpiring:     config.NotifyApprovalExpiring,
+		NotifyTokenAbuse:           config.NotifyTokenAbuse,
+		NotifyPolicyInvalid:        config.NotifyPolicyInvalid,
+		UpdatedAt:                  config.UpdatedAt,
+	})
+}
+
+func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	var payload NotificationConfigRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if payload.SlackBotEnabled && payload.SlackBotDefaultChannel == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack_bot_default_channel required"})
+	}
+	if payload.EmailEnabled && payload.EmailProvider == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_provider required"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	config := models.NotificationConfig{
+		TenantID:                   tenantID,
+		SlackWebhookEnabled:        payload.SlackWebhookEnabled,
+		SlackWebhookSecretRef:      before.SlackWebhookSecretRef,
+		SlackWebhookDefaultChannel: payload.SlackWebhookDefaultChannel,
+		SlackBotEnabled:            payload.SlackBotEnabled,
+		SlackBotSecretRef:          before.SlackBotSecretRef,
+		SlackBotDefaultChannel:     payload.SlackBotDefaultChannel,
+		SlackBotSigningSecretRef:   before.SlackBotSigningSecretRef,
+		EmailEnabled:               payload.EmailEnabled,
+		EmailProvider:              payload.EmailProvider,
+		EmailSecretRef:             before.EmailSecretRef,
+		EmailFrom:                  payload.EmailFrom,
+		EmailDefaultMailingListID:  payload.EmailDefaultMailingListID,
+		NotifyApprovalExpiring:     payload.NotifyApprovalExpiring,
+		NotifyTokenAbuse:           payload.NotifyTokenAbuse,
+		NotifyPolicyInvalid:        payload.NotifyPolicyInvalid,
+	}
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update notification config"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.UPDATE", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
+		"slack_webhook_enabled": before.SlackWebhookEnabled,
+		"slack_bot_enabled":     before.SlackBotEnabled,
+		"email_enabled":         before.EmailEnabled,
+		"email_provider":        before.EmailProvider,
+	}, map[string]any{
+		"slack_webhook_enabled": payload.SlackWebhookEnabled,
+		"slack_bot_enabled":     payload.SlackBotEnabled,
+		"email_enabled":         payload.EmailEnabled,
+		"email_provider":        payload.EmailProvider,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit notification update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	var payload SecretRefRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if !isValidSecretRef(payload.SecretRef) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	beforeConfigured := before.SlackWebhookSecretRef != "" || before.SlackBotSecretRef != ""
+	config := before
+	config.TenantID = tenantID
+	config.SlackWebhookSecretRef = payload.SecretRef
+
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update slack secret ref"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.SLACK_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
+		"configured": beforeConfigured,
+	}, map[string]any{
+		"configured": true,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit slack secret ref",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	var payload SecretRefRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if !isValidSecretRef(payload.SecretRef) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	beforeConfigured := before.EmailSecretRef != ""
+	config := before
+	config.TenantID = tenantID
+	config.EmailSecretRef = payload.SecretRef
+
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update email secret ref"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.EMAIL_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
+		"configured": beforeConfigured,
+	}, map[string]any{
+		"configured": true,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit email secret ref",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleMailingListsList(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	lists, err := d.Store.ListMailingLists(c.Request().Context(), tenantID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list mailing lists"})
+	}
+	return c.JSON(http.StatusOK, lists)
+}
+
+func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	var payload MailingListRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if payload.Name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name required"})
+	}
+	for _, email := range payload.Members {
+		if !strings.Contains(email, "@") {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid member email"})
+		}
+	}
+
+	tenantID := c.Param("tenant_id")
+	list := models.MailingList{
+		MailingListID: uuid.NewString(),
+		TenantID:      tenantID,
+		Name:          payload.Name,
+		Description:   payload.Description,
+	}
+	if err := d.Store.CreateMailingList(c.Request().Context(), list, payload.Members); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create mailing list"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.CREATE", "MAILING_LIST", list.MailingListID, map[string]any{}, map[string]any{
+		"name":         payload.Name,
+		"description":  payload.Description,
+		"member_count": len(payload.Members),
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit mailing list create",
+			"detail": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusCreated, list)
+}
+
+func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	var payload MailingListRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if payload.Name == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name required"})
+	}
+	for _, email := range payload.Members {
+		if !strings.Contains(email, "@") {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid member email"})
+		}
+	}
+
+	tenantID := c.Param("tenant_id")
+	listID := c.Param("mailing_list_id")
+	before, _ := d.Store.GetMailingList(c.Request().Context(), tenantID, listID)
+	list := models.MailingList{
+		MailingListID: listID,
+		TenantID:      tenantID,
+		Name:          payload.Name,
+		Description:   payload.Description,
+	}
+	if err := d.Store.UpdateMailingList(c.Request().Context(), list, payload.Members); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update mailing list"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.UPDATE", "MAILING_LIST", listID, map[string]any{
+		"name":        before.Name,
+		"description": before.Description,
+	}, map[string]any{
+		"name":         payload.Name,
+		"description":  payload.Description,
+		"member_count": len(payload.Members),
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit mailing list update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleMailingListDelete(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	listID := c.Param("mailing_list_id")
+	before, _ := d.Store.GetMailingList(c.Request().Context(), tenantID, listID)
+	if err := d.Store.DeleteMailingList(c.Request().Context(), tenantID, listID); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to delete mailing list"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.DELETE", "MAILING_LIST", listID, map[string]any{
+		"name":        before.Name,
+		"description": before.Description,
+	}, map[string]any{}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit mailing list delete",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+		return err
+	}
+	if d.Notifications == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+	}
+	tenantID := c.Param("tenant_id")
+	msg := notifications.NotificationMessage{
+		Title:  "Slack notification test",
+		Body:   "This is a test notification from rbitr.",
+		Fields: map[string]string{"Tenant": tenantID},
+	}
+	err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  "NOTIFICATIONS.TEST",
+		Severity:   "INFO",
+		ResourceID: "test",
+	}, msg)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send slack test"})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "email delivery not enabled"})
+}
+
 func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
 	if err != nil {
@@ -789,4 +1164,8 @@ func validateRegoModule(module string) error {
 		return errors.New("rego module must define package rbitr.policy")
 	}
 	return nil
+}
+
+func isValidSecretRef(ref string) bool {
+	return strings.HasPrefix(ref, "env://") || strings.HasPrefix(ref, "file://")
 }
