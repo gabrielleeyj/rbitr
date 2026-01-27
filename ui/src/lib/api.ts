@@ -90,6 +90,7 @@ export interface RiskOverride {
 export interface AdminSettings {
   admin_write_lock: boolean;
   default_approval_ttl_seconds: number;
+  audit_retention_days: number;
 }
 
 export interface NotificationConfig {
@@ -137,6 +138,10 @@ export interface AuditEvent {
   ip?: string;
   user_agent?: string;
   created_at: string;
+}
+
+export interface AuditResourceTypesResponse {
+  resource_types: string[];
 }
 
 export interface ApprovalRequest {
@@ -456,6 +461,13 @@ export function getSettings(config: ApiConfig): Promise<AdminSettings> {
   return request<AdminSettings>(`/admin/settings`, config);
 }
 
+export function setAuditRetentionDays(config: ApiConfig, days: number): Promise<void> {
+  return request<void>(`/admin/settings/audit-retention`, config, {
+    method: "PUT",
+    body: JSON.stringify({ days }),
+  });
+}
+
 export function setAdminWriteLock(config: ApiConfig, locked: boolean): Promise<void> {
   return request<void>(`/admin/settings/admin-write-lock`, config, {
     method: "PUT",
@@ -473,7 +485,15 @@ export function setDefaultApprovalTTL(config: ApiConfig, seconds: number): Promi
 export async function listAuditEvents(
   config: ApiConfig,
   tenantId: string,
-  params: { limit?: number; offset?: number; action?: string; resource_type?: string; actor_id?: string } = {}
+  params: {
+    limit?: number;
+    offset?: number;
+    action?: string;
+    resource_type?: string;
+    actor_id?: string;
+    from?: string;
+    to?: string;
+  } = {}
 ): Promise<AuditEvent[]> {
   const query = new URLSearchParams();
   if (params.limit) query.set("limit", String(params.limit));
@@ -481,11 +501,41 @@ export async function listAuditEvents(
   if (params.action) query.set("action", params.action);
   if (params.resource_type) query.set("resource_type", params.resource_type);
   if (params.actor_id) query.set("actor_id", params.actor_id);
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
   const data = await request<AuditEvent[] | null>(
     `/admin/tenants/${tenantId}/audit?${query.toString()}`,
     config
   );
   return data ?? [];
+}
+
+export function auditExportUrl(
+  config: ApiConfig,
+  tenantId: string,
+  params: {
+    format?: "csv" | "json";
+    include_details?: boolean;
+    action?: string;
+    resource_type?: string;
+    actor_id?: string;
+    from?: string;
+    to?: string;
+  } = {}
+): string {
+  const query = new URLSearchParams();
+  query.set("format", params.format ?? "csv");
+  if (params.include_details) query.set("include_details", "true");
+  if (params.action) query.set("action", params.action);
+  if (params.resource_type) query.set("resource_type", params.resource_type);
+  if (params.actor_id) query.set("actor_id", params.actor_id);
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  return `${config.baseUrl ?? apiBaseUrl()}/admin/tenants/${tenantId}/audit/export?${query.toString()}`;
+}
+
+export async function listAuditResourceTypes(config: ApiConfig, tenantId: string): Promise<AuditResourceTypesResponse> {
+  return request<AuditResourceTypesResponse>(`/admin/tenants/${tenantId}/audit/resource-types`, config);
 }
 
 export async function listAuditEventsAll(

@@ -21,6 +21,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/db"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
+	"github.com/gabrielleeyj/rbitr/internal/retention"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 )
@@ -49,6 +50,7 @@ func main() {
 	}, 5*time.Minute)
 	notificationService := notifications.NewService(st, secretResolver, 10*time.Minute, metrics)
 	expiryScheduler := notifications.NewApprovalExpiryScheduler(st, notificationService, time.Minute, 5*time.Minute)
+	auditRetention := retention.NewAuditRetentionScheduler(st, 24*time.Hour)
 
 	e := echo.New()
 	e.Use(middleware.Recover())
@@ -80,6 +82,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go expiryScheduler.Start(ctx)
+	go auditRetention.Start(ctx)
 
 	sc := echo.StartConfig{
 		Address:         cfg.ListenAddr,

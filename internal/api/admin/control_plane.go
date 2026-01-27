@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 
+	"github.com/gabrielleeyj/rbitr/internal/audit"
 	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
@@ -45,6 +47,10 @@ type ApprovalDecisionRequest struct {
 
 type DefaultApprovalTTLRequest struct {
 	Seconds int `json:"seconds"`
+}
+
+type AuditRetentionRequest struct {
+	Days int `json:"days"`
 }
 
 type NotificationConfigRequest struct {
@@ -109,6 +115,7 @@ type PolicyVersionsResponse struct {
 type SettingsResponse struct {
 	AdminWriteLock            bool `json:"admin_write_lock"`
 	DefaultApprovalTTLSeconds int  `json:"default_approval_ttl_seconds"`
+	AuditRetentionDays        int  `json:"audit_retention_days"`
 }
 
 type ToolResponse struct {
@@ -597,9 +604,14 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetDefaultApprovalTTLSeconds(c.Request().Context()); err == nil && value > 0 {
 		defaultTTL = value
 	}
+	retentionDays := 365
+	if value, err := d.Store.GetAuditRetentionDays(c.Request().Context()); err == nil && value > 0 {
+		retentionDays = value
+	}
 	return c.JSON(http.StatusOK, SettingsResponse{
 		AdminWriteLock:            locked,
 		DefaultApprovalTTLSeconds: defaultTTL,
+		AuditRetentionDays:        retentionDays,
 	})
 }
 
@@ -619,7 +631,15 @@ func (d Dependencies) handleAuditList(c *echo.Context) error {
 	action := c.QueryParam("action")
 	resourceType := c.QueryParam("resource_type")
 	actorID := c.QueryParam("actor_id")
-	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID)
+	from, err := parseTimeParam(c.QueryParam("from"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+	}
+	to, err := parseTimeParam(c.QueryParam("to"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+	}
+	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to list audit events",
@@ -627,6 +647,89 @@ func (d Dependencies) handleAuditList(c *echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, events)
+}
+
+func (d Dependencies) handleAuditResourceTypes(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	values, err := d.Store.ListAuditResourceTypes(c.Request().Context(), tenantID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list audit resource types"})
+	}
+	return c.JSON(http.StatusOK, map[string][]string{
+		"resource_types": values,
+	})
+}
+
+func (d Dependencies) handleAuditExport(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	return d.handleAuditExportResponse(c, tenantID)
+}
+
+func (d Dependencies) handleAuditExportResponse(c *echo.Context, tenantID string) error {
+	format := strings.ToLower(strings.TrimSpace(c.QueryParam("format")))
+	if format == "" {
+		format = "json"
+	}
+	includeDetails := strings.EqualFold(c.QueryParam("include_details"), "true")
+	all := strings.EqualFold(c.QueryParam("all"), "true")
+	var (
+		limit  int
+		offset int
+		err    error
+	)
+	if !all {
+		limit, err = parseExportLimit(c.QueryParam("limit"))
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		}
+		offset, err = parseOffset(c.QueryParam("offset"))
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+		}
+	}
+	action := c.QueryParam("action")
+	resourceType := c.QueryParam("resource_type")
+	actorID := c.QueryParam("actor_id")
+	from, err := parseTimeParam(c.QueryParam("from"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+	}
+	to, err := parseTimeParam(c.QueryParam("to"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+	}
+	events, err := d.Store.ListAuditEventsExport(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to export audit events"})
+	}
+	if !includeDetails {
+		for i := range events {
+			events[i].Before = nil
+			events[i].After = nil
+		}
+	}
+
+	switch format {
+	case "csv":
+		c.Response().Header().Set("Content-Type", "text/csv")
+		c.Response().Header().Set("Content-Disposition", "attachment; filename=audit_export.csv")
+		writer := csv.NewWriter(c.Response())
+		if err := writeAuditCSV(writer, events, includeDetails); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to write csv"})
+		}
+		writer.Flush()
+		return nil
+	case "json":
+		return c.JSON(http.StatusOK, events)
+	default:
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid format"})
+	}
 }
 
 func (d Dependencies) handleAuditListAll(c *echo.Context) error {
@@ -644,7 +747,15 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 	action := c.QueryParam("action")
 	resourceType := c.QueryParam("resource_type")
 	actorID := c.QueryParam("actor_id")
-	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit, offset, action, resourceType, actorID)
+	from, err := parseTimeParam(c.QueryParam("from"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+	}
+	to, err := parseTimeParam(c.QueryParam("to"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+	}
+	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to list audit events",
@@ -1148,6 +1259,36 @@ func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+
+	var payload AuditRetentionRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if payload.Days < 30 || payload.Days > 3650 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "days must be between 30 and 3650"})
+	}
+	beforeValue, _ := d.Store.GetAuditRetentionDays(c.Request().Context())
+	if err := d.Store.SetAuditRetentionDays(c.Request().Context(), payload.Days); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update audit retention"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.AUDIT_RETENTION.SET", "SETTINGS", "audit_retention_days", map[string]any{
+		"value": beforeValue,
+	}, map[string]any{
+		"value": payload.Days,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit retention update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
 	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
 	if err != nil {
@@ -1252,11 +1393,11 @@ func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, 
 	if !regexp.MustCompile(`^[A-Z0-9_]+(\.[A-Z0-9_]+)*$`).MatchString(action) {
 		return errors.New("audit event action violates format constraint")
 	}
-	beforeJSON, err := marshalAuditPayload(before)
+	beforeJSON, err := marshalAuditPayload(resourceType, before)
 	if err != nil {
 		return err
 	}
-	afterJSON, err := marshalAuditPayload(after)
+	afterJSON, err := marshalAuditPayload(resourceType, after)
 	if err != nil {
 		return err
 	}
@@ -1279,11 +1420,12 @@ func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, 
 	return d.Store.InsertAuditEvent(c.Request().Context(), event)
 }
 
-func marshalAuditPayload(payload map[string]any) (json.RawMessage, error) {
+func marshalAuditPayload(resourceType string, payload map[string]any) (json.RawMessage, error) {
 	if payload == nil {
 		return nil, nil
 	}
-	data, err := json.Marshal(payload)
+	redacted := audit.RedactPayload(resourceType, payload)
+	data, err := audit.CanonicalJSON(redacted)
 	if err != nil {
 		return nil, err
 	}
@@ -1329,6 +1471,83 @@ func parseOffset(value string) (int, error) {
 		return 0, errors.New("invalid")
 	}
 	return parsed, nil
+}
+
+func parseExportLimit(value string) (int, error) {
+	if value == "" {
+		return 1000, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return 0, errors.New("invalid")
+	}
+	return parsed, nil
+}
+
+func parseTimeParam(value string) (*time.Time, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		parsed, err = time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &parsed, nil
+}
+
+func writeAuditCSV(writer *csv.Writer, events []models.AdminAuditEvent, includeDetails bool) error {
+	header := []string{
+		"audit_event_id",
+		"tenant_id",
+		"stream_id",
+		"event_hash",
+		"prev_hash",
+		"actor_type",
+		"actor_id",
+		"actor_display",
+		"action",
+		"resource_type",
+		"resource_id",
+		"request_id",
+		"ip",
+		"user_agent",
+		"created_at",
+	}
+	if includeDetails {
+		header = append(header, "before", "after")
+	}
+	if err := writer.Write(header); err != nil {
+		return err
+	}
+	for _, event := range events {
+		row := []string{
+			event.AuditEventID,
+			event.TenantID,
+			event.StreamID,
+			event.EventHash,
+			event.PrevHash,
+			event.ActorType,
+			event.ActorID,
+			event.ActorDisplay,
+			event.Action,
+			event.ResourceType,
+			event.ResourceID,
+			event.RequestID,
+			event.IP,
+			event.UserAgent,
+			event.CreatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if includeDetails {
+			row = append(row, string(event.Before), string(event.After))
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateRegoModule(module string) error {

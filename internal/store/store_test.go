@@ -1378,20 +1378,20 @@ func TestStoreListAuditEvents(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"audit_event_id", "tenant_id", "actor_type", "actor_id", "actor_display",
-		"action", "resource_type", "resource_id", "before", "after",
-		"request_id", "ip", "user_agent", "created_at",
+		"audit_event_id", "tenant_id", "stream_id", "event_hash", "prev_hash",
+		"actor_type", "actor_id", "actor_display", "action", "resource_type", "resource_id",
+		"before", "after", "request_id", "ip", "user_agent", "created_at",
 	}).AddRow(
-		"ae_1", "t1", "admin_key", "admin", "admin",
-		"POLICY.VERSION.PUBLISH", "POLICY.ACTIVE", "p_v1", []byte(`{}`), []byte(`{}`),
-		"req", "127.0.0.1", "agent", time.Now(),
+		"ae_1", "t1", "t1", "hash", nil,
+		"admin_key", "admin", "admin", "POLICY.VERSION.PUBLISH", "POLICY.ACTIVE", "p_v1",
+		[]byte(`{}`), []byte(`{}`), "req", "127.0.0.1", "agent", time.Now(),
 	)
 	mock.ExpectQuery("SELECT audit_event_id").
 		WithArgs("t1", 10, 0).
 		WillReturnRows(rows)
 
 	st := New(db)
-	events, err := st.ListAuditEvents(context.Background(), "t1", 10, 0, "", "", "")
+	events, err := st.ListAuditEvents(context.Background(), "t1", 10, 0, "", "", "", nil, nil)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -1403,24 +1403,66 @@ func TestStoreListAuditEventsFilters(t *testing.T) {
 	defer db.Close()
 
 	rows := sqlmock.NewRows([]string{
-		"audit_event_id", "tenant_id", "actor_type", "actor_id", "actor_display",
-		"action", "resource_type", "resource_id", "before", "after",
-		"request_id", "ip", "user_agent", "created_at",
+		"audit_event_id", "tenant_id", "stream_id", "event_hash", "prev_hash",
+		"actor_type", "actor_id", "actor_display", "action", "resource_type", "resource_id",
+		"before", "after", "request_id", "ip", "user_agent", "created_at",
 	}).AddRow(
-		"ae_1", nil, "admin_key", nil, nil,
-		"POLICY.VERSION.CREATE", "POLICY", nil, nil, nil,
-		nil, nil, nil, time.Now(),
+		"ae_1", nil, "global", "hash", nil,
+		"admin_key", nil, nil, "POLICY.VERSION.CREATE", "POLICY", nil,
+		nil, nil, nil, nil, nil, time.Now(),
 	)
 	mock.ExpectQuery("SELECT audit_event_id").
 		WithArgs("POLICY.VERSION.CREATE", "POLICY", "admin", 10, 0).
 		WillReturnRows(rows)
 
 	st := New(db)
-	events, err := st.ListAuditEvents(context.Background(), "", 10, 0, "POLICY.VERSION.CREATE", "POLICY", "admin")
+	events, err := st.ListAuditEvents(context.Background(), "", 10, 0, "POLICY.VERSION.CREATE", "POLICY", "admin", nil, nil)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
 	require.Equal(t, "", events[0].TenantID)
 	require.Equal(t, "", events[0].ActorID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreListAuditEventsExport(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{
+		"audit_event_id", "tenant_id", "stream_id", "event_hash", "prev_hash",
+		"actor_type", "actor_id", "actor_display", "action", "resource_type", "resource_id",
+		"before", "after", "request_id", "ip", "user_agent", "created_at",
+	}).AddRow(
+		"ae_1", "t1", "t1", "hash", "prev",
+		"admin_key", "admin", "admin", "ACTION", "RESOURCE", "res",
+		nil, nil, nil, nil, nil, time.Now(),
+	)
+	mock.ExpectQuery("SELECT audit_event_id").
+		WithArgs("t1", 10, 0).
+		WillReturnRows(rows)
+
+	st := New(db)
+	events, err := st.ListAuditEventsExport(context.Background(), "t1", 10, 0, "", "", "", nil, nil)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	require.Equal(t, "t1", events[0].StreamID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreDeleteAuditEventsBefore(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM rbitr.admin_audit_events WHERE created_at < $1`)).
+		WithArgs(sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+
+	st := New(db)
+	rows, err := st.DeleteAuditEventsBefore(context.Background(), time.Now().UTC())
+	require.NoError(t, err)
+	require.Equal(t, int64(3), rows)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -1429,13 +1471,23 @@ func TestStoreInsertAuditEvent(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT event_hash
+		FROM rbitr.admin_audit_events
+		WHERE stream_id = $1 AND event_hash IS NOT NULL
+		ORDER BY created_at DESC, audit_event_id DESC
+		LIMIT 1`)).
+		WithArgs("t1").
+		WillReturnError(sql.ErrNoRows)
+
 	query := regexp.QuoteMeta(`INSERT INTO rbitr.admin_audit_events (
-		audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
+		audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`)
 	mock.ExpectExec(query).
 		WithArgs(
-			"ae_1", "t1", "admin_key", "admin", "admin", "ACTION", "RESOURCE", "res",
+			"ae_1", "t1", "t1", sqlmock.AnyArg(), sqlmock.AnyArg(),
+			"admin_key", "admin", "admin", "ACTION", "RESOURCE", "res",
 			[]byte(`{}`), []byte(`{}`), "req", "127.0.0.1", "agent", sqlmock.AnyArg(),
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1443,6 +1495,52 @@ func TestStoreInsertAuditEvent(t *testing.T) {
 	st := New(db)
 	require.NoError(t, st.InsertAuditEvent(context.Background(), models.AdminAuditEvent{
 		AuditEventID: "ae_1",
+		TenantID:     "t1",
+		ActorType:    "admin_key",
+		ActorID:      "admin",
+		ActorDisplay: "admin",
+		Action:       "ACTION",
+		ResourceType: "RESOURCE",
+		ResourceID:   "res",
+		Before:       []byte(`{}`),
+		After:        []byte(`{}`),
+		RequestID:    "req",
+		IP:           "127.0.0.1",
+		UserAgent:    "agent",
+		CreatedAt:    time.Now(),
+	}))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreInsertAuditEventChainsHashes(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT event_hash
+		FROM rbitr.admin_audit_events
+		WHERE stream_id = $1 AND event_hash IS NOT NULL
+		ORDER BY created_at DESC, audit_event_id DESC
+		LIMIT 1`)).
+		WithArgs("t1").
+		WillReturnRows(sqlmock.NewRows([]string{"event_hash"}).AddRow("prevhash"))
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.admin_audit_events (
+		audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
+		before, after, request_id, ip, user_agent, created_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`)
+	mock.ExpectExec(query).
+		WithArgs(
+			"ae_2", "t1", "t1", sqlmock.AnyArg(), "prevhash",
+			"admin_key", "admin", "admin", "ACTION", "RESOURCE", "res",
+			[]byte(`{}`), []byte(`{}`), "req", "127.0.0.1", "agent", sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.InsertAuditEvent(context.Background(), models.AdminAuditEvent{
+		AuditEventID: "ae_2",
 		TenantID:     "t1",
 		ActorType:    "admin_key",
 		ActorID:      "admin",

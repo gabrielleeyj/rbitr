@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gabrielleeyj/rbitr/internal/audit"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
@@ -25,6 +26,7 @@ const (
 	bootstrapKey                 = "bootstrap_complete"
 	adminWriteLockKey            = "admin_write_lock"
 	defaultApprovalTTLSecondsKey = "default_approval_ttl_seconds"
+	auditRetentionDaysKey        = "audit_retention_days"
 	settingTrue                  = "true"
 	settingFalse                 = "false"
 )
@@ -69,8 +71,13 @@ type StoreAPI interface {
 	GetAdminWriteLock(ctx context.Context) (bool, error)
 	SetDefaultApprovalTTLSeconds(ctx context.Context, seconds int) error
 	GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error)
-	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error)
+	SetAuditRetentionDays(ctx context.Context, days int) error
+	GetAuditRetentionDays(ctx context.Context) (int, error)
+	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
+	ListAuditEventsExport(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
+	ListAuditResourceTypes(ctx context.Context, tenantID string) ([]string, error)
 	InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error
+	DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error)
 	GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error)
 	UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error
 	ListMailingLists(ctx context.Context, tenantID string) ([]models.MailingList, error)
@@ -927,6 +934,34 @@ func (s *Store) GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error) {
 	return parsed, nil
 }
 
+func (s *Store) SetAuditRetentionDays(ctx context.Context, days int) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+		auditRetentionDaysKey,
+		strconv.Itoa(days),
+		time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *Store) GetAuditRetentionDays(ctx context.Context) (int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, auditRetentionDaysKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	return parsed, nil
+}
+
 func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
 	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, adminWriteLockKey)
 	var value string
@@ -942,7 +977,7 @@ func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string) ([]models.AdminAuditEvent, error) {
+func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -967,8 +1002,17 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 		clauses = append(clauses, fmt.Sprintf("actor_id = $%d", len(args)+1))
 		args = append(args, actorID)
 	}
+	if from != nil {
+		clauses = append(clauses, fmt.Sprintf("created_at >= $%d", len(args)+1))
+		args = append(args, *from)
+	}
+	if to != nil {
+		clauses = append(clauses, fmt.Sprintf("created_at <= $%d", len(args)+1))
+		args = append(args, *to)
+	}
 	args = append(args, limit, offset)
-	query := fmt.Sprintf(`SELECT audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
+	query := fmt.Sprintf(`SELECT audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
 		FROM rbitr.admin_audit_events
 		WHERE %s
@@ -985,6 +1029,9 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 	for rows.Next() {
 		var event models.AdminAuditEvent
 		var tenantIDValue sql.NullString
+		var streamID sql.NullString
+		var eventHash sql.NullString
+		var prevHash sql.NullString
 		var actorID sql.NullString
 		var actorDisplay sql.NullString
 		var resourceID sql.NullString
@@ -996,6 +1043,9 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 		if err := rows.Scan(
 			&event.AuditEventID,
 			&tenantIDValue,
+			&streamID,
+			&eventHash,
+			&prevHash,
 			&event.ActorType,
 			&actorID,
 			&actorDisplay,
@@ -1013,6 +1063,15 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 		}
 		if tenantIDValue.Valid {
 			event.TenantID = tenantIDValue.String
+		}
+		if streamID.Valid {
+			event.StreamID = streamID.String
+		}
+		if eventHash.Valid {
+			event.EventHash = eventHash.String
+		}
+		if prevHash.Valid {
+			event.PrevHash = prevHash.String
 		}
 		if actorID.Valid {
 			event.ActorID = actorID.String
@@ -1043,20 +1102,219 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 	return events, rows.Err()
 }
 
+func (s *Store) ListAuditEventsExport(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error) {
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	clauses := []string{"1=1"}
+	args := []any{}
+	if tenantID != "" {
+		clauses = append(clauses, fmt.Sprintf("tenant_id = $%d", len(args)+1))
+		args = append(args, tenantID)
+	}
+	if action != "" {
+		clauses = append(clauses, fmt.Sprintf("action = $%d", len(args)+1))
+		args = append(args, action)
+	}
+	if resourceType != "" {
+		clauses = append(clauses, fmt.Sprintf("resource_type = $%d", len(args)+1))
+		args = append(args, resourceType)
+	}
+	if actorID != "" {
+		clauses = append(clauses, fmt.Sprintf("actor_id = $%d", len(args)+1))
+		args = append(args, actorID)
+	}
+	if from != nil {
+		clauses = append(clauses, fmt.Sprintf("created_at >= $%d", len(args)+1))
+		args = append(args, *from)
+	}
+	if to != nil {
+		clauses = append(clauses, fmt.Sprintf("created_at <= $%d", len(args)+1))
+		args = append(args, *to)
+	}
+	baseQuery := fmt.Sprintf(`SELECT audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
+		before, after, request_id, ip, user_agent, created_at
+		FROM rbitr.admin_audit_events
+		WHERE %s
+		ORDER BY created_at DESC`, strings.Join(clauses, " AND "))
+	query := baseQuery
+	if limit > 0 {
+		args = append(args, limit, offset)
+		query = fmt.Sprintf(`%s LIMIT $%d OFFSET $%d`, baseQuery, len(args)-1, len(args))
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []models.AdminAuditEvent
+	for rows.Next() {
+		var event models.AdminAuditEvent
+		var tenantIDValue sql.NullString
+		var streamID sql.NullString
+		var eventHash sql.NullString
+		var prevHash sql.NullString
+		var actorID sql.NullString
+		var actorDisplay sql.NullString
+		var resourceID sql.NullString
+		var beforeJSON []byte
+		var afterJSON []byte
+		var requestID sql.NullString
+		var ip sql.NullString
+		var userAgent sql.NullString
+		if err := rows.Scan(
+			&event.AuditEventID,
+			&tenantIDValue,
+			&streamID,
+			&eventHash,
+			&prevHash,
+			&event.ActorType,
+			&actorID,
+			&actorDisplay,
+			&event.Action,
+			&event.ResourceType,
+			&resourceID,
+			&beforeJSON,
+			&afterJSON,
+			&requestID,
+			&ip,
+			&userAgent,
+			&event.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if tenantIDValue.Valid {
+			event.TenantID = tenantIDValue.String
+		}
+		if streamID.Valid {
+			event.StreamID = streamID.String
+		}
+		if eventHash.Valid {
+			event.EventHash = eventHash.String
+		}
+		if prevHash.Valid {
+			event.PrevHash = prevHash.String
+		}
+		if actorID.Valid {
+			event.ActorID = actorID.String
+		}
+		if actorDisplay.Valid {
+			event.ActorDisplay = actorDisplay.String
+		}
+		if resourceID.Valid {
+			event.ResourceID = resourceID.String
+		}
+		if len(beforeJSON) > 0 {
+			event.Before = beforeJSON
+		}
+		if len(afterJSON) > 0 {
+			event.After = afterJSON
+		}
+		if requestID.Valid {
+			event.RequestID = requestID.String
+		}
+		if ip.Valid {
+			event.IP = ip.String
+		}
+		if userAgent.Valid {
+			event.UserAgent = userAgent.String
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
+func (s *Store) ListAuditResourceTypes(ctx context.Context, tenantID string) ([]string, error) {
+	if tenantID == "" {
+		return nil, ErrNotFound
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT resource_type
+		FROM rbitr.admin_audit_events
+		WHERE tenant_id = $1
+		ORDER BY resource_type`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var values []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func (s *Store) DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM rbitr.admin_audit_events WHERE created_at < $1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return rows, nil
+}
+
 func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
+	}
+	if event.StreamID == "" {
+		if event.TenantID != "" {
+			event.StreamID = event.TenantID
+		} else {
+			event.StreamID = "global"
+		}
+	}
+	prevHash, err := s.lastAuditHash(ctx, event.StreamID)
+	if err != nil {
+		return err
+	}
+	payload := audit.BuildHashPayload(event, event.StreamID)
+	eventHash, err := audit.ComputeEventHash(prevHash, payload)
+	if err != nil {
+		return err
+	}
+	event.EventHash = eventHash
+	event.PrevHash = prevHash
+
 	tenantID := sql.NullString{String: event.TenantID, Valid: event.TenantID != ""}
+	streamID := sql.NullString{String: event.StreamID, Valid: event.StreamID != ""}
+	eventHashValue := sql.NullString{String: event.EventHash, Valid: event.EventHash != ""}
+	prevHashValue := sql.NullString{String: event.PrevHash, Valid: event.PrevHash != ""}
 	actorID := sql.NullString{String: event.ActorID, Valid: event.ActorID != ""}
 	actorDisplay := sql.NullString{String: event.ActorDisplay, Valid: event.ActorDisplay != ""}
 	resourceID := sql.NullString{String: event.ResourceID, Valid: event.ResourceID != ""}
 	requestID := sql.NullString{String: event.RequestID, Valid: event.RequestID != ""}
 	ip := sql.NullString{String: event.IP, Valid: event.IP != ""}
 	userAgent := sql.NullString{String: event.UserAgent, Valid: event.UserAgent != ""}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.admin_audit_events (
-		audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
+	_, err = s.db.ExecContext(ctx, `INSERT INTO rbitr.admin_audit_events (
+		audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
 		event.AuditEventID,
 		tenantID,
+		streamID,
+		eventHashValue,
+		prevHashValue,
 		event.ActorType,
 		actorID,
 		actorDisplay,
@@ -1071,6 +1329,22 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEve
 		event.CreatedAt,
 	)
 	return err
+}
+
+func (s *Store) lastAuditHash(ctx context.Context, streamID string) (string, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT event_hash
+		FROM rbitr.admin_audit_events
+		WHERE stream_id = $1 AND event_hash IS NOT NULL
+		ORDER BY created_at DESC, audit_event_id DESC
+		LIMIT 1`, streamID)
+	var value sql.NullString
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	return value.String, nil
 }
 
 func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error) {

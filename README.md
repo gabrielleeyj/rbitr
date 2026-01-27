@@ -108,6 +108,25 @@ Additional Fields (TBD):
 - `tool_latency_ms`
 - `policy_eval_invalid_total{reason}`
 
+## Audit Trail (SOC-ready)
+
+Admin audit events are append-only and immutable. Each event is chained with a per-tenant hash:
+
+- `prev_hash` + canonical JSON payload -> `event_hash`
+- `stream_id` is the tenant id (or `global` for non-tenant events)
+
+Retention is configurable via settings:
+
+- `audit_retention_days` (default 365)
+- Cleanup runs daily inside the gateway with an advisory lock.
+
+Export endpoints (tenant-scoped):
+
+- `GET /admin/tenants/{tenant_id}/audit/export?format=json|csv`
+- `include_details=true` to include `before/after` payloads
+
+Export defaults are safe-by-default (redacted payloads, no secrets).
+
 ## Simulation
 
 1. Start services (two terminals)

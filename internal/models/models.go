@@ -59,17 +59,20 @@ type TenantConfig struct {
 type AdminAuditEvent struct {
 	AuditEventID string          `json:"audit_event_id"`
 	TenantID     string          `json:"tenant_id"`
+	StreamID     string          `json:"stream_id,omitempty"`
+	EventHash    string          `json:"event_hash,omitempty"`
+	PrevHash     string          `json:"prev_hash,omitempty"`
 	ActorType    string          `json:"actor_type"`
 	ActorID      string          `json:"actor_id"`
 	ActorDisplay string          `json:"actor_display"`
 	Action       string          `json:"action"`
 	ResourceType string          `json:"resource_type"`
 	ResourceID   string          `json:"resource_id"`
-	Before       json.RawMessage `json:"before"`
-	After        json.RawMessage `json:"after"`
-	RequestID    string          `json:"request_id"`
-	IP           string          `json:"ip"`
-	UserAgent    string          `json:"user_agent"`
+	Before       json.RawMessage `json:"before,omitempty"`
+	After        json.RawMessage `json:"after,omitempty"`
+	RequestID    string          `json:"request_id,omitempty"`
+	IP           string          `json:"ip,omitempty"`
+	UserAgent    string          `json:"user_agent,omitempty"`
 	CreatedAt    time.Time       `json:"created_at"`
 }
 

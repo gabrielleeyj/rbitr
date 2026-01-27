@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"net/http"
 	"testing"
 	"time"
@@ -831,6 +833,7 @@ func TestHandleSettingsGet(t *testing.T) {
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
+				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
 			},
 			expectedCode: http.StatusOK,
 		},
@@ -936,6 +939,78 @@ func TestHandleDefaultApprovalTTLUpdate(t *testing.T) {
 	}
 }
 
+func TestHandleAuditRetentionUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      AuditRetentionRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      AuditRetentionRequest{Days: 365},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      AuditRetentionRequest{Days: 7},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  AuditRetentionRequest{Days: 365},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAuditRetentionDays", context.Background()).Return(180, nil)
+				storeMock.On("SetAuditRetentionDays", context.Background(), 365).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleAuditRetentionUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
 func TestHandleAuditList(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -955,7 +1030,7 @@ func TestHandleAuditList(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("ListAuditEvents", context.Background(), "t1", 50, 0, "", "", "").
+				storeMock.On("ListAuditEvents", context.Background(), "t1", 50, 0, "", "", "", mock.Anything, mock.Anything).
 					Return([]models.AdminAuditEvent{}, nil)
 			},
 			expectedCode: http.StatusOK,
@@ -992,6 +1067,38 @@ func TestHandleAuditList(t *testing.T) {
 			require.Equal(t, tc.expectedCode, rec.Code)
 		})
 	}
+}
+
+func TestWriteAuditCSV(t *testing.T) {
+	events := []models.AdminAuditEvent{
+		{
+			AuditEventID: "ae_1",
+			TenantID:     "t1",
+			StreamID:     "t1",
+			EventHash:    "hash",
+			PrevHash:     "prev",
+			ActorType:    "admin_key",
+			ActorID:      "admin",
+			Action:       "ACTION",
+			ResourceType: "RESOURCE",
+			ResourceID:   "res",
+			RequestID:    "req",
+			IP:           "127.0.0.1",
+			UserAgent:    "agent",
+			Before:       []byte(`{"ok":true}`),
+			After:        []byte(`{"ok":false}`),
+			CreatedAt:    time.Date(2026, 1, 27, 0, 0, 0, 0, time.UTC),
+		},
+	}
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+	err := writeAuditCSV(writer, events, true)
+	writer.Flush()
+	require.NoError(t, err)
+	output := buf.String()
+	require.Contains(t, output, "audit_event_id")
+	require.Contains(t, output, "ae_1")
+	require.Contains(t, output, "{\"ok\":true}")
 }
 
 func TestHandleAuditListAll(t *testing.T) {

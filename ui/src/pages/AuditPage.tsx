@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { listAuditEvents } from "@/lib/api";
+import { auditExportUrl, listAuditEvents, listAuditResourceTypes } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,13 @@ export function AuditPage() {
   const [actionFilterInput, setActionFilterInput] = useState("ALL");
   const [resourceTypeFilterInput, setResourceTypeFilterInput] = useState("ALL");
   const [actorIDFilterInput, setActorIDFilterInput] = useState("ALL");
+  const [fromDateInput, setFromDateInput] = useState("");
+  const [toDateInput, setToDateInput] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [includeDetails, setIncludeDetails] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [resourceTypeOptions, setResourceTypeOptions] = useState<string[]>([]);
 
   const pageNumber = Math.floor(offset / limit) + 1;
   const canPrev = offset > 0;
@@ -42,11 +48,6 @@ export function AuditPage() {
 
   const actionOptions = useMemo(() => {
     const values = new Set(events.map((event) => event.action).filter(Boolean));
-    return Array.from(values).sort();
-  }, [events]);
-
-  const resourceTypeOptions = useMemo(() => {
-    const values = new Set(events.map((event) => event.resource_type).filter(Boolean));
     return Array.from(values).sort();
   }, [events]);
 
@@ -59,9 +60,65 @@ export function AuditPage() {
     () =>
       actionFilterInput !== "ALL" ||
       resourceTypeFilterInput !== "ALL" ||
-      actorIDFilterInput !== "ALL",
-    [actionFilterInput, resourceTypeFilterInput, actorIDFilterInput]
+      actorIDFilterInput !== "ALL" ||
+      fromDateInput !== "" ||
+      toDateInput !== "",
+    [actionFilterInput, resourceTypeFilterInput, actorIDFilterInput, fromDateInput, toDateInput]
   );
+
+  const toRFC3339 = (value: string) => {
+    if (!value) return undefined;
+    let normalized = value;
+    if (normalized.length === 16) {
+      normalized = `${normalized}:00`;
+    }
+    if (!normalized.endsWith("Z")) {
+      normalized = `${normalized}Z`;
+    }
+    return normalized;
+  };
+
+  const exportUrl = useMemo(() => {
+    if (!tenantId) return "";
+    return auditExportUrl(
+      { adminKey: "token" },
+      tenantId,
+      {
+        format: "csv",
+        include_details: includeDetails,
+        action: actionFilter === "ALL" ? undefined : actionFilter,
+        resource_type: resourceTypeFilter === "ALL" ? undefined : resourceTypeFilter,
+        actor_id: actorIDFilter === "ALL" ? undefined : actorIDFilter,
+        from: toRFC3339(fromDate),
+        to: toRFC3339(toDate),
+      }
+    );
+  }, [tenantId, actionFilter, resourceTypeFilter, actorIDFilter, includeDetails, fromDate, toDate]);
+
+  const handleExport = async () => {
+    if (!adminKey || !tenantId) return;
+    try {
+      const response = await fetch(exportUrl, {
+        headers: {
+          Authorization: `Bearer ${adminKey}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `audit_${tenantId}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export audit log.");
+    }
+  };
 
   const refresh = async (nextOffset = offset) => {
     if (!adminKey || !tenantId) return;
@@ -74,6 +131,8 @@ export function AuditPage() {
         action: actionFilter === "ALL" ? undefined : actionFilter,
         resource_type: resourceTypeFilter === "ALL" ? undefined : resourceTypeFilter,
         actor_id: actorIDFilter === "ALL" ? undefined : actorIDFilter,
+        from: toRFC3339(fromDate),
+        to: toRFC3339(toDate),
       }
     );
     setHasMore(data.length > limit);
@@ -98,6 +157,8 @@ export function AuditPage() {
             action: actionFilter === "ALL" ? undefined : actionFilter,
             resource_type: resourceTypeFilter === "ALL" ? undefined : resourceTypeFilter,
             actor_id: actorIDFilter === "ALL" ? undefined : actorIDFilter,
+            from: toRFC3339(fromDate),
+            to: toRFC3339(toDate),
           }
         );
         if (!mounted) return;
@@ -114,7 +175,28 @@ export function AuditPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId, limit, offset, actionFilter, resourceTypeFilter, actorIDFilter]);
+  }, [adminKey, tenantId, limit, offset, actionFilter, resourceTypeFilter, actorIDFilter, fromDate, toDate]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadResourceTypes = async () => {
+      if (!adminKey || !tenantId) return;
+      try {
+        const data = await listAuditResourceTypes({ adminKey }, tenantId);
+        if (mounted) {
+          setResourceTypeOptions(data.resource_types ?? []);
+        }
+      } catch {
+        if (mounted) {
+          setResourceTypeOptions([]);
+        }
+      }
+    };
+    loadResourceTypes();
+    return () => {
+      mounted = false;
+    };
+  }, [adminKey, tenantId]);
 
   return (
     <Card>
@@ -134,7 +216,7 @@ export function AuditPage() {
           <div className="text-sm text-muted-foreground">Loading audit events...</div>
         ) : (
         <div className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-6">
             <div>
               <div className="text-xs text-muted-foreground">Action</div>
               <Select value={actionFilterInput} onValueChange={setActionFilterInput}>
@@ -183,6 +265,24 @@ export function AuditPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <div className="text-xs text-muted-foreground">From (UTC)</div>
+              <input
+                type="datetime-local"
+                value={fromDateInput}
+                onChange={(event) => setFromDateInput(event.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">To (UTC)</div>
+              <input
+                type="datetime-local"
+                value={toDateInput}
+                onChange={(event) => setToDateInput(event.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+              />
+            </div>
             <div className="flex flex-wrap items-end justify-start gap-2 md:justify-end">
               <Select
                 value={String(limit)}
@@ -210,6 +310,8 @@ export function AuditPage() {
                   setActionFilter(actionFilterInput);
                   setResourceTypeFilter(resourceTypeFilterInput);
                   setActorIDFilter(actorIDFilterInput);
+                  setFromDate(fromDateInput);
+                  setToDate(toDateInput);
                 }}
                 disabled={!filtersActive}
                 className="w-full md:w-auto"
@@ -223,6 +325,11 @@ export function AuditPage() {
                   setActionFilterInput("ALL");
                   setResourceTypeFilterInput("ALL");
                   setActorIDFilterInput("ALL");
+                  setFromDateInput("");
+                  setToDateInput("");
+                  setFromDate("");
+                  setToDate("");
+                  setIncludeDetails(false);
                   setActionFilter("ALL");
                   setResourceTypeFilter("ALL");
                   setActorIDFilter("ALL");
@@ -233,6 +340,26 @@ export function AuditPage() {
               >
                 Clear
               </Button>
+              {exportUrl ? (
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={includeDetails}
+                      onChange={(event) => setIncludeDetails(event.target.checked)}
+                    />
+                    Include details (before/after)
+                  </label>
+                  {includeDetails ? (
+                    <div className="text-[11px] text-amber-600">
+                      Warning: details may include sensitive configuration data.
+                    </div>
+                  ) : null}
+                  <Button variant="outline" size="sm" className="w-full md:w-auto" onClick={handleExport}>
+                    Export CSV
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-col gap-2 border-t pt-3 md:flex-row md:items-center md:justify-between">

@@ -336,6 +336,72 @@ func (_c *MockStoreAPI_CreatePolicyVersion_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// DeleteAuditEventsBefore provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	ret := _mock.Called(ctx, cutoff)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAuditEventsBefore")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) (int64, error)); ok {
+		return returnFunc(ctx, cutoff)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) int64); ok {
+		r0 = returnFunc(ctx, cutoff)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time) error); ok {
+		r1 = returnFunc(ctx, cutoff)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_DeleteAuditEventsBefore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAuditEventsBefore'
+type MockStoreAPI_DeleteAuditEventsBefore_Call struct {
+	*mock.Call
+}
+
+// DeleteAuditEventsBefore is a helper method to define mock.On call
+//   - ctx context.Context
+//   - cutoff time.Time
+func (_e *MockStoreAPI_Expecter) DeleteAuditEventsBefore(ctx interface{}, cutoff interface{}) *MockStoreAPI_DeleteAuditEventsBefore_Call {
+	return &MockStoreAPI_DeleteAuditEventsBefore_Call{Call: _e.mock.On("DeleteAuditEventsBefore", ctx, cutoff)}
+}
+
+func (_c *MockStoreAPI_DeleteAuditEventsBefore_Call) Run(run func(ctx context.Context, cutoff time.Time)) *MockStoreAPI_DeleteAuditEventsBefore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteAuditEventsBefore_Call) Return(n int64, err error) *MockStoreAPI_DeleteAuditEventsBefore_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_DeleteAuditEventsBefore_Call) RunAndReturn(run func(ctx context.Context, cutoff time.Time) (int64, error)) *MockStoreAPI_DeleteAuditEventsBefore_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteMailingList provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) DeleteMailingList(ctx context.Context, tenantID string, mailingListID string) error {
 	ret := _mock.Called(ctx, tenantID, mailingListID)
@@ -737,6 +803,66 @@ func (_c *MockStoreAPI_GetApprovalRequest_Call) Return(approvalRequest models.Ap
 }
 
 func (_c *MockStoreAPI_GetApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string) (models.ApprovalRequest, error)) *MockStoreAPI_GetApprovalRequest_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetAuditRetentionDays provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetAuditRetentionDays(ctx context.Context) (int, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuditRetentionDays")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetAuditRetentionDays_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuditRetentionDays'
+type MockStoreAPI_GetAuditRetentionDays_Call struct {
+	*mock.Call
+}
+
+// GetAuditRetentionDays is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetAuditRetentionDays(ctx interface{}) *MockStoreAPI_GetAuditRetentionDays_Call {
+	return &MockStoreAPI_GetAuditRetentionDays_Call{Call: _e.mock.On("GetAuditRetentionDays", ctx)}
+}
+
+func (_c *MockStoreAPI_GetAuditRetentionDays_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetAuditRetentionDays_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetAuditRetentionDays_Call) Return(n int, err error) *MockStoreAPI_GetAuditRetentionDays_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetAuditRetentionDays_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetAuditRetentionDays_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2011,8 +2137,8 @@ func (_c *MockStoreAPI_ListApprovalsExpiring_Call) RunAndReturn(run func(ctx con
 }
 
 // ListAuditEvents provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error) {
-	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID)
+func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time) ([]models.AdminAuditEvent, error) {
+	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListAuditEvents")
@@ -2020,18 +2146,18 @@ func (_mock *MockStoreAPI) ListAuditEvents(ctx context.Context, tenantID string,
 
 	var r0 []models.AdminAuditEvent
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) ([]models.AdminAuditEvent, error)); ok {
-		return returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) ([]models.AdminAuditEvent, error)); ok {
+		return returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) []models.AdminAuditEvent); ok {
-		r0 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) []models.AdminAuditEvent); ok {
+		r0 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]models.AdminAuditEvent)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int, string, string, string) error); ok {
-		r1 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -2051,11 +2177,13 @@ type MockStoreAPI_ListAuditEvents_Call struct {
 //   - action string
 //   - resourceType string
 //   - actorID string
-func (_e *MockStoreAPI_Expecter) ListAuditEvents(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}, action interface{}, resourceType interface{}, actorID interface{}) *MockStoreAPI_ListAuditEvents_Call {
-	return &MockStoreAPI_ListAuditEvents_Call{Call: _e.mock.On("ListAuditEvents", ctx, tenantID, limit, offset, action, resourceType, actorID)}
+//   - from *time.Time
+//   - to *time.Time
+func (_e *MockStoreAPI_Expecter) ListAuditEvents(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}, action interface{}, resourceType interface{}, actorID interface{}, from interface{}, to interface{}) *MockStoreAPI_ListAuditEvents_Call {
+	return &MockStoreAPI_ListAuditEvents_Call{Call: _e.mock.On("ListAuditEvents", ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)}
 }
 
-func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string)) *MockStoreAPI_ListAuditEvents_Call {
+func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time)) *MockStoreAPI_ListAuditEvents_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -2085,6 +2213,14 @@ func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, t
 		if args[6] != nil {
 			arg6 = args[6].(string)
 		}
+		var arg7 *time.Time
+		if args[7] != nil {
+			arg7 = args[7].(*time.Time)
+		}
+		var arg8 *time.Time
+		if args[8] != nil {
+			arg8 = args[8].(*time.Time)
+		}
 		run(
 			arg0,
 			arg1,
@@ -2093,6 +2229,8 @@ func (_c *MockStoreAPI_ListAuditEvents_Call) Run(run func(ctx context.Context, t
 			arg4,
 			arg5,
 			arg6,
+			arg7,
+			arg8,
 		)
 	})
 	return _c
@@ -2103,7 +2241,185 @@ func (_c *MockStoreAPI_ListAuditEvents_Call) Return(adminAuditEvents []models.Ad
 	return _c
 }
 
-func (_c *MockStoreAPI_ListAuditEvents_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEvents_Call {
+func (_c *MockStoreAPI_ListAuditEvents_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEvents_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAuditEventsExport provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListAuditEventsExport(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time) ([]models.AdminAuditEvent, error) {
+	ret := _mock.Called(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAuditEventsExport")
+	}
+
+	var r0 []models.AdminAuditEvent
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) ([]models.AdminAuditEvent, error)); ok {
+		return returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) []models.AdminAuditEvent); ok {
+		r0 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.AdminAuditEvent)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListAuditEventsExport_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAuditEventsExport'
+type MockStoreAPI_ListAuditEventsExport_Call struct {
+	*mock.Call
+}
+
+// ListAuditEventsExport is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - limit int
+//   - offset int
+//   - action string
+//   - resourceType string
+//   - actorID string
+//   - from *time.Time
+//   - to *time.Time
+func (_e *MockStoreAPI_Expecter) ListAuditEventsExport(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}, action interface{}, resourceType interface{}, actorID interface{}, from interface{}, to interface{}) *MockStoreAPI_ListAuditEventsExport_Call {
+	return &MockStoreAPI_ListAuditEventsExport_Call{Call: _e.mock.On("ListAuditEventsExport", ctx, tenantID, limit, offset, action, resourceType, actorID, from, to)}
+}
+
+func (_c *MockStoreAPI_ListAuditEventsExport_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time)) *MockStoreAPI_ListAuditEventsExport_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		var arg7 *time.Time
+		if args[7] != nil {
+			arg7 = args[7].(*time.Time)
+		}
+		var arg8 *time.Time
+		if args[8] != nil {
+			arg8 = args[8].(*time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+			arg7,
+			arg8,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditEventsExport_Call) Return(adminAuditEvents []models.AdminAuditEvent, err error) *MockStoreAPI_ListAuditEventsExport_Call {
+	_c.Call.Return(adminAuditEvents, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditEventsExport_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int, action string, resourceType string, actorID string, from *time.Time, to *time.Time) ([]models.AdminAuditEvent, error)) *MockStoreAPI_ListAuditEventsExport_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAuditResourceTypes provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListAuditResourceTypes(ctx context.Context, tenantID string) ([]string, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAuditResourceTypes")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListAuditResourceTypes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAuditResourceTypes'
+type MockStoreAPI_ListAuditResourceTypes_Call struct {
+	*mock.Call
+}
+
+// ListAuditResourceTypes is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListAuditResourceTypes(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListAuditResourceTypes_Call {
+	return &MockStoreAPI_ListAuditResourceTypes_Call{Call: _e.mock.On("ListAuditResourceTypes", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListAuditResourceTypes_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListAuditResourceTypes_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditResourceTypes_Call) Return(strings []string, err error) *MockStoreAPI_ListAuditResourceTypes_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAuditResourceTypes_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]string, error)) *MockStoreAPI_ListAuditResourceTypes_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3298,6 +3614,63 @@ func (_c *MockStoreAPI_SetAdminWriteLock_Call) Return(err error) *MockStoreAPI_S
 }
 
 func (_c *MockStoreAPI_SetAdminWriteLock_Call) RunAndReturn(run func(ctx context.Context, locked bool) error) *MockStoreAPI_SetAdminWriteLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetAuditRetentionDays provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetAuditRetentionDays(ctx context.Context, days int) error {
+	ret := _mock.Called(ctx, days)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetAuditRetentionDays")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) error); ok {
+		r0 = returnFunc(ctx, days)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetAuditRetentionDays_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetAuditRetentionDays'
+type MockStoreAPI_SetAuditRetentionDays_Call struct {
+	*mock.Call
+}
+
+// SetAuditRetentionDays is a helper method to define mock.On call
+//   - ctx context.Context
+//   - days int
+func (_e *MockStoreAPI_Expecter) SetAuditRetentionDays(ctx interface{}, days interface{}) *MockStoreAPI_SetAuditRetentionDays_Call {
+	return &MockStoreAPI_SetAuditRetentionDays_Call{Call: _e.mock.On("SetAuditRetentionDays", ctx, days)}
+}
+
+func (_c *MockStoreAPI_SetAuditRetentionDays_Call) Run(run func(ctx context.Context, days int)) *MockStoreAPI_SetAuditRetentionDays_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetAuditRetentionDays_Call) Return(err error) *MockStoreAPI_SetAuditRetentionDays_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetAuditRetentionDays_Call) RunAndReturn(run func(ctx context.Context, days int) error) *MockStoreAPI_SetAuditRetentionDays_Call {
 	_c.Call.Return(run)
 	return _c
 }
