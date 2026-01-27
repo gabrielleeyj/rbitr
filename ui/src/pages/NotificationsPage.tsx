@@ -408,7 +408,7 @@ export function NotificationsPage() {
                   disabled={loading}
                 />
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
+              {config.email_provider === "ses" ? (
                 <div className="space-y-2">
                   <Label htmlFor="email-region">Region (SES)</Label>
                   <Input
@@ -419,6 +419,8 @@ export function NotificationsPage() {
                     disabled={loading}
                   />
                 </div>
+              ) : null}
+              {config.email_provider === "mailgun" ? (
                 <div className="space-y-2">
                   <Label htmlFor="email-domain">Domain (Mailgun)</Label>
                   <Input
@@ -429,7 +431,7 @@ export function NotificationsPage() {
                     disabled={loading}
                   />
                 </div>
-              </div>
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="email-default-list">Default mailing list ID</Label>
                 <Input
