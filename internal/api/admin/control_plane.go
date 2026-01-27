@@ -53,6 +53,8 @@ type NotificationConfigRequest struct {
 	EmailEnabled               bool   `json:"email_enabled"`
 	EmailProvider              string `json:"email_provider"`
 	EmailFrom                  string `json:"email_from"`
+	EmailRegion                string `json:"email_region"`
+	EmailDomain                string `json:"email_domain"`
 	EmailDefaultMailingListID  string `json:"email_default_mailing_list_id"`
 	NotifyApprovalExpiring     bool   `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool   `json:"notify_token_abuse"`
@@ -71,6 +73,8 @@ type NotificationConfigResponse struct {
 	EmailConfigured            bool      `json:"email_configured"`
 	EmailProvider              string    `json:"email_provider"`
 	EmailFrom                  string    `json:"email_from"`
+	EmailRegion                string    `json:"email_region"`
+	EmailDomain                string    `json:"email_domain"`
 	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
 	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
@@ -648,6 +652,8 @@ func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 		EmailConfigured:            config.EmailSecretRef != "",
 		EmailProvider:              config.EmailProvider,
 		EmailFrom:                  config.EmailFrom,
+		EmailRegion:                config.EmailRegion,
+		EmailDomain:                config.EmailDomain,
 		EmailDefaultMailingListID:  config.EmailDefaultMailingListID,
 		NotifyApprovalExpiring:     config.NotifyApprovalExpiring,
 		NotifyTokenAbuse:           config.NotifyTokenAbuse,
@@ -671,9 +677,24 @@ func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 	if payload.EmailEnabled && payload.EmailProvider == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_provider required"})
 	}
+	if payload.EmailEnabled && payload.EmailFrom == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_from required"})
+	}
+	if payload.EmailEnabled && strings.EqualFold(payload.EmailProvider, "ses") && payload.EmailRegion == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_region required for ses"})
+	}
+	if payload.EmailEnabled && strings.EqualFold(payload.EmailProvider, "mailgun") && payload.EmailDomain == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_domain required for mailgun"})
+	}
 
 	tenantID := c.Param("tenant_id")
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if payload.EmailEnabled {
+		provider := strings.ToLower(payload.EmailProvider)
+		if (provider == "sendgrid" || provider == "mailgun") && before.EmailSecretRef == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_secret_ref required"})
+		}
+	}
 	config := models.NotificationConfig{
 		TenantID:                   tenantID,
 		SlackWebhookEnabled:        payload.SlackWebhookEnabled,
@@ -687,6 +708,8 @@ func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		EmailProvider:              payload.EmailProvider,
 		EmailSecretRef:             before.EmailSecretRef,
 		EmailFrom:                  payload.EmailFrom,
+		EmailRegion:                payload.EmailRegion,
+		EmailDomain:                payload.EmailDomain,
 		EmailDefaultMailingListID:  payload.EmailDefaultMailingListID,
 		NotifyApprovalExpiring:     payload.NotifyApprovalExpiring,
 		NotifyTokenAbuse:           payload.NotifyTokenAbuse,
@@ -916,19 +939,69 @@ func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
 		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
 	}
 	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	if !config.SlackWebhookEnabled || config.SlackWebhookSecretRef == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack webhook not configured"})
+	}
 	msg := notifications.NotificationMessage{
 		Title:  "Slack notification test",
 		Body:   "This is a test notification from rbitr.",
 		Fields: map[string]string{"Tenant": tenantID},
 	}
-	err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
+	if err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
 		TenantID:   tenantID,
 		EventType:  "NOTIFICATIONS.TEST",
 		Severity:   "INFO",
 		ResourceID: "test",
-	}, msg)
-	if err != nil {
+	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send slack test"})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+		return err
+	}
+	if d.Notifications == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+	}
+	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	if !config.SlackBotEnabled || config.SlackBotSecretRef == "" || config.SlackBotDefaultChannel == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack bot not configured"})
+	}
+	token, err := d.Notifications.ResolveSecret(c.Request().Context(), config.SlackBotSecretRef)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to resolve slack bot secret"})
+	}
+	engine := notifications.NewEngine(d.Store, map[string]notifications.Notifier{
+		notifications.SlackBotChannel: notifications.NewSlackBotNotifier(token, config.SlackBotDefaultChannel, nil, ""),
+	}, d.Notifications.Cooldown, d.Metrics)
+	msg := notifications.NotificationMessage{
+		Title:  "Slack bot notification test",
+		Body:   "This is a test notification from rbitr.",
+		Fields: map[string]string{"Tenant": tenantID},
+	}
+	if err := engine.Send(c.Request().Context(), notifications.SlackBotChannel, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  "NOTIFICATIONS.TEST",
+		Severity:   "INFO",
+		ResourceID: "test",
+	}, msg); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send slack bot test"})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -937,7 +1010,34 @@ func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
 		return err
 	}
-	return c.JSON(http.StatusNotImplemented, map[string]string{"error": "email delivery not enabled"})
+	if d.Notifications == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+	}
+	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	if !config.EmailEnabled || config.EmailProvider == "" || config.EmailFrom == "" || config.EmailDefaultMailingListID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email not configured"})
+	}
+	msg := notifications.NotificationMessage{
+		Title:  "Email notification test",
+		Body:   "This is a test notification from rbitr.",
+		Fields: map[string]string{"Tenant": tenantID},
+	}
+	if err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  "NOTIFICATIONS.TEST",
+		Severity:   "INFO",
+		ResourceID: "test",
+	}, msg); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send email test"})
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {

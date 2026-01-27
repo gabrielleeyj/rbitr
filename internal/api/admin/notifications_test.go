@@ -140,6 +140,7 @@ func TestHandleNotificationConfigUpdate(t *testing.T) {
 				EmailEnabled:           true,
 				EmailProvider:          "ses",
 				EmailFrom:              "alerts@example.com",
+				EmailRegion:            "us-east-1",
 			},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetNotificationConfig", context.Background(), "t1").

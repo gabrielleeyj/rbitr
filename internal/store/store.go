@@ -1075,7 +1075,7 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEve
 func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error) {
 	query := `SELECT tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
-		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
 		FROM rbitr.notification_config WHERE tenant_id = $1`
 	row := s.db.QueryRowContext(ctx, query, tenantID)
@@ -1088,6 +1088,8 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	var emailProvider sql.NullString
 	var emailRef sql.NullString
 	var emailFrom sql.NullString
+	var emailRegion sql.NullString
+	var emailDomain sql.NullString
 	var emailListID sql.NullString
 	if err := row.Scan(
 		&config.TenantID,
@@ -1102,6 +1104,8 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 		&emailProvider,
 		&emailRef,
 		&emailFrom,
+		&emailRegion,
+		&emailDomain,
 		&emailListID,
 		&config.NotifyApprovalExpiring,
 		&config.NotifyTokenAbuse,
@@ -1138,6 +1142,12 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	if emailFrom.Valid {
 		config.EmailFrom = emailFrom.String
 	}
+	if emailRegion.Valid {
+		config.EmailRegion = emailRegion.String
+	}
+	if emailDomain.Valid {
+		config.EmailDomain = emailDomain.String
+	}
 	if emailListID.Valid {
 		config.EmailDefaultMailingListID = emailListID.String
 	}
@@ -1148,9 +1158,9 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config models.Noti
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.notification_config (
 		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
-		email_enabled, email_provider, email_secret_ref, email_from, email_default_mailing_list_id,
+		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
 	ON CONFLICT (tenant_id) DO UPDATE SET
 		slack_webhook_enabled = EXCLUDED.slack_webhook_enabled,
 		slack_webhook_secret_ref = EXCLUDED.slack_webhook_secret_ref,
@@ -1163,6 +1173,8 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config models.Noti
 		email_provider = EXCLUDED.email_provider,
 		email_secret_ref = EXCLUDED.email_secret_ref,
 		email_from = EXCLUDED.email_from,
+		email_region = EXCLUDED.email_region,
+		email_domain = EXCLUDED.email_domain,
 		email_default_mailing_list_id = EXCLUDED.email_default_mailing_list_id,
 		notify_approval_expiring = EXCLUDED.notify_approval_expiring,
 		notify_token_abuse = EXCLUDED.notify_token_abuse,
@@ -1180,6 +1192,8 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config models.Noti
 		nullableString(config.EmailProvider),
 		nullableString(config.EmailSecretRef),
 		nullableString(config.EmailFrom),
+		nullableString(config.EmailRegion),
+		nullableString(config.EmailDomain),
 		nullableString(config.EmailDefaultMailingListID),
 		config.NotifyApprovalExpiring,
 		config.NotifyTokenAbuse,

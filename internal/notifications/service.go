@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
@@ -72,6 +73,13 @@ func (s *Service) Send(ctx context.Context, tenantID string, event NotificationE
 		}
 	}
 
+	if config.EmailEnabled {
+		emailErr := s.sendEmail(ctx, config, event, msg)
+		if emailErr != nil {
+			errs = append(errs, emailErr)
+		}
+	}
+
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
@@ -96,4 +104,56 @@ func eventEnabled(config models.NotificationConfig, eventType string) bool {
 	default:
 		return true
 	}
+}
+
+func (s *Service) sendEmail(ctx context.Context, config models.NotificationConfig, event NotificationEvent, msg NotificationMessage) error {
+	if config.EmailProvider == "" || config.EmailFrom == "" {
+		return fmt.Errorf("email provider or from address missing")
+	}
+	if config.EmailDefaultMailingListID == "" {
+		return fmt.Errorf("email default mailing list missing")
+	}
+
+	members, err := s.Store.ListMailingListMembers(ctx, config.EmailDefaultMailingListID)
+	if err != nil {
+		return err
+	}
+	var recipients []string
+	for _, member := range members {
+		if member.Email != "" {
+			recipients = append(recipients, member.Email)
+		}
+	}
+	if len(recipients) == 0 {
+		return fmt.Errorf("email mailing list has no members")
+	}
+
+	secretValue := ""
+	if config.EmailSecretRef != "" {
+		secretValue, err = s.ResolveSecret(ctx, config.EmailSecretRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	provider := strings.ToLower(config.EmailProvider)
+	var sender EmailSender
+	switch provider {
+	case "ses":
+		sender, err = NewSESSender(ctx, config.EmailRegion, secretValue)
+	case "sendgrid":
+		sender, err = NewSendGridSender(secretValue)
+	case "mailgun":
+		sender, err = NewMailgunSender(secretValue, config.EmailDomain)
+	default:
+		return fmt.Errorf("unsupported email provider")
+	}
+	if err != nil {
+		return err
+	}
+
+	engine := NewEngine(s.Store, map[string]Notifier{
+		EmailChannel: NewEmailNotifier(sender, config.EmailFrom, recipients),
+	}, s.Cooldown, s.Metrics)
+	return engine.Send(ctx, EmailChannel, event, msg)
 }

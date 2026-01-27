@@ -190,6 +190,8 @@ type NotificationConfig struct {
 	EmailProvider              string    `json:"email_provider"`
 	EmailSecretRef             string    `json:"-"`
 	EmailFrom                  string    `json:"email_from"`
+	EmailRegion                string    `json:"email_region"`
+	EmailDomain                string    `json:"email_domain"`
 	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
 	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
