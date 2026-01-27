@@ -104,6 +104,8 @@ export interface NotificationConfig {
   email_configured: boolean;
   email_provider?: string;
   email_from?: string;
+  email_region?: string;
+  email_domain?: string;
   email_default_mailing_list_id?: string;
   notify_approval_expiring: boolean;
   notify_token_abuse: boolean;
@@ -505,6 +507,10 @@ export function setEmailSecretRef(config: ApiConfig, tenantId: string, secretRef
 
 export function sendSlackTest(config: ApiConfig, tenantId: string): Promise<void> {
   return request<void>(`/admin/tenants/${tenantId}/notifications/test/slack`, config, { method: "POST" });
+}
+
+export function sendSlackBotTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/test/slack-bot`, config, { method: "POST" });
 }
 
 export function sendEmailTest(config: ApiConfig, tenantId: string): Promise<void> {

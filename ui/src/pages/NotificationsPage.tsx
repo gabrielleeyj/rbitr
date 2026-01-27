@@ -16,6 +16,7 @@ import {
   listMailingLists,
   sendEmailTest,
   sendSlackTest,
+  sendSlackBotTest,
   setEmailSecretRef,
   setSlackSecretRef,
   updateMailingList,
@@ -33,6 +34,8 @@ const emptyConfig = {
   email_enabled: false,
   email_provider: "",
   email_from: "",
+  email_region: "",
+  email_domain: "",
   email_default_mailing_list_id: "",
   notify_approval_expiring: true,
   notify_token_abuse: true,
@@ -89,6 +92,8 @@ export function NotificationsPage() {
         email_enabled: configData.email_enabled,
         email_provider: configData.email_provider ?? "",
         email_from: configData.email_from ?? "",
+        email_region: configData.email_region ?? "",
+        email_domain: configData.email_domain ?? "",
         email_default_mailing_list_id: configData.email_default_mailing_list_id ?? "",
         notify_approval_expiring: configData.notify_approval_expiring,
         notify_token_abuse: configData.notify_token_abuse,
@@ -186,14 +191,23 @@ export function NotificationsPage() {
     }
   };
 
+  const handleSlackBotTest = async () => {
+    if (!adminKey || !tenantId) return;
+    setActionError("");
+    try {
+      await sendSlackBotTest({ adminKey }, tenantId);
+      toast.success("Slack bot test sent");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to send slack bot test.");
+    }
+  };
+
   const handleEmailTest = async () => {
     if (!adminKey || !tenantId) return;
     setActionError("");
     try {
       await sendEmailTest({ adminKey }, tenantId);
-      toast.message("Email test requested", {
-        description: "Email delivery is not enabled yet.",
-      });
+      toast.success("Email test sent");
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to send email test.");
     }
@@ -347,6 +361,11 @@ export function NotificationsPage() {
                   disabled={loading}
                 />
               </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleSlackBotTest} disabled={!status.slack_bot_configured}>
+                  Send Slack bot test
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -388,6 +407,28 @@ export function NotificationsPage() {
                   placeholder="alerts@example.com"
                   disabled={loading}
                 />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="email-region">Region (SES)</Label>
+                  <Input
+                    id="email-region"
+                    value={config.email_region}
+                    onChange={(event) => setConfig((prev) => ({ ...prev, email_region: event.target.value }))}
+                    placeholder="us-east-1"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email-domain">Domain (Mailgun)</Label>
+                  <Input
+                    id="email-domain"
+                    value={config.email_domain}
+                    onChange={(event) => setConfig((prev) => ({ ...prev, email_domain: event.target.value }))}
+                    placeholder="mg.example.com"
+                    disabled={loading}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email-default-list">Default mailing list ID</Label>
