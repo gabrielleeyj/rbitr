@@ -13,6 +13,7 @@ import {
   createMailingList,
   deleteMailingList,
   getNotificationConfig,
+  getNotificationMetadata,
   listMailingLists,
   sendEmailTest,
   sendSlackTest,
@@ -81,10 +82,15 @@ export function NotificationsPage() {
     }>
   >([]);
   const [suppressionFilters, setSuppressionFilters] = useState({
-    event_type: "",
+    event_type: "all",
     channel: "all",
     severity: "all",
   });
+  const [notificationMeta, setNotificationMeta] = useState<{
+    event_types: string[];
+    severities: string[];
+    channels: string[];
+  } | null>(null);
 
   const isEditingList = Boolean(listForm.mailing_list_id);
 
@@ -166,6 +172,27 @@ export function NotificationsPage() {
       mounted = false;
     };
   }, [adminKey, tenantId]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadMetadata = async () => {
+      if (!adminKey) return;
+      try {
+        const meta = await getNotificationMetadata({ adminKey });
+        if (mounted) {
+          setNotificationMeta(meta);
+        }
+      } catch {
+        if (mounted) {
+          setNotificationMeta(null);
+        }
+      }
+    };
+    loadMetadata();
+    return () => {
+      mounted = false;
+    };
+  }, [adminKey]);
 
   const handleConfigSave = async () => {
     if (!adminKey || !tenantId) return;
@@ -298,7 +325,7 @@ export function NotificationsPage() {
     try {
       const data = await listNotificationSuppressions({ adminKey }, tenantId, {
         limit: 50,
-        event_type: suppressionFilters.event_type || undefined,
+        event_type: suppressionFilters.event_type === "all" ? undefined : suppressionFilters.event_type,
         channel: suppressionFilters.channel === "all" ? undefined : suppressionFilters.channel,
         severity: suppressionFilters.severity === "all" ? undefined : suppressionFilters.severity,
       });
@@ -654,14 +681,22 @@ export function NotificationsPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="suppression-event">Event type</Label>
-              <Input
-                id="suppression-event"
+              <Select
                 value={suppressionFilters.event_type}
-                onChange={(event) =>
-                  setSuppressionFilters((prev) => ({ ...prev, event_type: event.target.value }))
-                }
-                placeholder="APPROVAL.EXPIRING"
-              />
+                onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, event_type: value }))}
+              >
+                <SelectTrigger id="suppression-event">
+                  <SelectValue placeholder="All events" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {(notificationMeta?.event_types ?? []).map((eventType) => (
+                    <SelectItem key={eventType} value={eventType}>
+                      {eventType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="suppression-channel">Channel</Label>

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 
+	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
@@ -59,6 +61,12 @@ type NotificationConfigRequest struct {
 	NotifyApprovalExpiring     bool   `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool   `json:"notify_token_abuse"`
 	NotifyPolicyInvalid        bool   `json:"notify_policy_invalid"`
+}
+
+type NotificationMetadataResponse struct {
+	EventTypes []string `json:"event_types"`
+	Severities []string `json:"severities"`
+	Channels   []string `json:"channels"`
 }
 
 type NotificationConfigResponse struct {
@@ -359,7 +367,13 @@ func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
 
 	tenantID := c.Param("tenant_id")
 	if err := d.Store.CreatePolicyVersion(c.Request().Context(), tenantID, payload.PolicyVersion, payload.RegoModule, adminKey.AdminKeyID, payload.Notes); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create policy"})
+		if errors.Is(err, store.ErrAdminWriteLocked) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to create policy",
+			"detail": err.Error(),
+		})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.CREATE", "POLICY.VERSION", payload.PolicyVersion, nil, map[string]any{
 		"policy_version": payload.PolicyVersion,
@@ -389,7 +403,13 @@ func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to publish policy"})
+		if errors.Is(err, store.ErrAdminWriteLocked) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to publish policy",
+			"detail": err.Error(),
+		})
 	}
 	after, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
@@ -423,7 +443,13 @@ func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
 		if errors.Is(err, store.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to rollback policy"})
+		if errors.Is(err, store.ErrAdminWriteLocked) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to rollback policy",
+			"detail": err.Error(),
+		})
 	}
 	after, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
@@ -1061,6 +1087,32 @@ func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list suppressions"})
 	}
 	return c.JSON(http.StatusOK, items)
+}
+
+func (d Dependencies) handleNotificationEventTypes(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	channels := []string{
+		notifications.SlackWebhookChannel,
+		notifications.SlackBotChannel,
+		notifications.EmailChannel,
+	}
+	sort.Strings(channels)
+	return c.JSON(http.StatusOK, NotificationMetadataResponse{
+		EventTypes: notifications.EventTypes(),
+		Severities: notifications.Severities(),
+		Channels:   channels,
+	})
+}
+
+func (d Dependencies) handleActionTypes(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string][]string{
+		"action_types": classification.ActionTypes(),
+	})
 }
 
 func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {

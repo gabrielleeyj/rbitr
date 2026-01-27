@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { deleteRiskOverride, listRiskOverrides, upsertRiskOverride } from "@/lib/api";
+import { deleteRiskOverride, getActionTypes, listRiskOverrides, upsertRiskOverride } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ export function RiskOverridesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [actionTypes, setActionTypes] = useState<string[]>([]);
 
   const refresh = async () => {
     if (!adminKey || !tenantId) return;
@@ -52,6 +53,27 @@ export function RiskOverridesPage() {
       mounted = false;
     };
   }, [adminKey, tenantId]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadActionTypes = async () => {
+      if (!adminKey) return;
+      try {
+        const data = await getActionTypes({ adminKey });
+        if (mounted) {
+          setActionTypes(data.action_types);
+        }
+      } catch {
+        if (mounted) {
+          setActionTypes([]);
+        }
+      }
+    };
+    loadActionTypes();
+    return () => {
+      mounted = false;
+    };
+  }, [adminKey]);
 
   const handleUpsert = async () => {
     if (!adminKey || !tenantId || !actionType) return;
@@ -103,12 +125,27 @@ export function RiskOverridesPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <Label htmlFor="action-type">Action type</Label>
-            <Input
-              id="action-type"
-              value={actionType}
-              onChange={(event) => setActionType(event.target.value)}
-              placeholder="DATA.EXPORT"
-            />
+            {actionTypes.length > 0 ? (
+              <Select value={actionType} onValueChange={setActionType}>
+                <SelectTrigger id="action-type">
+                  <SelectValue placeholder="Select action type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {actionTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id="action-type"
+                value={actionType}
+                onChange={(event) => setActionType(event.target.value)}
+                placeholder="DATA.EXPORT"
+              />
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="risk">Risk</Label>

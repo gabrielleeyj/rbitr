@@ -184,6 +184,16 @@ export interface NotificationSuppression {
   updated_at: string;
 }
 
+export interface NotificationMetadata {
+  event_types: string[];
+  severities: string[];
+  channels: string[];
+}
+
+export interface ActionTypesResponse {
+  action_types: string[];
+}
+
 function apiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? defaultBaseUrl;
 }
@@ -494,6 +504,14 @@ export async function listAuditEventsAll(
 
 export function getNotificationConfig(config: ApiConfig, tenantId: string): Promise<NotificationConfig> {
   return request<NotificationConfig>(`/admin/tenants/${tenantId}/notifications`, config);
+}
+
+export function getNotificationMetadata(config: ApiConfig): Promise<NotificationMetadata> {
+  return request<NotificationMetadata>(`/admin/notifications/event-types`, config);
+}
+
+export function getActionTypes(config: ApiConfig): Promise<ActionTypesResponse> {
+  return request<ActionTypesResponse>(`/admin/action-types`, config);
 }
 
 export function updateNotificationConfig(
