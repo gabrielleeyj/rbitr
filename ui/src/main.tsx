@@ -1,8 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { Toaster } from "sonner";
-
 import { ThemeProvider } from "@/components/theme-provider";
 import { App } from "@/App";
 import "@/styles/globals.css";
@@ -19,7 +17,6 @@ createRoot(root).render(
       <BrowserRouter>
         <App />
       </BrowserRouter>
-      <Toaster richColors position="top-right" />
     </ThemeProvider>
   </StrictMode>
 );
