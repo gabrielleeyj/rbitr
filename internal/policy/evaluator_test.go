@@ -212,6 +212,43 @@ func TestEvaluatorCacheExpired(t *testing.T) {
 	require.Equal(t, "ALLOW", result.Decision)
 }
 
+func TestEvaluatorCacheModuleChanged(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
+
+	evalIface := NewEvaluator(storeMock)
+	evaluator := evalIface.(*Evaluator)
+
+	prepared, err := opa.PrepareQuery(context.Background(), invalidPolicy)
+	require.NoError(t, err)
+
+	evaluator.cache["t1:p_v1"] = cachedPrepared{
+		prepared:  prepared,
+		module:    "old_module",
+		expiresAt: time.Now().Add(time.Minute),
+	}
+
+	result, err := evaluator.Evaluate(context.Background(), "t1", map[string]any{"action_type": "TICKET.CREATE"})
+	require.NoError(t, err)
+	require.Equal(t, "ALLOW", result.Decision)
+}
+
+func TestEvaluatorEvaluatePolicyOutputError(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetPolicy", context.Background(), "t1").
+		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: invalidPolicy, PolicyVersion: "p_v1"}, nil)
+
+	var storeAPI store.StoreAPI = storeMock
+	evaluator := NewEvaluator(storeAPI)
+	_, err := evaluator.Evaluate(context.Background(), "t1", map[string]any{})
+	require.Error(t, err)
+	var outputErr InvalidPolicyOutputError
+	require.ErrorAs(t, err, &outputErr)
+	require.Equal(t, "decode_error", outputErr.Reason)
+	require.Equal(t, "p_v1", outputErr.PolicyVersion)
+}
+
 func TestToDecisionReasons(t *testing.T) {
 	t.Parallel()
 
