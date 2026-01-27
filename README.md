@@ -4,13 +4,14 @@
 
 What this does:
 
-Governance semantics: canonicalization + hashing + action classification ✅
-OPA/Rego policies stored in DB ✅ (policy-as-data)
-ADR persistence ✅ (governance artifact, not access logs)
-Approval-request persistence ✅ (the “human-in-loop” hook)
-Evidence export with DTO whitelist + contract validation + redaction tests ✅
-Risk overrides ✅ and you already made them editable post-bootstrap (good call)
-Metrics for decisioning and latency ✅
+Governance semantics: canonicalization + hashing + action classification
+
+- OPA/Rego policies stored in DB (policy-as-data)
+- ADR persistence (governance artifact, not access logs)
+- Approval-request persistence (the “human-in-loop” hook)
+- Evidence export with DTO whitelist + contract validation + redaction tests
+- Risk overrides
+- Metrics for decisioning and latency
 
 Demo theme: “Enterprise customer asks: prove your AI agent can’t refund/export/change permissions without controls.”
 
