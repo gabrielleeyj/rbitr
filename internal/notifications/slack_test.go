@@ -106,3 +106,14 @@ func TestSlackBlocksAndText(t *testing.T) {
 		t.Fatalf("expected blocks")
 	}
 }
+
+func TestSlackNotifierNames(t *testing.T) {
+	webhook := NewSlackWebhookNotifier("http://example.com", "C1")
+	if webhook.Name() != SlackWebhookChannel {
+		t.Fatalf("expected webhook name %s got %s", SlackWebhookChannel, webhook.Name())
+	}
+	bot := NewSlackBotNotifier("token", "C1", nil, "")
+	if bot.Name() != SlackBotChannel {
+		t.Fatalf("expected bot name %s got %s", SlackBotChannel, bot.Name())
+	}
+}
