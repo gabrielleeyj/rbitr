@@ -396,12 +396,12 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 
 	t.Run("ListAuditEvents", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().ListAuditEvents(ctx, "t1", 10, 0, "", "", "")
-		call.Run(func(context.Context, string, int, int, string, string, string) {})
-		call.RunAndReturn(func(context.Context, string, int, int, string, string, string) ([]models.AdminAuditEvent, error) {
+		call := storeMock.EXPECT().ListAuditEvents(ctx, "t1", 10, 0, "", "", "", (*time.Time)(nil), (*time.Time)(nil))
+		call.Run(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) {})
+		call.RunAndReturn(func(context.Context, string, int, int, string, string, string, *time.Time, *time.Time) ([]models.AdminAuditEvent, error) {
 			return []models.AdminAuditEvent{}, nil
 		})
-		_, _ = storeMock.ListAuditEvents(ctx, "t1", 10, 0, "", "", "")
+		_, _ = storeMock.ListAuditEvents(ctx, "t1", 10, 0, "", "", "", nil, nil)
 	})
 
 	t.Run("InsertAuditEvent", func(t *testing.T) {

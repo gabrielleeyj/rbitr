@@ -246,8 +246,8 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 
 	t.Run("ListAuditEvents", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		storeMock.EXPECT().ListAuditEvents(ctx, "t1", 10, 0, "", "", "").Return([]models.AdminAuditEvent{}, nil)
-		_, _ = storeMock.ListAuditEvents(ctx, "t1", 10, 0, "", "", "")
+		storeMock.EXPECT().ListAuditEvents(ctx, "t1", 10, 0, "", "", "", (*time.Time)(nil), (*time.Time)(nil)).Return([]models.AdminAuditEvent{}, nil)
+		_, _ = storeMock.ListAuditEvents(ctx, "t1", 10, 0, "", "", "", nil, nil)
 	})
 
 	t.Run("InsertAuditEvent", func(t *testing.T) {
