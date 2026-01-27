@@ -168,6 +168,22 @@ export interface PendingApprovalsCount {
   pending_count: number;
 }
 
+export interface NotificationSuppression {
+  dedup_key: string;
+  tenant_id: string;
+  channel: string;
+  event_type: string;
+  resource_id?: string;
+  severity: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_sent_at?: string;
+  suppressed_until?: string;
+  suppressed_count: number;
+  last_payload_hash?: string;
+  updated_at: string;
+}
+
 function apiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? defaultBaseUrl;
 }
@@ -553,4 +569,22 @@ export function deleteMailingList(
   return request<void>(`/admin/tenants/${tenantId}/mailing-lists/${mailingListId}`, config, {
     method: "DELETE",
   });
+}
+
+export async function listNotificationSuppressions(
+  config: ApiConfig,
+  tenantId: string,
+  params: { limit?: number; offset?: number; event_type?: string; channel?: string; severity?: string } = {}
+): Promise<NotificationSuppression[]> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  if (params.event_type) query.set("event_type", params.event_type);
+  if (params.channel) query.set("channel", params.channel);
+  if (params.severity) query.set("severity", params.severity);
+  const data = await request<NotificationSuppression[] | null>(
+    `/admin/tenants/${tenantId}/notifications/suppressions?${query.toString()}`,
+    config
+  );
+  return data ?? [];
 }

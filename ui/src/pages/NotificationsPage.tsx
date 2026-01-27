@@ -21,6 +21,7 @@ import {
   setSlackSecretRef,
   updateMailingList,
   updateNotificationConfig,
+  listNotificationSuppressions,
 } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
@@ -66,6 +67,24 @@ export function NotificationsPage() {
     description: "",
     members: "",
   });
+  const [suppressions, setSuppressions] = useState<
+    Array<{
+      dedup_key: string;
+      channel: string;
+      event_type: string;
+      severity: string;
+      resource_id?: string;
+      last_seen_at: string;
+      last_sent_at?: string;
+      suppressed_until?: string;
+      suppressed_count: number;
+    }>
+  >([]);
+  const [suppressionFilters, setSuppressionFilters] = useState({
+    event_type: "",
+    channel: "all",
+    severity: "all",
+  });
 
   const isEditingList = Boolean(listForm.mailing_list_id);
 
@@ -78,9 +97,10 @@ export function NotificationsPage() {
 
   const load = async () => {
     if (!adminKey || !tenantId) return;
-    const [configResult, lists] = await Promise.allSettled([
+    const [configResult, lists, suppressionResult] = await Promise.allSettled([
       getNotificationConfig({ adminKey }, tenantId),
       listMailingLists({ adminKey }, tenantId),
+      listNotificationSuppressions({ adminKey }, tenantId, { limit: 50 }),
     ]);
     if (configResult.status === "fulfilled") {
       const configData = configResult.value;
@@ -116,6 +136,11 @@ export function NotificationsPage() {
       setMailingLists(lists.value);
     } else {
       setMailingLists([]);
+    }
+    if (suppressionResult.status === "fulfilled") {
+      setSuppressions(suppressionResult.value);
+    } else {
+      setSuppressions([]);
     }
   };
 
@@ -266,6 +291,21 @@ export function NotificationsPage() {
 
   const resetListForm = () => {
     setListForm({ mailing_list_id: "", name: "", description: "", members: "" });
+  };
+
+  const refreshSuppressions = async () => {
+    if (!adminKey || !tenantId) return;
+    try {
+      const data = await listNotificationSuppressions({ adminKey }, tenantId, {
+        limit: 50,
+        event_type: suppressionFilters.event_type || undefined,
+        channel: suppressionFilters.channel === "all" ? undefined : suppressionFilters.channel,
+        severity: suppressionFilters.severity === "all" ? undefined : suppressionFilters.severity,
+      });
+      setSuppressions(data);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to load suppressions.");
+    }
   };
 
   return (
@@ -597,6 +637,96 @@ export function NotificationsPage() {
                         </Button>
                       </div>
                     </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notification suppressions</CardTitle>
+          <CardDescription>Dedup and suppression state for recent notifications.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label htmlFor="suppression-event">Event type</Label>
+              <Input
+                id="suppression-event"
+                value={suppressionFilters.event_type}
+                onChange={(event) =>
+                  setSuppressionFilters((prev) => ({ ...prev, event_type: event.target.value }))
+                }
+                placeholder="APPROVAL.EXPIRING"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="suppression-channel">Channel</Label>
+              <Select
+                value={suppressionFilters.channel}
+                onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, channel: value }))}
+              >
+                <SelectTrigger id="suppression-channel">
+                  <SelectValue placeholder="All channels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="slack_webhook">slack_webhook</SelectItem>
+                  <SelectItem value="slack_bot">slack_bot</SelectItem>
+                  <SelectItem value="email">email</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="suppression-severity">Severity</Label>
+              <Select
+                value={suppressionFilters.severity}
+                onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, severity: value }))}
+              >
+                <SelectTrigger id="suppression-severity">
+                  <SelectValue placeholder="All severities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="INFO">INFO</SelectItem>
+                  <SelectItem value="WARN">WARN</SelectItem>
+                  <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button variant="outline" onClick={refreshSuppressions} disabled={!tenantId}>
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          {!tenantId ? (
+            <div className="text-sm text-muted-foreground">Select a tenant to view suppressions.</div>
+          ) : suppressions.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No suppressions recorded.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Channel</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Last seen</TableHead>
+                  <TableHead>Suppressed count</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {suppressions.map((item) => (
+                  <TableRow key={item.dedup_key}>
+                    <TableCell className="font-medium">{item.event_type}</TableCell>
+                    <TableCell>{item.channel}</TableCell>
+                    <TableCell>{item.severity}</TableCell>
+                    <TableCell>{item.last_seen_at ? new Date(item.last_seen_at).toLocaleString() : "—"}</TableCell>
+                    <TableCell>{item.suppressed_count}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

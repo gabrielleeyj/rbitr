@@ -2416,6 +2416,104 @@ func (_c *MockStoreAPI_ListMailingLists_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// ListNotificationSuppressions provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListNotificationSuppressions(ctx context.Context, tenantID string, limit int, offset int, eventType string, channel string, severity string) ([]models.NotificationSuppression, error) {
+	ret := _mock.Called(ctx, tenantID, limit, offset, eventType, channel, severity)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListNotificationSuppressions")
+	}
+
+	var r0 []models.NotificationSuppression
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) ([]models.NotificationSuppression, error)); ok {
+		return returnFunc(ctx, tenantID, limit, offset, eventType, channel, severity)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int, string, string, string) []models.NotificationSuppression); ok {
+		r0 = returnFunc(ctx, tenantID, limit, offset, eventType, channel, severity)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.NotificationSuppression)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int, string, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit, offset, eventType, channel, severity)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListNotificationSuppressions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListNotificationSuppressions'
+type MockStoreAPI_ListNotificationSuppressions_Call struct {
+	*mock.Call
+}
+
+// ListNotificationSuppressions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - limit int
+//   - offset int
+//   - eventType string
+//   - channel string
+//   - severity string
+func (_e *MockStoreAPI_Expecter) ListNotificationSuppressions(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}, eventType interface{}, channel interface{}, severity interface{}) *MockStoreAPI_ListNotificationSuppressions_Call {
+	return &MockStoreAPI_ListNotificationSuppressions_Call{Call: _e.mock.On("ListNotificationSuppressions", ctx, tenantID, limit, offset, eventType, channel, severity)}
+}
+
+func (_c *MockStoreAPI_ListNotificationSuppressions_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int, eventType string, channel string, severity string)) *MockStoreAPI_ListNotificationSuppressions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListNotificationSuppressions_Call) Return(notificationSuppressions []models.NotificationSuppression, err error) *MockStoreAPI_ListNotificationSuppressions_Call {
+	_c.Call.Return(notificationSuppressions, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListNotificationSuppressions_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int, eventType string, channel string, severity string) ([]models.NotificationSuppression, error)) *MockStoreAPI_ListNotificationSuppressions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListPolicyVersions provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error) {
 	ret := _mock.Called(ctx, tenantID)

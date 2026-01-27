@@ -81,6 +81,7 @@ type StoreAPI interface {
 	DeleteMailingList(ctx context.Context, tenantID, mailingListID string) error
 	GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error)
 	UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error
+	ListNotificationSuppressions(ctx context.Context, tenantID string, limit, offset int, eventType, channel, severity string) ([]models.NotificationSuppression, error)
 	ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error)
 	ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error)
 	TryAdvisoryLock(ctx context.Context, key int64) (bool, error)
@@ -1422,6 +1423,83 @@ func (s *Store) UpsertNotificationSuppression(ctx context.Context, suppression m
 		time.Now().UTC(),
 	)
 	return err
+}
+
+func (s *Store) ListNotificationSuppressions(ctx context.Context, tenantID string, limit, offset int, eventType, channel, severity string) ([]models.NotificationSuppression, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	args := []any{tenantID}
+	clauses := []string{"tenant_id = $1"}
+	if eventType != "" {
+		args = append(args, eventType)
+		clauses = append(clauses, fmt.Sprintf("event_type = $%d", len(args)))
+	}
+	if channel != "" {
+		args = append(args, channel)
+		clauses = append(clauses, fmt.Sprintf("channel = $%d", len(args)))
+	}
+	if severity != "" {
+		args = append(args, severity)
+		clauses = append(clauses, fmt.Sprintf("severity = $%d", len(args)))
+	}
+	args = append(args, limit, offset)
+
+	query := fmt.Sprintf(`SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
+		FROM rbitr.notification_suppressions
+		WHERE %s
+		ORDER BY last_seen_at DESC
+		LIMIT $%d OFFSET $%d`, strings.Join(clauses, " AND "), len(args)-1, len(args))
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var suppressions []models.NotificationSuppression
+	for rows.Next() {
+		var suppression models.NotificationSuppression
+		var resourceID sql.NullString
+		var lastSentAt sql.NullTime
+		var suppressedUntil sql.NullTime
+		var lastPayloadHash sql.NullString
+		if err := rows.Scan(
+			&suppression.DedupKey,
+			&suppression.TenantID,
+			&suppression.Channel,
+			&suppression.EventType,
+			&resourceID,
+			&suppression.Severity,
+			&suppression.FirstSeenAt,
+			&suppression.LastSeenAt,
+			&lastSentAt,
+			&suppressedUntil,
+			&suppression.SuppressedCount,
+			&lastPayloadHash,
+			&suppression.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		if resourceID.Valid {
+			suppression.ResourceID = resourceID.String
+		}
+		if lastSentAt.Valid {
+			suppression.LastSentAt = &lastSentAt.Time
+		}
+		if suppressedUntil.Valid {
+			suppression.SuppressedUntil = &suppressedUntil.Time
+		}
+		if lastPayloadHash.Valid {
+			suppression.LastPayloadHash = lastPayloadHash.String
+		}
+		suppressions = append(suppressions, suppression)
+	}
+	return suppressions, rows.Err()
 }
 
 func (s *Store) ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error) {

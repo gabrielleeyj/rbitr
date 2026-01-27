@@ -1040,6 +1040,29 @@ func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	limit, err := parseLimit(c.QueryParam("limit"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+	}
+	offset, err := parseOffset(c.QueryParam("offset"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+	}
+	eventType := strings.ToUpper(strings.TrimSpace(c.QueryParam("event_type")))
+	channel := strings.TrimSpace(c.QueryParam("channel"))
+	severity := strings.ToUpper(strings.TrimSpace(c.QueryParam("severity")))
+	items, err := d.Store.ListNotificationSuppressions(c.Request().Context(), tenantID, limit, offset, eventType, channel, severity)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list suppressions"})
+	}
+	return c.JSON(http.StatusOK, items)
+}
+
 func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
 	if err != nil {

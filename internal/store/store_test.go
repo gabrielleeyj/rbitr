@@ -2284,6 +2284,34 @@ func TestStoreUpsertNotificationSuppression(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreListNotificationSuppressions(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
+		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
+		FROM rbitr.notification_suppressions
+		WHERE tenant_id = $1
+		ORDER BY last_seen_at DESC
+		LIMIT $2 OFFSET $3`)
+	rows := sqlmock.NewRows([]string{
+		"dedup_key", "tenant_id", "channel", "event_type", "resource_id", "severity",
+		"first_seen_at", "last_seen_at", "last_sent_at", "suppressed_until", "suppressed_count", "last_payload_hash", "updated_at",
+	}).AddRow(
+		"dk1", "t1", "slack_webhook", "APPROVAL.EXPIRING", "ar1", "WARN",
+		time.Now(), time.Now(), nil, nil, 2, "hash", time.Now(),
+	)
+	mock.ExpectQuery(query).WithArgs("t1", 10, 0).WillReturnRows(rows)
+
+	st := New(db)
+	items, err := st.ListNotificationSuppressions(context.Background(), "t1", 10, 0, "", "", "")
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "dk1", items[0].DedupKey)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func ptrTime(value time.Time) *time.Time {
 	return &value
 }

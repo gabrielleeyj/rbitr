@@ -14,9 +14,13 @@ import (
 )
 
 const (
-	EventApprovalExpiring = "APPROVAL.EXPIRING"
-	EventApprovalExpired  = "APPROVAL.EXPIRED"
-	SeverityWarn          = "WARN"
+	EventApprovalExpiring    = "APPROVAL.EXPIRING"
+	EventApprovalExpired     = "APPROVAL.EXPIRED"
+	EventTokenAbuse          = "SECURITY.TOKEN_ABUSE"
+	EventPolicyInvalidOutput = "POLICY.INVALID_OUTPUT"
+	EventPolicyEvalError     = "POLICY.EVAL_ERROR"
+	SeverityWarn             = "WARN"
+	SeverityCritical         = "CRITICAL"
 )
 
 type ApprovalExpiryScheduler struct {
@@ -119,10 +123,6 @@ func (s *ApprovalExpiryScheduler) notifyApproval(ctx context.Context, approval m
 }
 
 func ApprovalNotificationMessage(approval models.ApprovalRequest, eventType string, now time.Time) NotificationMessage {
-	title := "Approval expiring soon"
-	if eventType == EventApprovalExpired {
-		title = "Approval expired"
-	}
 	expiresIn := approval.ExpiresAt.Sub(now)
 	fields := map[string]string{
 		"Tenant":   approval.TenantID,
@@ -133,11 +133,8 @@ func ApprovalNotificationMessage(approval models.ApprovalRequest, eventType stri
 	if eventType == EventApprovalExpiring {
 		fields["ExpiresIn"] = formatDurationMinutes(expiresIn)
 	}
-	return NotificationMessage{
-		Title:  title,
-		Body:   approval.ActionSummary,
-		Fields: fields,
-	}
+	fields["summary"] = approval.ActionSummary
+	return BuildMessage(eventType, fields)
 }
 
 func formatDurationMinutes(value time.Duration) string {

@@ -20,6 +20,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
 	"github.com/gabrielleeyj/rbitr/internal/store"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	Connector connector.Connector
 	Metrics   *telemetry.Metrics
 	Config    config.Config
+	Notifier  *notifications.Service
 }
 
 type ToolCallRequest struct {
@@ -200,6 +202,13 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
 	if err != nil {
 		if invalidReason, policyVersion, ok := policyInvalidReason(err); ok {
+			d.emitNotification(c, tenant.TenantID, notifications.EventPolicyInvalidOutput, notifications.SeverityCritical, policyVersion, map[string]string{
+				"Tenant":        tenant.TenantID,
+				"Tool":          toolID,
+				"Action":        classificationResult.ActionType,
+				"PolicyVersion": policyVersion,
+				"reason":        invalidReason,
+			})
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 				d.Metrics.PolicyEvalInvalidTotal.WithLabelValues(invalidReason).Inc()
@@ -222,6 +231,12 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 				PolicyVersion: policyVersion,
 			}
 		} else {
+			d.emitNotification(c, tenant.TenantID, notifications.EventPolicyEvalError, notifications.SeverityCritical, "", map[string]string{
+				"Tenant": tenant.TenantID,
+				"Tool":   toolID,
+				"Action": classificationResult.ActionType,
+				"reason": err.Error(),
+			})
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
@@ -406,6 +421,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 	if err != nil {
 		d.Metrics.ErrorsTotal.Inc()
 		if errors.Is(err, store.ErrNotFound) {
+			d.emitTokenAbuse(c, params, "approval_not_found")
 			return approvalError(c, http.StatusForbidden, "approval_token_invalid")
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "approval lookup failed"})
@@ -441,12 +457,14 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("token_invalid").Inc()
 		}
+		d.emitTokenAbuse(c, params, "approval_token_invalid")
 		return approvalError(c, http.StatusForbidden, "approval_token_invalid")
 	}
 	if approval.RequestHash != params.requestHash {
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("hash_mismatch").Inc()
 		}
+		d.emitTokenAbuse(c, params, "approval_request_hash_mismatch")
 		return approvalError(c, http.StatusForbidden, "approval_request_hash_mismatch")
 	}
 
@@ -649,6 +667,16 @@ func approvalError(c *echo.Context, status int, code string) error {
 	return c.JSON(status, map[string]string{"error": code})
 }
 
+func (d *Dependencies) emitTokenAbuse(c *echo.Context, params approvedToolCallParams, reason string) {
+	d.emitNotification(c, params.tenantID, notifications.EventTokenAbuse, notifications.SeverityCritical, params.approvalID, map[string]string{
+		"Tenant":   params.tenantID,
+		"Tool":     params.toolID,
+		"Action":   params.classificationType,
+		"Approval": params.approvalID,
+		"reason":   reason,
+	})
+}
+
 func (d *Dependencies) handleEvidence(c *echo.Context) error {
 	limit := 50
 	if l := c.QueryParam("limit"); l != "" {
@@ -723,6 +751,19 @@ func (d *Dependencies) handleEvidence(c *echo.Context) error {
 		TenantID: tenant.TenantID,
 		Records:  exported,
 	})
+}
+
+func (d *Dependencies) emitNotification(c *echo.Context, tenantID, eventType, severity, resourceID string, data map[string]string) {
+	if d.Notifier == nil {
+		return
+	}
+	msg := notifications.BuildMessage(eventType, data)
+	_ = d.Notifier.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  eventType,
+		Severity:   severity,
+		ResourceID: resourceID,
+	}, msg)
 }
 
 func authError(c *echo.Context, err error) error {

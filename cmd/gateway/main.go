@@ -68,6 +68,7 @@ func main() {
 		Connector: restConnector,
 		Metrics:   metrics,
 		Config:    cfg,
+		Notifier:  notificationService,
 	})
 	admin.RegisterRoutes(e, &admin.Dependencies{
 		Store:         st,
