@@ -98,7 +98,7 @@ type ActionDecisionRecord struct {
 	RequestHash       string           `json:"request_hash,omitempty"`
 	ResponseHash      string           `json:"response_hash,omitempty"`
 	ApprovalRequestID string           `json:"approval_request_id,omitempty"`
-	CreatedAt         time.Time        `json:"created_at,omitempty"`
+	CreatedAt         time.Time        `json:"created_at"`
 }
 
 type DecisionRule struct {
