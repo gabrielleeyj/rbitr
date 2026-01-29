@@ -1095,10 +1095,13 @@ func TestWriteAuditCSV(t *testing.T) {
 	err := writeAuditCSV(writer, events, true)
 	writer.Flush()
 	require.NoError(t, err)
-	output := buf.String()
-	require.Contains(t, output, "audit_event_id")
-	require.Contains(t, output, "ae_1")
-	require.Contains(t, output, "{\"ok\":true}")
+	reader := csv.NewReader(bytes.NewReader(buf.Bytes()))
+	records, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(records), 2)
+	require.Equal(t, "audit_event_id", records[0][0])
+	require.Equal(t, "ae_1", records[1][0])
+	require.Contains(t, records[1][len(records[1])-2], "\"ok\":true")
 }
 
 func TestHandleAuditListAll(t *testing.T) {
@@ -1120,7 +1123,7 @@ func TestHandleAuditListAll(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("ListAuditEvents", context.Background(), "", 50, 0, "", "", "").
+				storeMock.On("ListAuditEvents", context.Background(), "", 50, 0, "", "", "", mock.Anything, mock.Anything).
 					Return([]models.AdminAuditEvent{}, nil)
 			},
 			expectedCode: http.StatusOK,

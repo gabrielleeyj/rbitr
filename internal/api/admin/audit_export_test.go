@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -109,6 +108,9 @@ func TestWriteAuditCSVDetails(t *testing.T) {
 	err := writeAuditCSV(writer, events, true)
 	writer.Flush()
 	require.NoError(t, err)
-	output := buf.String()
-	require.True(t, strings.Contains(output, "{\"ok\":true}"))
+	reader := csv.NewReader(bytes.NewReader(buf.Bytes()))
+	records, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(records), 2)
+	require.Contains(t, records[1][len(records[1])-2], "\"ok\":true")
 }

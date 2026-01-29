@@ -340,13 +340,25 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
 		))
 
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT event_hash
+		FROM rbitr.admin_audit_events
+		WHERE stream_id = $1 AND event_hash IS NOT NULL
+		ORDER BY created_at DESC, audit_event_id DESC
+		LIMIT 1`)).
+		WithArgs("t_demo").
+		WillReturnRows(sqlmock.NewRows([]string{"event_hash"}))
+
 	sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.admin_audit_events (
-		audit_event_id, tenant_id, actor_type, actor_id, actor_display, action, resource_type, resource_id,
+		audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
+		actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`)).
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`)).
 		WithArgs(
 			sqlmock.AnyArg(),
 			"t_demo",
+			"t_demo",
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
 			"admin_key",
 			"admin_demo",
 			"admin_demo",

@@ -24,8 +24,8 @@ export function AppLayout() {
     <SidebarProvider defaultOpen>
       <Sidebar>
         <SidebarHeader className="border-b">
-          <div className="flex items-center gap-3 px-4 py-3">
-            <GatewayLogo className="h-8 w-8" />
+          <div className="flex items-center gap-3 px-4 py-4">
+            <GatewayLogo className="h-10 w-10" />
             <div>
               <div className="text-base font-semibold tracking-tight">
                 rbitr
