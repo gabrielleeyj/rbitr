@@ -1,0 +1,210 @@
+-- +goose Up
+-- Fix the demo policy to:
+-- 1. Add import rego.v1 statement (required by OPA)
+-- 2. Remove illegal default rule with function call
+-- 3. Use proper else chaining to avoid rule conflicts
+-- 4. Add missing tags field for schema compliance
+
+UPDATE rbitr.policies
+SET rego_module = $$
+package rbitr.policy
+
+import rego.v1
+
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {},
+    "tags": []
+}
+
+allow_actions := {
+    "TICKET.CREATE",
+    "TICKET.COMMENT",
+    "TICKET.UPDATE",
+    "CRM.READ",
+    "DATA.READ",
+    "DATA.QUERY"
+}
+
+require_approval_actions := {
+    "PAYMENT.REFUND",
+    "ACCESS.ROLE_CHANGE"
+}
+
+deny_actions := {
+    "DATA.EXPORT",
+    "DATA.BULK_EXPORT",
+    "ACCESS.GRANT",
+    "DATA.DELETE",
+    "CRM.DELETE"
+}
+
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+    deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+    input.action_risk == "HIGH"
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+    input.action_risk == "CRITICAL"
+} else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+$$
+WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+UPDATE rbitr.policy_versions
+SET rego_module = $$
+package rbitr.policy
+
+import rego.v1
+
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {},
+    "tags": []
+}
+
+allow_actions := {
+    "TICKET.CREATE",
+    "TICKET.COMMENT",
+    "TICKET.UPDATE",
+    "CRM.READ",
+    "DATA.READ",
+    "DATA.QUERY"
+}
+
+require_approval_actions := {
+    "PAYMENT.REFUND",
+    "ACCESS.ROLE_CHANGE"
+}
+
+deny_actions := {
+    "DATA.EXPORT",
+    "DATA.BULK_EXPORT",
+    "ACCESS.GRANT",
+    "DATA.DELETE",
+    "CRM.DELETE"
+}
+
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+    deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+    input.action_risk == "HIGH"
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+    input.action_risk == "CRITICAL"
+} else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+$$
+WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';
+
+-- +goose Down
+-- Revert to the previous policy (without import rego.v1 and with broken syntax)
+UPDATE rbitr.policies
+SET rego_module = $$
+package rbitr.policy
+
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {}
+}
+
+default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+allow_actions := {
+    "TICKET.CREATE",
+    "TICKET.COMMENT",
+    "TICKET.UPDATE",
+    "CRM.READ",
+    "DATA.READ",
+    "DATA.QUERY"
+}
+
+require_approval_actions := {
+    "PAYMENT.REFUND",
+    "ACCESS.ROLE_CHANGE"
+}
+
+deny_actions := {
+    "DATA.EXPORT",
+    "DATA.BULK_EXPORT",
+    "ACCESS.GRANT",
+    "DATA.DELETE",
+    "CRM.DELETE"
+}
+
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+    deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+    input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+}
+$$
+WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+UPDATE rbitr.policy_versions
+SET rego_module = $$
+package rbitr.policy
+
+decision_obj(decision, risk, rule_id, priority, code, message) := {
+    "version": "2026-01-20",
+    "decision": decision,
+    "risk": risk,
+    "rule": {"id": rule_id, "priority": priority},
+    "reasons": [{"code": code, "message": message}],
+    "constraints": {}
+}
+
+default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+allow_actions := {
+    "TICKET.CREATE",
+    "TICKET.COMMENT",
+    "TICKET.UPDATE",
+    "CRM.READ",
+    "DATA.READ",
+    "DATA.QUERY"
+}
+
+require_approval_actions := {
+    "PAYMENT.REFUND",
+    "ACCESS.ROLE_CHANGE"
+}
+
+deny_actions := {
+    "DATA.EXPORT",
+    "DATA.BULK_EXPORT",
+    "ACCESS.GRANT",
+    "DATA.DELETE",
+    "CRM.DELETE"
+}
+
+decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+    deny_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+    require_approval_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+    allow_actions[input.action_type]
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+    input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+}
+$$
+WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';

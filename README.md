@@ -129,6 +129,8 @@ Export defaults are safe-by-default (redacted payloads, no secrets).
 
 ## Simulation
 
+**Quick test**: Run `./scripts/test_demo.sh` to test the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail).
+
 1. Start services (two terminals)
 
 go run ./cmd/mocktool
