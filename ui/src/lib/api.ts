@@ -72,12 +72,23 @@ export interface PolicySimulationResponse {
   };
 }
 
-export interface ToolConfig {
-  tool_id: string;
-  tenant_id: string;
+export interface HTTPConfig {
   base_url: string;
   auth_type: string;
   auth_set: boolean;
+}
+
+export interface MCPConfig {
+  upstream_url: string;
+  description: string;
+  input_schema_json: object;
+}
+
+export interface ToolConfig {
+  tool_id: string;
+  tenant_id: string;
+  http?: HTTPConfig;
+  mcp?: MCPConfig;
 }
 
 export interface RiskOverride {
@@ -345,6 +356,22 @@ export function updateTool(
       auth_type: payload.auth_type ?? "",
       auth_value: payload.auth_value ?? "",
     }),
+  });
+}
+
+export function updateToolMetadata(
+  config: ApiConfig,
+  tenantId: string,
+  toolId: string,
+  payload: {
+    description: string;
+    mcp_upstream_url: string;
+    input_schema_json: object | null;
+  }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/tools/${toolId}/metadata`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
 
