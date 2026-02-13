@@ -18,11 +18,15 @@ type TenantSummary struct {
 }
 
 type Tool struct {
-	ToolID    string `json:"tool_id"`
-	TenantID  string `json:"tenant_id"`
-	BaseURL   string `json:"base_url"`
-	AuthType  string `json:"auth_type"`
-	AuthValue string `json:"auth_value"`
+	ToolID          string          `json:"tool_id"`
+	TenantID        string          `json:"tenant_id"`
+	BaseURL         string          `json:"base_url"`
+	AuthType        string          `json:"auth_type"`
+	AuthValue       string          `json:"auth_value"`
+	Transport       string          `json:"transport"`
+	MCPUpstreamURL  string          `json:"mcp_upstream_url,omitempty"`
+	Description     string          `json:"description,omitempty"`
+	InputSchemaJSON json.RawMessage `json:"input_schema_json,omitempty"`
 }
 
 type RiskOverride struct {

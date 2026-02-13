@@ -197,19 +197,30 @@ func (s *Store) GetTenantKeyHash(ctx context.Context, tenantID string) (string, 
 
 func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error) {
 	var tool models.Tool
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
+	var mcpUpstreamURL, description sql.NullString
+	var inputSchemaJSON []byte
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, toolID)
-	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue); err != nil {
+	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Tool{}, ErrNotFound
 		}
 		return models.Tool{}, err
 	}
+	if mcpUpstreamURL.Valid {
+		tool.MCPUpstreamURL = mcpUpstreamURL.String
+	}
+	if description.Valid {
+		tool.Description = description.String
+	}
+	if len(inputSchemaJSON) > 0 {
+		tool.InputSchemaJSON = json.RawMessage(inputSchemaJSON)
+	}
 	return tool, nil
 }
 
 func (s *Store) ListTools(ctx context.Context, tenantID string) ([]models.Tool, error) {
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`
 	rows, err := s.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
@@ -219,8 +230,19 @@ func (s *Store) ListTools(ctx context.Context, tenantID string) ([]models.Tool, 
 	var tools []models.Tool
 	for rows.Next() {
 		var tool models.Tool
-		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue); err != nil {
+		var mcpUpstreamURL, description sql.NullString
+		var inputSchemaJSON []byte
+		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON); err != nil {
 			return nil, err
+		}
+		if mcpUpstreamURL.Valid {
+			tool.MCPUpstreamURL = mcpUpstreamURL.String
+		}
+		if description.Valid {
+			tool.Description = description.String
+		}
+		if len(inputSchemaJSON) > 0 {
+			tool.InputSchemaJSON = json.RawMessage(inputSchemaJSON)
 		}
 		tools = append(tools, tool)
 	}
