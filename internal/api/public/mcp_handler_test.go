@@ -124,6 +124,15 @@ func TestHandleMCP_ValidRequest(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:          "test_tool",
+			TenantID:        "t_demo",
+			BaseURL:         "http://localhost:8090",
+			Description:     "Test tool",
+			InputSchemaJSON: []byte(`{"type":"object"}`),
+		},
+	}, nil)
 
 	deps := &Dependencies{
 		Store:   mockStore,
@@ -151,9 +160,9 @@ func TestHandleMCP_ValidRequest(t *testing.T) {
 
 	assert.Equal(t, "2.0", resp.JSONRPC)
 	assert.NotNil(t, resp.ID)
-	// Method not found is expected since we haven't implemented handlers yet
-	assert.NotNil(t, resp.Error)
-	assert.Equal(t, mcp.ErrorMethodNotFound, resp.Error.Code)
+	// tools/list is now implemented and should succeed
+	assert.Nil(t, resp.Error)
+	assert.NotNil(t, resp.Result)
 
 	mockStore.AssertExpectations(t)
 }
@@ -246,11 +255,6 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 		expectedErrCode int
 	}{
 		{
-			name:            "tools/list not implemented",
-			method:          "tools/list",
-			expectedErrCode: mcp.ErrorMethodNotFound,
-		},
-		{
 			name:            "tools/call not implemented",
 			method:          "tools/call",
 			expectedErrCode: mcp.ErrorMethodNotFound,
@@ -300,6 +304,169 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 	}
 }
 
+func TestHandleMCP_ToolsList(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupMock     func(*store.MockStoreAPI)
+		validateTools func(*testing.T, []mcp.Tool)
+	}{
+		{
+			name: "returns tools with descriptions and schemas",
+			setupMock: func(m *store.MockStoreAPI) {
+				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+					{
+						ToolID:          "jira",
+						TenantID:        "t_demo",
+						BaseURL:         "http://localhost:8081",
+						Description:     "Jira integration for issue management",
+						InputSchemaJSON: []byte(`{"type":"object","properties":{"action":{"type":"string"}},"required":["action"]}`),
+					},
+					{
+						ToolID:          "mock_internal",
+						TenantID:        "t_demo",
+						BaseURL:         "http://localhost:8090",
+						Description:     "Internal mock tool for testing",
+						InputSchemaJSON: []byte(`{"type":"object","additionalProperties":true}`),
+					},
+				}, nil)
+			},
+			validateTools: func(t *testing.T, tools []mcp.Tool) {
+				require.Len(t, tools, 2)
+
+				// Check first tool
+				assert.Equal(t, "jira", tools[0].Name)
+				assert.Equal(t, "Jira integration for issue management", tools[0].Description)
+				assert.NotEmpty(t, tools[0].InputSchema)
+
+				// Check second tool
+				assert.Equal(t, "mock_internal", tools[1].Name)
+				assert.Equal(t, "Internal mock tool for testing", tools[1].Description)
+				assert.NotEmpty(t, tools[1].InputSchema)
+			},
+		},
+		{
+			name: "provides defaults for missing description and schema",
+			setupMock: func(m *store.MockStoreAPI) {
+				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+					{
+						ToolID:   "minimal_tool",
+						TenantID: "t_demo",
+						BaseURL:  "http://localhost:9000",
+						// No description or schema
+					},
+				}, nil)
+			},
+			validateTools: func(t *testing.T, tools []mcp.Tool) {
+				require.Len(t, tools, 1)
+				assert.Equal(t, "minimal_tool", tools[0].Name)
+				assert.Equal(t, "No description available", tools[0].Description)
+				assert.Equal(t, `{"type":"object","additionalProperties":true}`, string(tools[0].InputSchema))
+			},
+		},
+		{
+			name: "returns empty list when no tools",
+			setupMock: func(m *store.MockStoreAPI) {
+				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
+			},
+			validateTools: func(t *testing.T, tools []mcp.Tool) {
+				assert.Empty(t, tools)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStore := &store.MockStoreAPI{}
+			tt.setupMock(mockStore)
+
+			deps := &Dependencies{
+				Store:   mockStore,
+				Metrics: newTestMetrics(),
+			}
+
+			reqBody := `{"jsonrpc":"2.0","id":"req-list-1","method":"tools/list","params":{}}`
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodPost,
+				bytes.NewReader([]byte(reqBody)),
+				testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+			)
+			req.Header.Set(auth.TenantKeyHeader, "valid_key")
+			req.Header.Set(auth.AgentIDHeader, "agent1")
+
+			err := deps.handleMCP(ctx)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, rec.Code)
+
+			// Parse JSON-RPC response
+			var resp mcp.Response
+			err = json.Unmarshal(rec.Body.Bytes(), &resp)
+			require.NoError(t, err)
+
+			// Should be success response
+			assert.Nil(t, resp.Error)
+			assert.NotNil(t, resp.Result)
+
+			// Parse result
+			var result mcp.ToolsListResult
+			err = json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+
+			// Validate tools
+			if tt.validateTools != nil {
+				tt.validateTools(t, result.Tools)
+			}
+
+			mockStore.AssertExpectations(t)
+		})
+	}
+}
+
+func TestHandleMCP_ToolsList_StoreError(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").
+		Return([]models.Tool{}, assert.AnError)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Parse JSON-RPC response
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	// Should return error
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, mcp.ErrorInternalError, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "failed to list tools")
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -339,6 +506,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+			mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
 
 			deps := &Dependencies{
 				Store:   mockStore,

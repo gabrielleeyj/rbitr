@@ -136,8 +136,7 @@ func (d *Dependencies) handleMCP(c *echo.Context) error {
 func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, agentID string, req *mcp.Request) (*mcp.Response, error) {
 	switch req.Method {
 	case mcp.MethodToolsList:
-		// TODO: Implement in Story 2
-		return mcp.NewErrorResponse(req.ID, mcp.NewMethodNotFoundError(req.Method)), nil
+		return d.handleToolsList(c, tenant, req)
 
 	case mcp.MethodToolsCall:
 		// TODO: Implement in Story 3
@@ -147,6 +146,46 @@ func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, age
 		// Unknown method
 		return mcp.NewErrorResponse(req.ID, mcp.NewMethodNotFoundError(req.Method)), nil
 	}
+}
+
+// handleToolsList handles the tools/list MCP method.
+func (d *Dependencies) handleToolsList(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
+	ctx := c.Request().Context()
+
+	// List all tools for the tenant
+	tools, err := d.Store.ListTools(ctx, tenant.TenantID)
+	if err != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
+	}
+
+	// Convert rbitr tools to MCP tool format
+	mcpTools := make([]mcp.Tool, 0, len(tools))
+	for _, tool := range tools {
+		mcpTool := mcp.Tool{
+			Name:        tool.ToolID, // Use tool_id as the stable MCP tool name
+			Description: tool.Description,
+			InputSchema: tool.InputSchemaJSON,
+		}
+
+		// If no description is set, provide a default
+		if mcpTool.Description == "" {
+			mcpTool.Description = "No description available"
+		}
+
+		// If no input schema is set, provide a permissive default
+		if len(mcpTool.InputSchema) == 0 {
+			mcpTool.InputSchema = []byte(`{"type":"object","additionalProperties":true}`)
+		}
+
+		mcpTools = append(mcpTools, mcpTool)
+	}
+
+	// Create result
+	result := mcp.ToolsListResult{
+		Tools: mcpTools,
+	}
+
+	return mcp.NewSuccessResponse(req.ID, result)
 }
 
 // writeJSONRPCError writes a JSON-RPC error response.
