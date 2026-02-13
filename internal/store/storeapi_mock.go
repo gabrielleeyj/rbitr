@@ -4149,6 +4149,63 @@ func (_c *MockStoreAPI_UpdateToolConfig_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// UpdateToolMetadata provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpdateToolMetadata(ctx context.Context, tenantID string, toolID string, description string, mcpUpstreamURL string, inputSchemaJSON []byte) error {
+	ret := _mock.Called(ctx, tenantID, toolID, description, mcpUpstreamURL, inputSchemaJSON)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateToolMetadata")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, []byte) error); ok {
+		r0 = returnFunc(ctx, tenantID, toolID, description, mcpUpstreamURL, inputSchemaJSON)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpdateToolMetadata_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateToolMetadata'
+type MockStoreAPI_UpdateToolMetadata_Call struct {
+	*mock.Call
+}
+
+// UpdateToolMetadata is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - toolID string
+//   - description string
+//   - mcpUpstreamURL string
+//   - inputSchemaJSON []byte
+func (_e *MockStoreAPI_Expecter) UpdateToolMetadata(ctx interface{}, tenantID interface{}, toolID interface{}, description interface{}, mcpUpstreamURL interface{}, inputSchemaJSON interface{}) *MockStoreAPI_UpdateToolMetadata_Call {
+	return &MockStoreAPI_UpdateToolMetadata_Call{Call: _e.mock.On("UpdateToolMetadata", ctx, tenantID, toolID, description, mcpUpstreamURL, inputSchemaJSON)}
+}
+
+func (_c *MockStoreAPI_UpdateToolMetadata_Call) Run(run func(ctx context.Context, tenantID string, toolID string, description string, mcpUpstreamURL string, inputSchemaJSON []byte)) *MockStoreAPI_UpdateToolMetadata_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(
+			args[0].(context.Context),
+			args[1].(string),
+			args[2].(string),
+			args[3].(string),
+			args[4].(string),
+			args[5].([]byte),
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateToolMetadata_Call) Return(err error) *MockStoreAPI_UpdateToolMetadata_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateToolMetadata_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string, description string, mcpUpstreamURL string, inputSchemaJSON []byte) error) *MockStoreAPI_UpdateToolMetadata_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpsertNotificationConfig provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error {
 	ret := _mock.Called(ctx, config)

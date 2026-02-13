@@ -34,6 +34,12 @@ type ToolConfigRequest struct {
 	AuthValue string `json:"auth_value"`
 }
 
+type ToolMetadataRequest struct {
+	Description     string          `json:"description"`
+	MCPUpstreamURL  string          `json:"mcp_upstream_url"`
+	InputSchemaJSON json.RawMessage `json:"input_schema_json"`
+}
+
 type PolicyUpdateRequest struct {
 	RegoModule    string `json:"rego_module"`
 	PolicyVersion string `json:"policy_version"`
@@ -67,6 +73,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/deny", deps.handleApprovalDeny)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
 	adminGroup.GET("/tenants/:tenant_id/tools", deps.handleToolsList)
+	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
 	adminGroup.GET("/tenants/:tenant_id/audit", deps.handleAuditList)
 	adminGroup.GET("/tenants/:tenant_id/audit/export", deps.handleAuditExport)
 	adminGroup.GET("/tenants/:tenant_id/audit/resource-types", deps.handleAuditResourceTypes)
@@ -183,6 +190,70 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 			"detail": err.Error(),
 		})
 	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+
+	var payload ToolMetadataRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	// Validate input schema JSON if provided
+	// Note: JSON Schema allows boolean schemas (true/false) in addition to objects
+	if len(payload.InputSchemaJSON) > 0 {
+		var schemaTest interface{}
+		if err := json.Unmarshal(payload.InputSchemaJSON, &schemaTest); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "input_schema_json must be valid JSON"})
+		}
+	}
+
+	tenantID := c.Param("tenant_id")
+	toolID := c.Param("tool_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
+	c.Set(telemetry.CtxToolID, toolID)
+
+	// Get current tool state for audit
+	beforeTool, _ := d.Store.GetTool(c.Request().Context(), tenantID, toolID)
+
+	// Update tool metadata
+	if err := d.Store.UpdateToolMetadata(
+		c.Request().Context(),
+		tenantID,
+		toolID,
+		payload.Description,
+		payload.MCPUpstreamURL,
+		payload.InputSchemaJSON,
+	); err != nil {
+		return handleBootstrapError(c, err)
+	}
+
+	// Emit audit event
+	beforeAudit := map[string]any{
+		"description":       beforeTool.Description,
+		"mcp_upstream_url":  beforeTool.MCPUpstreamURL,
+		"input_schema_json": beforeTool.InputSchemaJSON,
+	}
+	afterAudit := map[string]any{
+		"description":       payload.Description,
+		"mcp_upstream_url":  payload.MCPUpstreamURL,
+		"input_schema_json": payload.InputSchemaJSON,
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.METADATA.UPDATE", "TOOL", toolID, beforeAudit, afterAudit); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit tool metadata update",
+			"detail": err.Error(),
+		})
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 

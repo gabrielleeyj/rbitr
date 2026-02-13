@@ -118,12 +118,23 @@ type SettingsResponse struct {
 	AuditRetentionDays        int  `json:"audit_retention_days"`
 }
 
-type ToolResponse struct {
-	ToolID   string `json:"tool_id"`
-	TenantID string `json:"tenant_id"`
+type HTTPConfig struct {
 	BaseURL  string `json:"base_url"`
 	AuthType string `json:"auth_type"`
 	AuthSet  bool   `json:"auth_set"`
+}
+
+type MCPConfig struct {
+	UpstreamURL     string          `json:"upstream_url"`
+	Description     string          `json:"description"`
+	InputSchemaJSON json.RawMessage `json:"input_schema_json"`
+}
+
+type ToolResponse struct {
+	ToolID   string      `json:"tool_id"`
+	TenantID string      `json:"tenant_id"`
+	HTTP     *HTTPConfig `json:"http,omitempty"`
+	MCP      *MCPConfig  `json:"mcp,omitempty"`
 }
 
 func (d Dependencies) handleTenantList(c *echo.Context) error {
@@ -581,13 +592,30 @@ func (d Dependencies) handleToolsList(c *echo.Context) error {
 	}
 	response := make([]ToolResponse, 0, len(tools))
 	for _, tool := range tools {
-		response = append(response, ToolResponse{
+		toolResponse := ToolResponse{
 			ToolID:   tool.ToolID,
 			TenantID: tool.TenantID,
-			BaseURL:  tool.BaseURL,
-			AuthType: tool.AuthType,
-			AuthSet:  tool.AuthValue != "",
-		})
+		}
+
+		// Add HTTP config if base_url is set
+		if tool.BaseURL != "" {
+			toolResponse.HTTP = &HTTPConfig{
+				BaseURL:  tool.BaseURL,
+				AuthType: tool.AuthType,
+				AuthSet:  tool.AuthValue != "",
+			}
+		}
+
+		// Add MCP config if any MCP fields are set
+		if tool.MCPUpstreamURL != "" || tool.Description != "" || len(tool.InputSchemaJSON) > 0 {
+			toolResponse.MCP = &MCPConfig{
+				UpstreamURL:     tool.MCPUpstreamURL,
+				Description:     tool.Description,
+				InputSchemaJSON: tool.InputSchemaJSON,
+			}
+		}
+
+		response = append(response, toolResponse)
 	}
 	return c.JSON(http.StatusOK, response)
 }

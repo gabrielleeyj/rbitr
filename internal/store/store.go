@@ -63,6 +63,7 @@ type StoreAPI interface {
 	ListEvidenceFiltered(ctx context.Context, tenantID, decision, actionType, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error)
 	UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error
 	UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error
+	UpdateToolMetadata(ctx context.Context, tenantID, toolID, description, mcpUpstreamURL string, inputSchemaJSON []byte) error
 	UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error
 	UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error
 	MarkBootstrapComplete(ctx context.Context) error
@@ -851,6 +852,23 @@ func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL,
 
 	_, err := s.db.ExecContext(ctx, `UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`,
 		baseURL, authType, authValue, tenantID, toolID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) UpdateToolMetadata(ctx context.Context, tenantID, toolID, description, mcpUpstreamURL string, inputSchemaJSON []byte) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE rbitr.tools
+		SET description = $1, mcp_upstream_url = $2, input_schema_json = $3
+		WHERE tenant_id = $4 AND tool_id = $5`,
+		description, mcpUpstreamURL, inputSchemaJSON, tenantID, toolID)
 	if err != nil {
 		return err
 	}

@@ -124,10 +124,10 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 					AddRow("p_v1", "t_demo", integrationPolicy, time.Now()))
 
 			if tc.expectedDecision == "ALLOW" {
-				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 					WithArgs("t_demo", "mock_internal").
-					WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-						AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http_api", nil, nil, nil))
+					WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
+						AddRow("mock_internal", "t_demo", "http://mock.local", "", "", nil, nil, nil))
 			}
 
 			if tc.expectApproval {
