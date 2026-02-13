@@ -1,0 +1,211 @@
+package mcp
+
+import "encoding/json"
+
+// JSON-RPC 2.0 specification: https://www.jsonrpc.org/specification
+
+// Request represents a JSON-RPC 2.0 request.
+type Request struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      *RequestID      `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+// UnmarshalJSON implements custom unmarshaling for Request to handle null IDs.
+func (r *Request) UnmarshalJSON(data []byte) error {
+	type Alias Request
+	aux := &struct {
+		IDRaw json.RawMessage `json:"id"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Handle the ID field specially
+	if aux.IDRaw != nil {
+		r.ID = &RequestID{}
+		if err := r.ID.UnmarshalJSON(aux.IDRaw); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Response represents a JSON-RPC 2.0 response.
+type Response struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      *RequestID      `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *ErrorObject    `json:"error,omitempty"`
+}
+
+// RequestID represents a JSON-RPC request ID that can be a string, number, or null.
+type RequestID struct {
+	str    *string
+	num    *float64
+	isNull bool
+}
+
+// NewStringID creates a RequestID with a string value.
+func NewStringID(s string) *RequestID {
+	return &RequestID{str: &s}
+}
+
+// NewNumberID creates a RequestID with a number value.
+func NewNumberID(n float64) *RequestID {
+	return &RequestID{num: &n}
+}
+
+// NewNullID creates a RequestID with a null value.
+func NewNullID() *RequestID {
+	return &RequestID{isNull: true}
+}
+
+// String returns the string value if set.
+func (r *RequestID) String() *string {
+	return r.str
+}
+
+// Number returns the number value if set.
+func (r *RequestID) Number() *float64 {
+	return r.num
+}
+
+// IsNull returns true if the ID is null.
+func (r *RequestID) IsNull() bool {
+	return r.isNull
+}
+
+// MarshalJSON implements json.Marshaler for RequestID.
+func (r RequestID) MarshalJSON() ([]byte, error) {
+	if r.isNull {
+		return []byte("null"), nil
+	}
+	if r.str != nil {
+		return json.Marshal(r.str)
+	}
+	if r.num != nil {
+		return json.Marshal(r.num)
+	}
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler for RequestID.
+func (r *RequestID) UnmarshalJSON(data []byte) error {
+	// Check for null
+	if string(data) == "null" {
+		r.isNull = true
+		return nil
+	}
+
+	// Try to unmarshal as string
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		r.str = &s
+		return nil
+	}
+
+	// Try to unmarshal as number
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		r.num = &n
+		return nil
+	}
+
+	return &ErrorObject{
+		Code:    ErrorInvalidRequest,
+		Message: "id must be string, number, or null",
+	}
+}
+
+// ErrorObject represents a JSON-RPC 2.0 error object.
+type ErrorObject struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
+}
+
+// Error implements the error interface for ErrorObject.
+func (e *ErrorObject) Error() string {
+	return e.Message
+}
+
+// Standard JSON-RPC 2.0 error codes
+const (
+	ErrorParseError     = -32700 // Parse error
+	ErrorInvalidRequest = -32600 // Invalid Request
+	ErrorMethodNotFound = -32601 // Method not found
+	ErrorInvalidParams  = -32602 // Invalid params
+	ErrorInternalError  = -32603 // Internal error
+)
+
+// Application-specific error codes (as defined in EPIC_6.md)
+const (
+	ErrorApprovalRequired = -32001 // Approval required
+	ErrorDeniedByPolicy   = -32003 // Denied by policy
+	ErrorPolicyInvalid    = -32004 // Policy evaluation error
+)
+
+// MCP method names
+const (
+	MethodToolsList = "tools/list"
+	MethodToolsCall = "tools/call"
+)
+
+// ToolsListResult represents the result of a tools/list call.
+type ToolsListResult struct {
+	Tools []Tool `json:"tools"`
+}
+
+// Tool represents an MCP tool definition.
+type Tool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"inputSchema"`
+}
+
+// ToolsCallParams represents the params for a tools/call request.
+type ToolsCallParams struct {
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+// ToolsCallResult represents the result of a tools/call request.
+type ToolsCallResult struct {
+	Content []Content `json:"content"`
+}
+
+// Content represents a content item in the tool response.
+type Content struct {
+	Type string          `json:"type"`
+	Text string          `json:"text,omitempty"`
+	JSON json.RawMessage `json:"json,omitempty"`
+}
+
+// ApprovalRequiredData represents the data for an approval required error.
+type ApprovalRequiredData struct {
+	ApprovalRequired  bool     `json:"approval_required"`
+	ApprovalRequestID string   `json:"approval_request_id"`
+	ExpiresAt         string   `json:"expires_at"`
+	UIURL             string   `json:"ui_url,omitempty"`
+	PolicyVersion     string   `json:"policy_version"`
+	RuleID            string   `json:"rule_id"`
+	Risk              string   `json:"risk"`
+	Reasons           []string `json:"reasons"`
+}
+
+// DeniedData represents the data for a denied error.
+type DeniedData struct {
+	Denied        bool     `json:"denied"`
+	PolicyVersion string   `json:"policy_version"`
+	RuleID        string   `json:"rule_id"`
+	Risk          string   `json:"risk"`
+	Reasons       []string `json:"reasons"`
+	Tags          []string `json:"tags,omitempty"`
+}
