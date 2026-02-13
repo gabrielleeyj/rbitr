@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -126,7 +125,7 @@ func TestValidateAndParseRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req, err := ValidateAndParseRequest(bytes.NewReader([]byte(tt.input)), MaxRequestSize)
+			req, err := ValidateAndParseRequest([]byte(tt.input), MaxRequestSize)
 
 			if tt.expectErr {
 				require.Error(t, err)
@@ -156,12 +155,12 @@ func TestValidateAndParseRequest_SizeLimit(t *testing.T) {
 	}`
 
 	// Should succeed with normal limit
-	req, err := ValidateAndParseRequest(bytes.NewReader([]byte(input)), MaxRequestSize)
+	req, err := ValidateAndParseRequest([]byte(input), MaxRequestSize)
 	require.NoError(t, err)
 	require.NotNil(t, req)
 
 	// Should fail with very small limit
-	_, err = ValidateAndParseRequest(bytes.NewReader([]byte(input)), 100)
+	_, err = ValidateAndParseRequest([]byte(input), 100)
 	require.Error(t, err)
 	errObj, ok := err.(*ErrorObject)
 	require.True(t, ok)
@@ -179,7 +178,7 @@ func TestValidateAndParseRequest_ExactBoundary(t *testing.T) {
 	maxSize := int64(len(validJSON))
 
 	// Should fail because total input exceeds maxSize
-	_, err := ValidateAndParseRequest(strings.NewReader(input), maxSize)
+	_, err := ValidateAndParseRequest([]byte(input), maxSize)
 	require.Error(t, err)
 	errObj, ok := err.(*ErrorObject)
 	require.True(t, ok)
@@ -187,11 +186,11 @@ func TestValidateAndParseRequest_ExactBoundary(t *testing.T) {
 	assert.Contains(t, errObj.Message, "too large")
 
 	// Should succeed with input exactly at maxSize
-	_, err = ValidateAndParseRequest(strings.NewReader(validJSON), maxSize)
+	_, err = ValidateAndParseRequest([]byte(validJSON), maxSize)
 	require.NoError(t, err)
 
 	// Should succeed with input under maxSize
-	_, err = ValidateAndParseRequest(strings.NewReader(validJSON), maxSize+100)
+	_, err = ValidateAndParseRequest([]byte(validJSON), maxSize+100)
 	require.NoError(t, err)
 }
 

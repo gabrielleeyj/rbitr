@@ -78,6 +78,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	v1 := e.Group("/v1")
 	v1.POST("/tools/:tool_id/call", deps.handleToolCall)
 	v1.GET("/tenants/:tenant_id/evidence", deps.handleEvidence)
+	v1.POST("/mcp/:tenant_id", deps.handleMCP)
 }
 
 func (d *Dependencies) handleToolCall(c *echo.Context) error {

@@ -5,43 +5,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 )
 
 // MaxRequestSize is the maximum size of an MCP request body (10MB).
 const MaxRequestSize = 10 * 1024 * 1024
 
-// ValidateAndParseRequest validates and parses a JSON-RPC request from a reader.
-func ValidateAndParseRequest(r io.Reader, maxSize int64) (*Request, error) {
+// ValidateAndParseRequest validates and parses a JSON-RPC request from raw bytes.
+func ValidateAndParseRequest(data []byte, maxSize int64) (*Request, error) {
 	if maxSize <= 0 {
 		maxSize = MaxRequestSize
 	}
 
-	// Read body into memory up to maxSize+1 to detect oversized requests
-	// We need to buffer the entire body to:
-	// 1. Check exact size (io.LimitReader would truncate at boundary)
-	// 2. Check for trailing data after first JSON value
-	buf := bytes.NewBuffer(make([]byte, 0, min(maxSize, 4096)))
-	n, err := io.CopyN(buf, r, maxSize+1)
-
-	// If we read exactly maxSize+1 bytes, the request is too large
-	if n == maxSize+1 {
+	// Check size limit
+	if int64(len(data)) > maxSize {
 		return nil, &ErrorObject{
 			Code:    ErrorInvalidRequest,
 			Message: "request body too large",
 		}
 	}
 
-	// If CopyN returned an error other than EOF, it's an I/O error
-	if err != nil && err != io.EOF {
-		return nil, &ErrorObject{
-			Code:    ErrorInternalError,
-			Message: "failed to read request body",
-		}
-	}
-
 	var req Request
-	decoder := json.NewDecoder(buf)
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&req); err != nil {
 		// Check if error is already an ErrorObject (e.g., from RequestID.UnmarshalJSON)
 		var errObj *ErrorObject

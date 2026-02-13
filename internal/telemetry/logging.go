@@ -13,6 +13,7 @@ const (
 	CtxActionType = "action_type"
 	CtxDecision   = "decision"
 	CtxAdminID    = "admin_id"
+	CtxMCPMethod  = "mcp_method"
 )
 
 func RequestLogger() echo.MiddlewareFunc {
@@ -37,6 +38,7 @@ func RequestLogger() echo.MiddlewareFunc {
 			appendIfValue(&fields, "action_type", getContextString(c, CtxActionType))
 			appendIfValue(&fields, "decision", getContextString(c, CtxDecision))
 			appendIfValue(&fields, "admin_id", getContextString(c, CtxAdminID))
+			appendIfValue(&fields, "mcp_method", getContextString(c, CtxMCPMethod))
 			logger.Info(
 				"request",
 				fields...,
