@@ -1,4 +1,4 @@
-## EPIC 5 - SOC‑ready goals
+# EPIC 5 - SOC‑ready goals
 
 - Completeness: every admin mutation, approval decision, and policy lifecycle event is logged.
 - Integrity: logs are tamper‑evident and immutable.

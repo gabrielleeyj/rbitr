@@ -1,4 +1,4 @@
-# MCP Compatibility (Minimal, Safe)
+# EPIC 6 - MCP Compatibility (Minimal, Safe)
 
 ## Goal
 
