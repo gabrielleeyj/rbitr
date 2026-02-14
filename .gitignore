@@ -58,11 +58,11 @@ Thumbs.db
 pkg/
 tmp/
 admin-api
+.gocache/
 
 # yaml files
 *.yaml
 *.yml
-!config/ap-southeast-1/dtone/example.config.yaml
 !docker-compose.yml
 
 # Test coverage related files
