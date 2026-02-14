@@ -74,10 +74,10 @@ func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {
 			nil, nil, nil, "d_req", "Refund", "MEDIUM", "rule_approval", nil,
 		))
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
-		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
-			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", nil, nil, nil))
+		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
+			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
 
 	sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
@@ -417,10 +417,10 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
 		))
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
-		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
-			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", nil, nil, nil))
+		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
+			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
 
 	sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,

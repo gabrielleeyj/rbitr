@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -16,6 +17,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
+	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
 func TestHandleMCP_Authentication(t *testing.T) {
@@ -252,16 +254,19 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 	tests := []struct {
 		name            string
 		method          string
+		params          string
 		expectedErrCode int
 	}{
 		{
-			name:            "tools/call not implemented",
+			name:            "tools/call with missing tool name",
 			method:          "tools/call",
-			expectedErrCode: mcp.ErrorMethodNotFound,
+			params:          `{}`,
+			expectedErrCode: mcp.ErrorInvalidParams,
 		},
 		{
 			name:            "unknown method",
 			method:          "unknown/method",
+			params:          `{}`,
 			expectedErrCode: mcp.ErrorMethodNotFound,
 		},
 	}
@@ -277,7 +282,7 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 				Metrics: newTestMetrics(),
 			}
 
-			reqBody := `{"jsonrpc":"2.0","id":1,"method":"` + tt.method + `","params":{}}`
+			reqBody := `{"jsonrpc":"2.0","id":1,"method":"` + tt.method + `","params":` + tt.params + `}`
 
 			ctx, req, rec := testhelpers.MakeRequestWithParams(
 				http.MethodPost,
@@ -542,4 +547,208 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 			mockStore.AssertExpectations(t)
 		})
 	}
+}
+
+func TestHandleMCP_ToolsCall_ApprovalResubmitRequiresApprovalRequestID(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{
+		"jsonrpc":"2.0",
+		"id":1,
+		"method":"tools/call",
+		"params":{
+			"name":"jira",
+			"arguments":{
+				"action":"issue_create",
+				"_rbitr_approval_token":"apt_123"
+			}
+		}
+	}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, mcp.ErrorInvalidParams, resp.Error.Code)
+	assert.Contains(t, resp.Error.Message, "_rbitr_approval_request_id is required")
+	mockStore.AssertNotCalled(t, "ListApprovalRequests", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *testing.T) {
+	argumentsForHash := map[string]interface{}{"action": "issue_create"}
+	argumentsJSON, err := json.Marshal(argumentsForHash)
+	require.NoError(t, err)
+
+	canonical := utils.CanonicalRequest{
+		TenantID: "t_demo",
+		AgentID:  "agent1",
+		ToolID:   "jira",
+		Method:   "MCP_CALL",
+		Path:     "/tools/call",
+		Headers:  map[string]string{},
+		BodyHash: utils.HashBody(argumentsJSON),
+	}
+	expectedHash := utils.HashCanonical(&canonical)
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
+		Return(models.ApprovalRequest{
+			ApprovalRequestID: "ar_123",
+			TenantID:          "t_demo",
+			Status:            "APPROVED",
+			RequestHash:       expectedHash,
+			ApprovalTokenHash: utils.HashString("apt_123"),
+			ExpiresAt:         time.Now().UTC().Add(time.Hour),
+			ActionType:        "MCP.jira",
+			Risk:              "MEDIUM",
+			ActionSummary:     "MCP tool call: jira",
+			PolicyVersion:     "p_v1",
+			RuleID:            "rule_approve",
+		}, nil)
+	mockStore.On("MarkApprovalExecuted", mock.Anything, "t_demo", "ar_123", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(adr models.ActionDecisionRecord) bool {
+		return adr.ApprovalRequestID == "ar_123" && adr.RequestHash == expectedHash
+	})).Return(nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{
+		"jsonrpc":"2.0",
+		"id":1,
+		"method":"tools/call",
+		"params":{
+			"name":"jira",
+			"arguments":{
+				"action":"issue_create",
+				"_rbitr_approval_token":"apt_123",
+				"_rbitr_approval_request_id":"ar_123"
+			}
+		}
+	}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err = deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Nil(t, resp.Error)
+	assert.NotNil(t, resp.Result)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.T) {
+	argumentsForHash := map[string]interface{}{"action": "issue_create"}
+	argumentsJSON, err := json.Marshal(argumentsForHash)
+	require.NoError(t, err)
+
+	canonical := utils.CanonicalRequest{
+		TenantID: "t_demo",
+		AgentID:  "agent1",
+		ToolID:   "jira",
+		Method:   "MCP_CALL",
+		Path:     "/tools/call",
+		Headers:  map[string]string{},
+		BodyHash: utils.HashBody(argumentsJSON),
+	}
+	expectedHash := utils.HashCanonical(&canonical)
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
+		Return(models.ApprovalRequest{
+			ApprovalRequestID: "ar_123",
+			TenantID:          "t_demo",
+			Status:            "APPROVED",
+			RequestHash:       expectedHash,
+			ApprovalTokenHash: utils.HashString("apt_123"),
+			ExpiresAt:         time.Now().UTC().Add(time.Hour),
+			ActionType:        "MCP.jira",
+			Risk:              "MEDIUM",
+			ActionSummary:     "MCP tool call: jira",
+		}, nil)
+	mockStore.On("MarkApprovalExecuted", mock.Anything, "t_demo", "ar_123", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+	mockStore.On("InsertADR", mock.Anything, mock.Anything).Return(assert.AnError)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{
+		"jsonrpc":"2.0",
+		"id":1,
+		"method":"tools/call",
+		"params":{
+			"name":"jira",
+			"arguments":{
+				"action":"issue_create",
+				"_rbitr_approval_token":"apt_123",
+				"_rbitr_approval_request_id":"ar_123"
+			}
+		}
+	}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err = deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Error)
+	assert.Equal(t, mcp.ErrorInternalError, resp.Error.Code)
+	assert.Equal(t, "failed to persist execution evidence", resp.Error.Message)
+	mockStore.AssertExpectations(t)
 }

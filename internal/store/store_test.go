@@ -297,12 +297,12 @@ func TestStoreGetTool(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
-				AddRow("jira", "t1", "http://example", "bearer", "token", nil, nil, nil),
+			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
+				AddRow("jira", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}),
+			rows:      sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -312,8 +312,7 @@ func TestStoreGetTool(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer db.Close()
-
-			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value,  mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)
+			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)
 			mock.ExpectQuery(query).WithArgs("t1", "jira").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -336,13 +335,13 @@ func TestStoreListTools(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
-				AddRow("tool1", "t1", "http://example", "bearer", "token", nil, nil, nil),
+			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
+				AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil),
 			expected: 1,
 		},
 		{
 			name:     "empty",
-			rows:     sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}),
+			rows:     sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}),
 			expected: 0,
 		},
 	}
@@ -353,7 +352,7 @@ func TestStoreListTools(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value,  mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -370,7 +369,7 @@ func TestStoreListToolsError(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value,  mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
 	mock.ExpectQuery(query).WithArgs("t1").WillReturnError(errors.New("query failed"))
 
 	st := New(db)
@@ -384,9 +383,9 @@ func TestStoreListToolsRowError(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value,  mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
-	rows := sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "mcp_upstream_url", "description", "input_schema_json"}).
-		AddRow("tool1", "t1", "http://example", "bearer", "token", nil, nil, nil).
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+	rows := sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
+		AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil).
 		RowError(0, errors.New("row error"))
 	mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(rows)
 
