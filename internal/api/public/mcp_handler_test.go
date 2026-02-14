@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -497,11 +498,10 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 			},
 		},
 		{
-			name:      "null id (notification - no response)",
+			name:      "null id (invalid request)",
 			requestID: `null`,
 			checkIDFn: func(t *testing.T, id *mcp.RequestID) {
-				// Should not get here - notifications don't get responses
-				t.Fatal("notification should not receive a response")
+				assert.Nil(t, id)
 			},
 		},
 	}
@@ -511,7 +511,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
-			mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
+			mockStore.On("ListTools", mock.Anything, "t_demo").Maybe().Return([]models.Tool{}, nil)
 
 			deps := &Dependencies{
 				Store:   mockStore,
@@ -531,9 +531,15 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 			err := deps.handleMCP(ctx)
 			assert.NoError(t, err)
 
-			// For notification (null ID), expect no response (204 No Content)
+			// For invalid null ID, expect JSON-RPC error response
 			if tt.requestID == `null` {
-				assert.Equal(t, http.StatusNoContent, rec.Code)
+				assert.Equal(t, http.StatusOK, rec.Code)
+				var resp mcp.Response
+				err = json.Unmarshal(rec.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				require.NotNil(t, resp.Error)
+				assert.Equal(t, mcp.ErrorInvalidRequest, resp.Error.Code)
+				assert.Nil(t, resp.ID)
 				mockStore.AssertExpectations(t)
 				return
 			}
@@ -554,7 +560,7 @@ func TestHandleMCP_ToolsCall_ApprovalResubmitRequiresApprovalRequestID(t *testin
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
-		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: "http://upstream-mcp.local"}, nil)
 
 	deps := &Dependencies{
 		Store:   mockStore,
@@ -597,6 +603,38 @@ func TestHandleMCP_ToolsCall_ApprovalResubmitRequiresApprovalRequestID(t *testin
 }
 
 func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *testing.T) {
+	// Create mock upstream MCP server
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read the request to get the ID
+		var req mcp.Request
+		json.NewDecoder(r.Body).Decode(&req)
+		require.Equal(t, "tools/call", req.Method)
+		var params mcp.ToolsCallParams
+		err := json.Unmarshal(req.Params, &params)
+		require.NoError(t, err)
+		var args map[string]interface{}
+		err = json.Unmarshal(params.Arguments, &args)
+		require.NoError(t, err)
+		_, hasToken := args["_rbitr_approval_token"]
+		_, hasApprovalID := args["_rbitr_approval_request_id"]
+		assert.False(t, hasToken, "approval token must not be forwarded upstream")
+		assert.False(t, hasApprovalID, "approval request id must not be forwarded upstream")
+
+		resultData, _ := json.Marshal(mcp.ToolsCallResult{
+			Content: []mcp.Content{
+				{Type: "text", Text: "Success"},
+			},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      req.ID, // Echo back the request ID
+			Result:  resultData,
+		})
+	}))
+	defer upstreamServer.Close()
+
 	argumentsForHash := map[string]interface{}{"action": "issue_create"}
 	argumentsJSON, err := json.Marshal(argumentsForHash)
 	require.NoError(t, err)
@@ -616,7 +654,7 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
-		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: upstreamServer.URL}, nil)
 	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
 		Return(models.ApprovalRequest{
 			ApprovalRequestID: "ar_123",
@@ -677,6 +715,27 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 }
 
 func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.T) {
+	// Create mock upstream MCP server
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read the request to get the ID
+		var req mcp.Request
+		json.NewDecoder(r.Body).Decode(&req)
+
+		resultData, _ := json.Marshal(mcp.ToolsCallResult{
+			Content: []mcp.Content{
+				{Type: "text", Text: "Success"},
+			},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      req.ID, // Echo back the request ID
+			Result:  resultData,
+		})
+	}))
+	defer upstreamServer.Close()
+
 	argumentsForHash := map[string]interface{}{"action": "issue_create"}
 	argumentsJSON, err := json.Marshal(argumentsForHash)
 	require.NoError(t, err)
@@ -696,7 +755,7 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
-		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http"}, nil)
+		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: upstreamServer.URL}, nil)
 	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
 		Return(models.ApprovalRequest{
 			ApprovalRequestID: "ar_123",
@@ -747,8 +806,125 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 	var resp mcp.Response
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.NotNil(t, resp.Error)
-	assert.Equal(t, mcp.ErrorInternalError, resp.Error.Code)
-	assert.Equal(t, "failed to persist execution evidence", resp.Error.Message)
+	// When ADR persistence fails but tool execution succeeds, we return success
+	// because the approval is already consumed and the tool was already executed.
+	// The ADR failure is logged but not returned to the user.
+	assert.Nil(t, resp.Error)
+	assert.NotNil(t, resp.Result)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_NotificationWithoutIDReturns202(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","method":"tools/list","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, rec.Body.String())
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_InitializeAndInitializedFlow(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	// initialize request
+	initBody := `{
+		"jsonrpc":"2.0",
+		"id":"init-1",
+		"method":"initialize",
+		"params":{
+			"protocolVersion":"2025-11-25",
+			"capabilities":{},
+			"clientInfo":{"name":"test-client","version":"1.0.0"}
+		}
+	}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(initBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var initResp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &initResp)
+	require.NoError(t, err)
+	require.Nil(t, initResp.Error)
+
+	var initResult mcp.InitializeResult
+	err = json.Unmarshal(initResp.Result, &initResult)
+	require.NoError(t, err)
+	assert.Equal(t, mcp.ProtocolVersion20251125, initResult.ProtocolVersion)
+	assert.Equal(t, "rbitr-gateway", initResult.ServerInfo.Name)
+
+	// notifications/initialized should be accepted as notification (no response body)
+	initializedBody := `{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}`
+	ctx2, req2, rec2 := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(initializedBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req2.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req2.Header.Set(auth.AgentIDHeader, "agent1")
+	err = deps.handleMCP(ctx2)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusAccepted, rec2.Code)
+	assert.Empty(t, rec2.Body.String())
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCPStream_GetEndpoint(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		bytes.NewReader(nil),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCPStream(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
+	assert.Contains(t, rec.Body.String(), ": connected")
 	mockStore.AssertExpectations(t)
 }

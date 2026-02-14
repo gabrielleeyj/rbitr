@@ -55,9 +55,9 @@ func TestRequestID_UnmarshalJSON(t *testing.T) {
 		expectErr  bool
 	}{
 		{
-			name:       "null",
-			input:      "null",
-			expectNull: true,
+			name:      "null is invalid for request IDs",
+			input:     "null",
+			expectErr: true,
 		},
 		{
 			name:      "string",
@@ -131,14 +131,6 @@ func TestRequest_RoundTrip(t *testing.T) {
 				ID:      NewNumberID(1),
 				Method:  "tools/call",
 				Params:  json.RawMessage(`{"name":"jira","arguments":{}}`),
-			},
-		},
-		{
-			name: "with null id",
-			req: Request{
-				JSONRPC: "2.0",
-				ID:      NewNullID(),
-				Method:  "tools/list",
 			},
 		},
 	}

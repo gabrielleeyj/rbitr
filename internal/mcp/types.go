@@ -45,7 +45,9 @@ type Response struct {
 	Error   *ErrorObject    `json:"error,omitempty"`
 }
 
-// RequestID represents a JSON-RPC request ID that can be a string, number, or null.
+// RequestID represents a JSON-RPC request ID.
+// For requests, MCP expects string or integer IDs (notifications omit the id field).
+// For responses, null can still be used per JSON-RPC error handling.
 type RequestID struct {
 	str    *string
 	num    *float64
@@ -100,8 +102,10 @@ func (r RequestID) MarshalJSON() ([]byte, error) {
 func (r *RequestID) UnmarshalJSON(data []byte) error {
 	// Check for null
 	if string(data) == "null" {
-		r.isNull = true
-		return nil
+		return &ErrorObject{
+			Code:    ErrorInvalidRequest,
+			Message: "id must be string or number",
+		}
 	}
 
 	// Try to unmarshal as string
@@ -120,7 +124,7 @@ func (r *RequestID) UnmarshalJSON(data []byte) error {
 
 	return &ErrorObject{
 		Code:    ErrorInvalidRequest,
-		Message: "id must be string, number, or null",
+		Message: "id must be string or number",
 	}
 }
 
@@ -155,8 +159,15 @@ const (
 
 // MCP method names
 const (
-	MethodToolsList = "tools/list"
-	MethodToolsCall = "tools/call"
+	MethodInitialize               = "initialize"
+	MethodNotificationsInitialized = "notifications/initialized"
+	MethodToolsList                = "tools/list"
+	MethodToolsCall                = "tools/call"
+)
+
+// MCP protocol versions.
+const (
+	ProtocolVersion20251125 = "2025-11-25"
 )
 
 // ToolsListResult represents the result of a tools/list call.
@@ -169,6 +180,26 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
+}
+
+// Implementation describes MCP client/server implementation metadata.
+type Implementation struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// InitializeParams represents the params for an initialize request.
+type InitializeParams struct {
+	ProtocolVersion string          `json:"protocolVersion"`
+	Capabilities    json.RawMessage `json:"capabilities,omitempty"`
+	ClientInfo      *Implementation `json:"clientInfo,omitempty"`
+}
+
+// InitializeResult represents the result for an initialize response.
+type InitializeResult struct {
+	ProtocolVersion string                 `json:"protocolVersion"`
+	Capabilities    map[string]interface{} `json:"capabilities"`
+	ServerInfo      Implementation         `json:"serverInfo"`
 }
 
 // ToolsCallParams represents the params for a tools/call request.

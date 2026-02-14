@@ -33,12 +33,9 @@ func TestExtractRequestID(t *testing.T) {
 			},
 		},
 		{
-			name:     "valid request with null id",
+			name:     "null id is invalid and not extracted",
 			input:    `{"jsonrpc":"2.0","id":null,"method":"test"}`,
-			expectID: true,
-			checkID: func(t *testing.T, id *RequestID) {
-				assert.True(t, id.IsNull())
-			},
+			expectID: false,
 		},
 		{
 			name:     "invalid jsonrpc version but valid id",

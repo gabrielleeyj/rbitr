@@ -50,18 +50,14 @@ func TestValidateAndParseRequest(t *testing.T) {
 			},
 		},
 		{
-			name: "valid request with null id (notification)",
+			name: "null id is invalid (notifications must omit id)",
 			input: `{
 				"jsonrpc": "2.0",
 				"id": null,
 				"method": "tools/list"
 			}`,
-			validate: func(t *testing.T, req *Request) {
-				assert.Equal(t, "2.0", req.JSONRPC)
-				assert.Equal(t, "tools/list", req.Method)
-				require.NotNil(t, req.ID)
-				assert.True(t, req.ID.IsNull())
-			},
+			expectErr: true,
+			errCode:   ErrorInvalidRequest,
 		},
 		{
 			name: "valid request without params",

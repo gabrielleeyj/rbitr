@@ -26,6 +26,7 @@ func NewREST(responseLimit int64) *REST {
 	}
 }
 
+// Execute forwards the http request from the original source to the destination.
 func (r *REST) Execute(ctx context.Context, req Request) (Response, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, bytes.NewReader(req.Body))
 	if err != nil {
