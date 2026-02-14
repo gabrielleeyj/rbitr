@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -256,18 +257,26 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 		name            string
 		method          string
 		params          string
+		setupMock       func(*store.MockStoreAPI)
 		expectedErrCode int
 	}{
 		{
-			name:            "tools/call with missing tool name",
-			method:          "tools/call",
-			params:          `{}`,
+			name:   "tools/call with missing tool name",
+			method: "tools/call",
+			params: `{}`,
+			setupMock: func(m *store.MockStoreAPI) {
+				// No extra mocks needed
+			},
 			expectedErrCode: mcp.ErrorInvalidParams,
 		},
 		{
-			name:            "unknown method",
-			method:          "unknown/method",
-			params:          `{}`,
+			name:   "unknown method with no MCP upstream",
+			method: "unknown/method",
+			params: `{}`,
+			setupMock: func(m *store.MockStoreAPI) {
+				// Pass-through needs ListTools to find upstream - return no MCP tools
+				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
+			},
 			expectedErrCode: mcp.ErrorMethodNotFound,
 		},
 	}
@@ -277,6 +286,7 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+			tt.setupMock(mockStore)
 
 			deps := &Dependencies{
 				Store:   mockStore,
@@ -926,5 +936,213 @@ func TestHandleMCPStream_GetEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
 	assert.Contains(t, rec.Body.String(), ": connected")
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
+	// Create mock upstream MCP server that echoes back a result for resources/list
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req mcp.Request
+		json.NewDecoder(r.Body).Decode(&req)
+		assert.Equal(t, "resources/list", req.Method)
+
+		resultData, _ := json.Marshal(map[string]interface{}{
+			"resources": []interface{}{},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result:  resultData,
+		})
+	}))
+	defer upstreamServer.Close()
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:         "mcp_tool",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: upstreamServer.URL,
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"pt-1","method":"resources/list","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.Nil(t, resp.Error)
+	assert.NotNil(t, resp.Result)
+	assert.NotNil(t, resp.ID)
+	require.NotNil(t, resp.ID.String())
+	assert.Equal(t, "pt-1", *resp.ID.String())
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
+	// Create mock upstream that always fails
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("internal server error"))
+	}))
+	defer upstreamServer.Close()
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:         "mcp_tool",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: upstreamServer.URL,
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"pt-2","method":"resources/list","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	// Upstream HTTP 500 is handled by MCPClient as a JSON-RPC error response
+	// (not a Go error), so it's returned as an upstream error response
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, mcp.ErrorInternalError, resp.Error.Code)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
+	// Create mock upstream MCP server
+	var upstreamCalled atomic.Bool
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstreamServer.Close()
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:         "mcp_tool",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: upstreamServer.URL,
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	// Notification: no "id" field
+	reqBody := `{"jsonrpc":"2.0","method":"notifications/custom","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	// Notifications return 202 with no body
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+	assert.Empty(t, rec.Body.String())
+
+	// Verify upstream was actually called (pass-through forwards the notification)
+	// even though handleMCP suppresses the response for notifications
+	assert.True(t, upstreamCalled.Load(), "upstream should have been called for notification pass-through")
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+	// Only non-MCP tools available - should fall back to method not found
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:    "rest_tool",
+			TenantID:  "t_demo",
+			Transport: "http",
+			BaseURL:   "http://localhost:8090",
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"pt-3","method":"prompts/list","params":{}}`
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.NotNil(t, resp.Error)
+	assert.Equal(t, mcp.ErrorMethodNotFound, resp.Error.Code)
+
 	mockStore.AssertExpectations(t)
 }

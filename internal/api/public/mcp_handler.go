@@ -192,9 +192,52 @@ func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, age
 		return d.handleToolsCall(c, tenant, agentID, req)
 
 	default:
-		// Unknown method
+		// Unknown method - attempt pass-through to upstream MCP server
+		return d.handlePassThrough(c, tenant, req)
+	}
+}
+
+// handlePassThrough forwards unknown MCP methods to the upstream MCP server
+// without governance (no policy eval, no ADR, no approval workflow).
+func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
+	ctx := c.Request().Context()
+
+	// Find an MCP upstream to forward to
+	tools, err := d.Store.ListTools(ctx, tenant.TenantID)
+	if err != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
+	}
+
+	var upstreamURL string
+	for _, tool := range tools {
+		if tool.Transport == "mcp_streamable_http" && tool.MCPUpstreamURL != "" {
+			upstreamURL = tool.MCPUpstreamURL
+			break
+		}
+	}
+
+	if upstreamURL == "" {
 		return mcp.NewErrorResponse(req.ID, mcp.NewMethodNotFoundError(req.Method)), nil
 	}
+
+	// Forward request as-is to upstream
+	mcpClient := connector.NewMCPClient(30 * time.Second)
+	start := time.Now()
+	upstreamResp, err := mcpClient.ForwardRequest(ctx, upstreamURL, req)
+	latencyMs := time.Since(start).Milliseconds()
+
+	if d.Metrics != nil {
+		d.Metrics.ToolLatencyMs.Observe(float64(latencyMs))
+	}
+
+	if err != nil {
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorInternalError,
+			Message: "upstream request failed",
+		}), nil
+	}
+
+	return upstreamResp, nil
 }
 
 func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error) {
