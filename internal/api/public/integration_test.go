@@ -93,12 +93,14 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 			defer db.Close()
 			sm.MatchExpectationsInOrder(false)
 
-			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 				WithArgs(sqlmock.AnyArg()).
-				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 			sm.ExpectQuery(regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)).
 				WithArgs("t_demo", sqlmock.AnyArg()).

@@ -41,18 +41,15 @@ func (d *Dependencies) handleMCP(c *echo.Context) error {
 	c.Set(telemetry.CtxRequestID, requestID)
 	c.Response().Header().Set("X-Request-Id", requestID)
 
-	// Authenticate tenant using X-Tenant-Key header
-	tenantKey := c.Request().Header.Get(auth.TenantKeyHeader)
-	agentID := c.Request().Header.Get(auth.AgentIDHeader)
-
-	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	tenant, agentID, err := d.authenticateTenantRequest(c)
 	if err != nil {
-		// Return JSON-RPC error for auth failures
-		errObj := &mcp.ErrorObject{
-			Code:    mcp.ErrorUnauthorized,
-			Message: "authentication failed",
+		code := mcp.ErrorUnauthorized
+		msg := "authentication failed"
+		if errors.Is(err, auth.ErrInvalidAgentID) {
+			code = mcp.ErrorInvalidParams
+			msg = "invalid agent_id"
 		}
-		return writeJSONRPCError(c, nil, errObj)
+		return writeJSONRPCError(c, nil, &mcp.ErrorObject{Code: code, Message: msg})
 	}
 
 	// Verify tenant_id matches authenticated tenant
@@ -151,9 +148,7 @@ func (d *Dependencies) handleMCPStream(c *echo.Context) error {
 	c.Set(telemetry.CtxRequestID, requestID)
 	c.Response().Header().Set("X-Request-Id", requestID)
 
-	tenantKey := c.Request().Header.Get(auth.TenantKeyHeader)
-	agentID := c.Request().Header.Get(auth.AgentIDHeader)
-	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	tenant, agentID, err := d.authenticateTenantRequest(c)
 	if err != nil {
 		return c.NoContent(http.StatusUnauthorized)
 	}
@@ -370,7 +365,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	}
 
 	// Verify tool exists before any side effects (governance, approvals, ADRs)
-	tool, err := d.Store.GetTool(ctx, tenant.TenantID, toolID)
+	tool, err := d.getToolCached(ctx, tenant.TenantID, toolID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError(fmt.Sprintf("tool not found: %s", toolID))), nil
@@ -467,7 +462,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	}
 
 	// Check for risk overrides
-	if overrideRisk, lookupErr := d.Store.GetRiskOverride(ctx, tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
+	if overrideRisk, lookupErr := d.getRiskOverrideCached(ctx, tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
 		classificationResult.ActionRisk = overrideRisk
 	} else if !errors.Is(lookupErr, store.ErrNotFound) {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("risk override lookup failed")), nil
@@ -592,6 +587,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			ToolID:            toolID,
 			ActionType:        classificationResult.ActionType,
 			RequestHash:       requestHash,
+			RequestContext:    buildMCPApprovalRequestContext(toolID, argumentsMap),
 			Status:            "PENDING",
 			ApprovalTokenHash: utils.HashString(token),
 			ExpiresAt:         expiresAt,
@@ -716,7 +712,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInvalidParamsError("_rbitr_approval_request_id is required when _rbitr_approval_token is provided")), nil
 	}
 
-	approval, err := d.Store.GetApprovalRequest(ctx, tenant.TenantID, approvalRequestID)
+	approval, err := d.Store.GetApprovalForExecution(ctx, tenant.TenantID, approvalRequestID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
@@ -729,6 +725,22 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			}), nil
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to lookup approval")), nil
+	}
+
+	tokenHash := utils.HashString(approvalToken)
+	// Validate approval token.
+	if !utils.SecureCompare(tokenHash, approval.ApprovalTokenHash) {
+		if d.Metrics != nil {
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("token_invalid").Inc()
+		}
+		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorDeniedByPolicy,
+			Message: "approval token invalid",
+			Data: mustMarshalJSON(map[string]interface{}{
+				"reason":              "token_invalid",
+				"approval_request_id": approval.ApprovalRequestID,
+			}),
+		}), nil
 	}
 
 	// Verify request hash matches to prevent token reuse across different requests
@@ -745,20 +757,6 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	// Validate approval state
 	now := time.Now().UTC()
-	if approval.Status == "EXECUTED" {
-		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
-		}
-		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
-			Code:    mcp.ErrorDeniedByPolicy,
-			Message: "approval already executed",
-			Data: mustMarshalJSON(map[string]interface{}{
-				"reason":              "already_executed",
-				"approval_request_id": approval.ApprovalRequestID,
-			}),
-		}), nil
-	}
-
 	if approval.Status == "EXPIRED" || now.After(approval.ExpiresAt) {
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("expired").Inc()
@@ -775,31 +773,102 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		}), nil
 	}
 
-	if approval.Status != "APPROVED" {
+	switch approval.Status {
+	case "APPROVED":
+		if err := d.Store.ClaimApprovalExecution(ctx, tenant.TenantID, approval.ApprovalRequestID, tokenHash, requestHash, now); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+					Code:    mcp.ErrorDeniedByPolicy,
+					Message: "approval not found",
+					Data: mustMarshalJSON(map[string]interface{}{
+						"reason":              "approval_not_found",
+						"approval_request_id": approvalRequestID,
+					}),
+				}), nil
+			}
+			if errors.Is(err, store.ErrInvalidState) {
+				latest, stateErr := d.Store.GetApprovalForExecution(ctx, tenant.TenantID, approvalRequestID)
+				if stateErr != nil {
+					return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to refresh approval state")), nil
+				}
+				if latest.Status == "EXECUTING" {
+					if !approvalRetryAllowed(latest, now) {
+						if d.Metrics != nil {
+							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
+						}
+						return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+							Code:    mcp.ErrorDeniedByPolicy,
+							Message: "approval retry window exceeded",
+							Data: mustMarshalJSON(map[string]interface{}{
+								"reason":               "executing_retry_window_exceeded",
+								"approval_request_id":  latest.ApprovalRequestID,
+								"retry_window_seconds": int(approvalExecutionRetryWindow.Seconds()),
+							}),
+						}), nil
+					}
+					approval = latest
+				} else {
+					if d.Metrics != nil {
+						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_claimed").Inc()
+					}
+					return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+						Code:    mcp.ErrorDeniedByPolicy,
+						Message: "approval already claimed",
+						Data: mustMarshalJSON(map[string]interface{}{
+							"reason":              "already_claimed",
+							"status":              latest.Status,
+							"approval_request_id": latest.ApprovalRequestID,
+						}),
+					}), nil
+				}
+			} else {
+				return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to claim approval")), nil
+			}
+		} else {
+			approval.Status = "EXECUTING"
+			approval.ExecutingAt = &now
+			if approval.ExecutionID == "" {
+				approval.ExecutionID = approval.ApprovalRequestID
+			}
+		}
+	case "EXECUTING":
+		if !approvalRetryAllowed(approval, now) {
+			if d.Metrics != nil {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
+			}
+			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+				Code:    mcp.ErrorDeniedByPolicy,
+				Message: "approval retry window exceeded",
+				Data: mustMarshalJSON(map[string]interface{}{
+					"reason":               "executing_retry_window_exceeded",
+					"approval_request_id":  approval.ApprovalRequestID,
+					"retry_window_seconds": int(approvalExecutionRetryWindow.Seconds()),
+				}),
+			}), nil
+		}
+	case "EXECUTED":
 		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("not_approved").Inc()
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
-			Message: "approval not approved",
+			Message: "approval already claimed",
 			Data: mustMarshalJSON(map[string]interface{}{
-				"reason":              "not_approved",
+				"reason":              "already_claimed",
 				"status":              approval.Status,
 				"approval_request_id": approval.ApprovalRequestID,
 			}),
 		}), nil
-	}
-
-	// Validate approval token
-	if utils.HashString(approvalToken) != approval.ApprovalTokenHash {
+	default:
 		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("token_invalid").Inc()
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_claimed").Inc()
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
-			Message: "approval token invalid",
+			Message: "approval already claimed",
 			Data: mustMarshalJSON(map[string]interface{}{
-				"reason":              "token_invalid",
+				"reason":              "already_claimed",
+				"status":              approval.Status,
 				"approval_request_id": approval.ApprovalRequestID,
 			}),
 		}), nil
@@ -809,8 +878,6 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 	c.Set(telemetry.CtxActionType, approval.ActionType)
 	c.Set(telemetry.CtxDecision, "ALLOW")
 
-	// TODO Story 4: Execute actual tool call via upstream MCP server
-	// For now, return success response indicating execution would happen
 	decisionID := "d_" + uuid.NewString()
 	ruleID := approval.RuleID
 	if ruleID == "" {
@@ -837,8 +904,9 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 	reasons := []models.DecisionReason{{Code: "APPROVED", Message: "Approved execution"}}
 
 	// Get tool configuration for upstream forwarding
-	tool, err := d.Store.GetTool(ctx, tenant.TenantID, toolID)
+	tool, err := d.getToolCached(ctx, tenant.TenantID, toolID)
 	if err != nil {
+		_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, "UPSTREAM_ERROR", now)
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 		}
@@ -857,6 +925,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	// Check if tool is configured for MCP upstream
 	if tool.MCPUpstreamURL == "" {
+		_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, "UPSTREAM_ERROR", now)
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 		}
@@ -870,28 +939,6 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		}), nil
 	}
 
-	// Mark approval as executed FIRST (before tool execution) to prevent race condition
-	// If two concurrent requests both pass validation, only one will succeed here
-	executedAt := time.Now().UTC()
-	if err := d.Store.MarkApprovalExecuted(ctx, tenant.TenantID, approval.ApprovalRequestID, requestID, decisionID, executedAt); err != nil {
-		if d.Metrics != nil {
-			d.Metrics.ErrorsTotal.Inc()
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("mark_executed_failed").Inc()
-		}
-		// Check if this is a concurrent execution (already executed)
-		if errors.Is(err, store.ErrInvalidState) {
-			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
-				Code:    mcp.ErrorDeniedByPolicy,
-				Message: "approval already executed",
-				Data: mustMarshalJSON(map[string]interface{}{
-					"reason":              "already_executed",
-					"approval_request_id": approval.ApprovalRequestID,
-				}),
-			}), nil
-		}
-		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to mark approval executed")), nil
-	}
-
 	// Execute tool call via upstream MCP server
 	mcpClient := connector.NewMCPClient(30 * time.Second)
 	toolStart := time.Now()
@@ -902,14 +949,60 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
 	}
 
-	// Compute response hash for audit trail
-	var responseHash string
-	if err == nil && upstreamResp.Result != nil {
+	// Handle upstream execution error
+	if err != nil {
+		errorCode := "UPSTREAM_ERROR"
+		reason := "upstream_error"
+		if isUpstreamTimeoutError(err) {
+			errorCode = "UPSTREAM_TIMEOUT"
+			reason = "upstream_timeout"
+		}
+		_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, errorCode, time.Now().UTC())
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+			if errorCode == "UPSTREAM_TIMEOUT" {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_timeout").Inc()
+			} else {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_failed").Inc()
+			}
+		}
+		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorInternalError,
+			Message: "upstream tool execution failed",
+			Data: mustMarshalJSON(map[string]interface{}{
+				"reason":              reason,
+				"approval_request_id": approval.ApprovalRequestID,
+				"execution_id":        approvalExecutionID(approval),
+			}),
+		}), nil
+	}
+
+	executedAt := time.Now().UTC()
+	if err := d.Store.MarkApprovalExecuted(ctx, tenant.TenantID, approval.ApprovalRequestID, requestID, decisionID, executedAt); err != nil {
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("mark_executed_failed").Inc()
+		}
+		if errors.Is(err, store.ErrInvalidState) {
+			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+				Code:    mcp.ErrorDeniedByPolicy,
+				Message: "approval already claimed",
+				Data: mustMarshalJSON(map[string]interface{}{
+					"reason":              "already_claimed",
+					"approval_request_id": approval.ApprovalRequestID,
+				}),
+			}), nil
+		}
+		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to mark approval executed")), nil
+	}
+
+	// Compute response hash for audit trail.
+	responseHash := ""
+	if upstreamResp.Result != nil {
 		responseBytes, _ := json.Marshal(upstreamResp.Result)
 		responseHash = utils.HashBody(responseBytes)
 	}
 
-	// Now write ADR after successful state transition (with response hash if available)
 	adr := models.ActionDecisionRecord{
 		DecisionID:        decisionID,
 		RequestID:         requestID,
@@ -934,7 +1027,6 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		ApprovalRequestID: approval.ApprovalRequestID,
 		CreatedAt:         executedAt,
 	}
-
 	if err := d.Store.InsertADR(ctx, adr); err != nil {
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
@@ -945,24 +1037,6 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			"approval_request_id", approval.ApprovalRequestID,
 			"decision_id", decisionID,
 		)
-		// Continue - approval already consumed, tool already executed
-		// Return upstream response or error
-	}
-
-	// Handle upstream execution error
-	if err != nil {
-		if d.Metrics != nil {
-			d.Metrics.ErrorsTotal.Inc()
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_failed").Inc()
-		}
-		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
-			Code:    mcp.ErrorInternalError,
-			Message: "upstream tool execution failed",
-			Data: mustMarshalJSON(map[string]interface{}{
-				"reason":              "upstream_error",
-				"approval_request_id": approval.ApprovalRequestID,
-			}),
-		}), nil
 	}
 
 	if d.Metrics != nil {
@@ -973,6 +1047,26 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	// Return upstream response directly
 	return upstreamResp, nil
+}
+
+func approvalExecutionID(approval models.ApprovalRequest) string {
+	if approval.ExecutionID != "" {
+		return approval.ExecutionID
+	}
+	return approval.ApprovalRequestID
+}
+
+func buildMCPApprovalRequestContext(toolID string, arguments map[string]interface{}) map[string]any {
+	copiedArgs := make(map[string]any, len(arguments))
+	for key, value := range arguments {
+		copiedArgs[key] = value
+	}
+	return map[string]any{
+		"transport": "mcp",
+		"method":    "tools/call",
+		"tool_name": toolID,
+		"arguments": copiedArgs,
+	}
 }
 
 func buildForwardToolsCallRequest(req *mcp.Request, toolName string, argumentsJSON []byte) (*mcp.Request, error) {

@@ -162,6 +162,7 @@ export interface ApprovalRequest {
   tool_id: string;
   action_type: string;
   request_hash: string;
+  request_context?: Record<string, unknown>;
   status: string;
   expires_at: string;
   created_at: string;

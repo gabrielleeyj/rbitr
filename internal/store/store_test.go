@@ -24,11 +24,11 @@ func TestStoreGetTenantByKeyHash(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t1", "Tenant"),
+			rows: sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t1", "Tenant", true),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tenant_id", "name"}),
+			rows:      sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -39,10 +39,12 @@ func TestStoreGetTenantByKeyHash(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+			query := regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)
 			mock.ExpectQuery(query).WithArgs("hash").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -1044,8 +1046,8 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
-		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)
+		request_decision_id, action_summary, risk, rule_id, request_context, reasons
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`)
 	mock.ExpectExec(query).
 		WithArgs(
 			"ar1",
@@ -1056,6 +1058,7 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 			"hash",
 			"PENDING",
 			"",
+			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
@@ -1141,7 +1144,7 @@ func TestStoreListApprovalRequests(t *testing.T) {
 			query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE ` + tc.query + `
 		ORDER BY created_at DESC
@@ -1150,12 +1153,12 @@ func TestStoreListApprovalRequests(t *testing.T) {
 				"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 				"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
 				"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
-				"action_summary", "risk", "rule_id", "reasons",
+				"action_summary", "risk", "rule_id", "request_context", "reasons",
 			}).AddRow(
 				"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
 				"token", time.Now(), time.Now(), "p_v1", nil, nil,
 				nil, nil, nil, nil, nil,
-				nil, nil, nil, []byte(`[]`),
+				nil, nil, nil, []byte(`{"path":"/refund"}`), []byte(`[]`),
 			)
 			mock.ExpectQuery(query).WithArgs(toDriverValues(tc.args)...).WillReturnRows(rows)
 
@@ -1169,6 +1172,7 @@ func TestStoreListApprovalRequests(t *testing.T) {
 			results, err := st.ListApprovalRequests(context.Background(), "t1", tc.status, limit, offset)
 			require.NoError(t, err)
 			require.Len(t, results, 1)
+			require.Equal(t, "/refund", results[0].RequestContext["path"])
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
@@ -1190,7 +1194,7 @@ func TestStoreGetApprovalRequestNotFound(t *testing.T) {
 	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)
 	mock.ExpectQuery(query).WithArgs("t1", "ar1").WillReturnError(sql.ErrNoRows)
@@ -1227,16 +1231,16 @@ func TestScanApprovalRequestNulls(t *testing.T) {
 	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons`)
+		risk, rule_id, request_context, reasons`)
 	rows := sqlmock.NewRows([]string{
 		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
 		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
-		"action_summary", "risk", "rule_id", "reasons",
+		"action_summary", "risk", "rule_id", "request_context", "reasons",
 	}).AddRow(
 		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
 		"token", time.Now(), time.Now(), nil, nil, nil,
-		nil, nil, nil, nil, nil, nil, nil, nil, []byte(`[]`),
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, []byte(`[]`),
 	)
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
@@ -1257,16 +1261,16 @@ func TestScanApprovalRequestInvalidReasons(t *testing.T) {
 	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons`)
+		risk, rule_id, request_context, reasons`)
 	rows := sqlmock.NewRows([]string{
 		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
 		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
-		"action_summary", "risk", "rule_id", "reasons",
+		"action_summary", "risk", "rule_id", "request_context", "reasons",
 	}).AddRow(
 		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
 		"token", time.Now(), time.Now(), nil, nil, nil,
-		nil, nil, nil, nil, nil, nil, nil, nil, []byte(`{bad`),
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, []byte(`{bad`),
 	)
 	mock.ExpectQuery(query).WillReturnRows(rows)
 
@@ -1368,6 +1372,54 @@ func TestStoreMarkApprovalExecutedInvalidState(t *testing.T) {
 	st := New(db)
 	err = st.MarkApprovalExecuted(context.Background(), "t1", "ar1", "req1", "dec1", time.Now().UTC())
 	require.ErrorIs(t, err, ErrInvalidState)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreClaimApprovalExecution(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), "t1", "ar1", sqlmock.AnyArg(), "token_hash", "request_hash").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.ClaimApprovalExecution(context.Background(), "t1", "ar1", "token_hash", "request_hash", time.Now().UTC())
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreClaimApprovalExecutionInvalidState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), "t1", "ar1", sqlmock.AnyArg(), "token_hash", "request_hash").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT status FROM rbitr.approval_requests").
+		WithArgs("t1", "ar1").
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("EXECUTING"))
+
+	st := New(db)
+	err = st.ClaimApprovalExecution(context.Background(), "t1", "ar1", "token_hash", "request_hash", time.Now().UTC())
+	require.ErrorIs(t, err, ErrInvalidState)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreMarkApprovalExecutionFailed(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec("UPDATE rbitr.approval_requests").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "t1", "ar1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.MarkApprovalExecutionFailed(context.Background(), "t1", "ar1", "UPSTREAM_ERROR", time.Now().UTC())
+	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -2423,7 +2475,7 @@ func TestStoreListApprovalsExpiring(t *testing.T) {
 	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE status IN ('PENDING','APPROVED')
 			AND expires_at > $1
@@ -2433,11 +2485,11 @@ func TestStoreListApprovalsExpiring(t *testing.T) {
 		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
 		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
-		"action_summary", "risk", "rule_id", "reasons",
+		"action_summary", "risk", "rule_id", "request_context", "reasons",
 	}).AddRow(
 		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
 		"token", now.Add(2*time.Minute), now, "p_v1", nil, nil,
-		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`[]`),
+		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`{"http_method":"POST"}`), []byte(`[]`),
 	)
 	mock.ExpectQuery(query).WithArgs(now, cutoff).WillReturnRows(rows)
 
@@ -2457,7 +2509,7 @@ func TestStoreListApprovalsExpired(t *testing.T) {
 	query := regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE status IN ('PENDING','APPROVED')
 			AND expires_at <= $1
@@ -2466,11 +2518,11 @@ func TestStoreListApprovalsExpired(t *testing.T) {
 		"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 		"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by",
 		"decision_comment", "executed_at", "executed_request_id", "executed_decision_id", "request_decision_id",
-		"action_summary", "risk", "rule_id", "reasons",
+		"action_summary", "risk", "rule_id", "request_context", "reasons",
 	}).AddRow(
 		"ar1", "t1", "a1", "tool", "TYPE", "hash", "PENDING",
 		"token", now.Add(-time.Minute), now, "p_v1", nil, nil,
-		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`[]`),
+		nil, nil, nil, nil, nil, "Summary", "HIGH", "rule", []byte(`{"http_method":"POST"}`), []byte(`[]`),
 	)
 	mock.ExpectQuery(query).WithArgs(now).WillReturnRows(rows)
 

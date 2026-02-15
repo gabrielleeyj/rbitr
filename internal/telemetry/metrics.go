@@ -16,6 +16,9 @@ type Metrics struct {
 	NotificationsSentTotal       *prometheus.CounterVec
 	NotificationsSuppressedTotal *prometheus.CounterVec
 	NotificationsLatencyMs       *prometheus.HistogramVec
+	CacheHitsTotal               *prometheus.CounterVec
+	CacheMissesTotal             *prometheus.CounterVec
+	TenantAuthFallbackTotal      prometheus.Counter
 }
 
 func NewMetrics() *Metrics {
@@ -75,6 +78,18 @@ func NewMetrics() *Metrics {
 			Help:    "Notification delivery latency in ms by channel.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"channel"}),
+		CacheHitsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "config_cache_hits_total",
+			Help: "Total cache hits by cache name.",
+		}, []string{"cache"}),
+		CacheMissesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "config_cache_misses_total",
+			Help: "Total cache misses by cache name.",
+		}, []string{"cache"}),
+		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "tenant_auth_fallback_total",
+			Help: "Total requests authenticated via deprecated X-Tenant-Key fallback.",
+		}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -90,6 +105,9 @@ func NewMetrics() *Metrics {
 		m.NotificationsSentTotal,
 		m.NotificationsSuppressedTotal,
 		m.NotificationsLatencyMs,
+		m.CacheHitsTotal,
+		m.CacheMissesTotal,
+		m.TenantAuthFallbackTotal,
 	)
 	return m
 }

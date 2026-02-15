@@ -17,7 +17,7 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 
 	t.Run("GetTenantByKeyHash", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		storeMock.EXPECT().GetTenantByKeyHash(ctx, "hash").Return(models.Tenant{TenantID: "t1"}, nil)
+		storeMock.EXPECT().GetTenantByKeyHash(ctx, "hash").Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 		_, _ = storeMock.GetTenantByKeyHash(ctx, "hash")
 	})
 

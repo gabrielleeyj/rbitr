@@ -19,7 +19,7 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 		call := storeMock.EXPECT().GetTenantByKeyHash(ctx, "hash")
 		call.Run(func(context.Context, string) {})
 		call.RunAndReturn(func(context.Context, string) (models.Tenant, error) {
-			return models.Tenant{TenantID: "t1"}, nil
+			return models.Tenant{TenantID: "t1", Enabled: true}, nil
 		})
 		_, _ = storeMock.GetTenantByKeyHash(ctx, "hash")
 	})

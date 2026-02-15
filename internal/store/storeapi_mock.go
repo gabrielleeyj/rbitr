@@ -120,6 +120,87 @@ func (_c *MockStoreAPI_ApproveApprovalRequest_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// ClaimApprovalExecution provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ClaimApprovalExecution(ctx context.Context, tenantID string, approvalRequestID string, tokenHash string, requestHash string, executingAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, tokenHash, requestHash, executingAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClaimApprovalExecution")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, tokenHash, requestHash, executingAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_ClaimApprovalExecution_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClaimApprovalExecution'
+type MockStoreAPI_ClaimApprovalExecution_Call struct {
+	*mock.Call
+}
+
+// ClaimApprovalExecution is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - tokenHash string
+//   - requestHash string
+//   - executingAt time.Time
+func (_e *MockStoreAPI_Expecter) ClaimApprovalExecution(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, tokenHash interface{}, requestHash interface{}, executingAt interface{}) *MockStoreAPI_ClaimApprovalExecution_Call {
+	return &MockStoreAPI_ClaimApprovalExecution_Call{Call: _e.mock.On("ClaimApprovalExecution", ctx, tenantID, approvalRequestID, tokenHash, requestHash, executingAt)}
+}
+
+func (_c *MockStoreAPI_ClaimApprovalExecution_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, tokenHash string, requestHash string, executingAt time.Time)) *MockStoreAPI_ClaimApprovalExecution_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ClaimApprovalExecution_Call) Return(err error) *MockStoreAPI_ClaimApprovalExecution_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ClaimApprovalExecution_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, tokenHash string, requestHash string, executingAt time.Time) error) *MockStoreAPI_ClaimApprovalExecution_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountPendingApprovals provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error) {
 	ret := _mock.Called(ctx, tenantID, now)
@@ -332,6 +413,126 @@ func (_c *MockStoreAPI_CreatePolicyVersion_Call) Return(err error) *MockStoreAPI
 }
 
 func (_c *MockStoreAPI_CreatePolicyVersion_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, createdBy string, notes string) error) *MockStoreAPI_CreatePolicyVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateTenant provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CreateTenant(ctx context.Context, tenantID string, name string) error {
+	ret := _mock.Called(ctx, tenantID, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateTenant")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_CreateTenant_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateTenant'
+type MockStoreAPI_CreateTenant_Call struct {
+	*mock.Call
+}
+
+// CreateTenant is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - name string
+func (_e *MockStoreAPI_Expecter) CreateTenant(ctx interface{}, tenantID interface{}, name interface{}) *MockStoreAPI_CreateTenant_Call {
+	return &MockStoreAPI_CreateTenant_Call{Call: _e.mock.On("CreateTenant", ctx, tenantID, name)}
+}
+
+func (_c *MockStoreAPI_CreateTenant_Call) Run(run func(ctx context.Context, tenantID string, name string)) *MockStoreAPI_CreateTenant_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateTenant_Call) Return(err error) *MockStoreAPI_CreateTenant_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateTenant_Call) RunAndReturn(run func(ctx context.Context, tenantID string, name string) error) *MockStoreAPI_CreateTenant_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateTenantKey provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CreateTenantKey(ctx context.Context, key models.TenantKey) error {
+	ret := _mock.Called(ctx, key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateTenantKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, models.TenantKey) error); ok {
+		r0 = returnFunc(ctx, key)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_CreateTenantKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateTenantKey'
+type MockStoreAPI_CreateTenantKey_Call struct {
+	*mock.Call
+}
+
+// CreateTenantKey is a helper method to define mock.On call
+//   - ctx context.Context
+//   - key models.TenantKey
+func (_e *MockStoreAPI_Expecter) CreateTenantKey(ctx interface{}, key interface{}) *MockStoreAPI_CreateTenantKey_Call {
+	return &MockStoreAPI_CreateTenantKey_Call{Call: _e.mock.On("CreateTenantKey", ctx, key)}
+}
+
+func (_c *MockStoreAPI_CreateTenantKey_Call) Run(run func(ctx context.Context, key models.TenantKey)) *MockStoreAPI_CreateTenantKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 models.TenantKey
+		if args[1] != nil {
+			arg1 = args[1].(models.TenantKey)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateTenantKey_Call) Return(err error) *MockStoreAPI_CreateTenantKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CreateTenantKey_Call) RunAndReturn(run func(ctx context.Context, key models.TenantKey) error) *MockStoreAPI_CreateTenantKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -731,6 +932,78 @@ func (_c *MockStoreAPI_GetAdminWriteLock_Call) Return(b bool, err error) *MockSt
 }
 
 func (_c *MockStoreAPI_GetAdminWriteLock_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetAdminWriteLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetApprovalForExecution provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetApprovalForExecution(ctx context.Context, tenantID string, approvalRequestID string) (models.ApprovalRequest, error) {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetApprovalForExecution")
+	}
+
+	var r0 models.ApprovalRequest
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.ApprovalRequest, error)); ok {
+		return returnFunc(ctx, tenantID, approvalRequestID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.ApprovalRequest); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r0 = ret.Get(0).(models.ApprovalRequest)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetApprovalForExecution_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetApprovalForExecution'
+type MockStoreAPI_GetApprovalForExecution_Call struct {
+	*mock.Call
+}
+
+// GetApprovalForExecution is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+func (_e *MockStoreAPI_Expecter) GetApprovalForExecution(ctx interface{}, tenantID interface{}, approvalRequestID interface{}) *MockStoreAPI_GetApprovalForExecution_Call {
+	return &MockStoreAPI_GetApprovalForExecution_Call{Call: _e.mock.On("GetApprovalForExecution", ctx, tenantID, approvalRequestID)}
+}
+
+func (_c *MockStoreAPI_GetApprovalForExecution_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string)) *MockStoreAPI_GetApprovalForExecution_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetApprovalForExecution_Call) Return(approvalRequest models.ApprovalRequest, err error) *MockStoreAPI_GetApprovalForExecution_Call {
+	_c.Call.Return(approvalRequest, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetApprovalForExecution_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string) (models.ApprovalRequest, error)) *MockStoreAPI_GetApprovalForExecution_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2966,6 +3239,74 @@ func (_c *MockStoreAPI_ListRiskOverrides_Call) RunAndReturn(run func(ctx context
 	return _c
 }
 
+// ListTenantKeys provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTenantKeys")
+	}
+
+	var r0 []models.TenantKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.TenantKey, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.TenantKey); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.TenantKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListTenantKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTenantKeys'
+type MockStoreAPI_ListTenantKeys_Call struct {
+	*mock.Call
+}
+
+// ListTenantKeys is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListTenantKeys(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListTenantKeys_Call {
+	return &MockStoreAPI_ListTenantKeys_Call{Call: _e.mock.On("ListTenantKeys", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListTenantKeys_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListTenantKeys_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTenantKeys_Call) Return(tenantKeys []models.TenantKey, err error) *MockStoreAPI_ListTenantKeys_Call {
+	_c.Call.Return(tenantKeys, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTenantKeys_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.TenantKey, error)) *MockStoreAPI_ListTenantKeys_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTenants provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListTenants(ctx context.Context) ([]models.TenantSummary, error) {
 	ret := _mock.Called(ctx)
@@ -3173,6 +3514,81 @@ func (_c *MockStoreAPI_MarkApprovalExecuted_Call) Return(err error) *MockStoreAP
 }
 
 func (_c *MockStoreAPI_MarkApprovalExecuted_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, requestID string, decisionID string, executedAt time.Time) error) *MockStoreAPI_MarkApprovalExecuted_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MarkApprovalExecutionFailed provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) MarkApprovalExecutionFailed(ctx context.Context, tenantID string, approvalRequestID string, errorCode string, failedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID, errorCode, failedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarkApprovalExecutionFailed")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID, errorCode, failedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_MarkApprovalExecutionFailed_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MarkApprovalExecutionFailed'
+type MockStoreAPI_MarkApprovalExecutionFailed_Call struct {
+	*mock.Call
+}
+
+// MarkApprovalExecutionFailed is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+//   - errorCode string
+//   - failedAt time.Time
+func (_e *MockStoreAPI_Expecter) MarkApprovalExecutionFailed(ctx interface{}, tenantID interface{}, approvalRequestID interface{}, errorCode interface{}, failedAt interface{}) *MockStoreAPI_MarkApprovalExecutionFailed_Call {
+	return &MockStoreAPI_MarkApprovalExecutionFailed_Call{Call: _e.mock.On("MarkApprovalExecutionFailed", ctx, tenantID, approvalRequestID, errorCode, failedAt)}
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecutionFailed_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string, errorCode string, failedAt time.Time)) *MockStoreAPI_MarkApprovalExecutionFailed_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 time.Time
+		if args[4] != nil {
+			arg4 = args[4].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecutionFailed_Call) Return(err error) *MockStoreAPI_MarkApprovalExecutionFailed_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_MarkApprovalExecutionFailed_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string, errorCode string, failedAt time.Time) error) *MockStoreAPI_MarkApprovalExecutionFailed_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3498,6 +3914,75 @@ func (_c *MockStoreAPI_RevokeApprovalRequest_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// RevokeTenantKey provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) RevokeTenantKey(ctx context.Context, tenantID string, keyID string, revokedAt time.Time) error {
+	ret := _mock.Called(ctx, tenantID, keyID, revokedAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeTenantKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Time) error); ok {
+		r0 = returnFunc(ctx, tenantID, keyID, revokedAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_RevokeTenantKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeTenantKey'
+type MockStoreAPI_RevokeTenantKey_Call struct {
+	*mock.Call
+}
+
+// RevokeTenantKey is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - keyID string
+//   - revokedAt time.Time
+func (_e *MockStoreAPI_Expecter) RevokeTenantKey(ctx interface{}, tenantID interface{}, keyID interface{}, revokedAt interface{}) *MockStoreAPI_RevokeTenantKey_Call {
+	return &MockStoreAPI_RevokeTenantKey_Call{Call: _e.mock.On("RevokeTenantKey", ctx, tenantID, keyID, revokedAt)}
+}
+
+func (_c *MockStoreAPI_RevokeTenantKey_Call) Run(run func(ctx context.Context, tenantID string, keyID string, revokedAt time.Time)) *MockStoreAPI_RevokeTenantKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 time.Time
+		if args[3] != nil {
+			arg3 = args[3].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_RevokeTenantKey_Call) Return(err error) *MockStoreAPI_RevokeTenantKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_RevokeTenantKey_Call) RunAndReturn(run func(ctx context.Context, tenantID string, keyID string, revokedAt time.Time) error) *MockStoreAPI_RevokeTenantKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RollbackPolicyVersion provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) RollbackPolicyVersion(ctx context.Context, tenantID string, policyVersion string) error {
 	ret := _mock.Called(ctx, tenantID, policyVersion)
@@ -3728,6 +4213,69 @@ func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) Return(err error) *Moc
 }
 
 func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context, seconds int) error) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetTenantEnabled provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error {
+	ret := _mock.Called(ctx, tenantID, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetTenantEnabled")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool) error); ok {
+		r0 = returnFunc(ctx, tenantID, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetTenantEnabled_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetTenantEnabled'
+type MockStoreAPI_SetTenantEnabled_Call struct {
+	*mock.Call
+}
+
+// SetTenantEnabled is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetTenantEnabled(ctx interface{}, tenantID interface{}, enabled interface{}) *MockStoreAPI_SetTenantEnabled_Call {
+	return &MockStoreAPI_SetTenantEnabled_Call{Call: _e.mock.On("SetTenantEnabled", ctx, tenantID, enabled)}
+}
+
+func (_c *MockStoreAPI_SetTenantEnabled_Call) Run(run func(ctx context.Context, tenantID string, enabled bool)) *MockStoreAPI_SetTenantEnabled_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 bool
+		if args[2] != nil {
+			arg2 = args[2].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetTenantEnabled_Call) Return(err error) *MockStoreAPI_SetTenantEnabled_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetTenantEnabled_Call) RunAndReturn(run func(ctx context.Context, tenantID string, enabled bool) error) *MockStoreAPI_SetTenantEnabled_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4184,13 +4732,37 @@ func (_e *MockStoreAPI_Expecter) UpdateToolMetadata(ctx interface{}, tenantID in
 
 func (_c *MockStoreAPI_UpdateToolMetadata_Call) Run(run func(ctx context.Context, tenantID string, toolID string, description string, mcpUpstreamURL string, inputSchemaJSON []byte)) *MockStoreAPI_UpdateToolMetadata_Call {
 	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 []byte
+		if args[5] != nil {
+			arg5 = args[5].([]byte)
+		}
 		run(
-			args[0].(context.Context),
-			args[1].(string),
-			args[2].(string),
-			args[3].(string),
-			args[4].(string),
-			args[5].([]byte),
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
 		)
 	})
 	return _c

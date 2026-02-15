@@ -23,7 +23,7 @@ import type { ApprovalRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
-const statusTabs = ["PENDING", "APPROVED", "DENIED", "EXECUTED", "EXPIRED"];
+const statusTabs = ["PENDING", "APPROVED", "EXECUTING", "EXECUTED", "FAILED", "DENIED", "EXPIRED"];
 
 export function ApprovalsPage() {
   const { adminKey } = useAdminKey();
@@ -128,6 +128,22 @@ export function ApprovalsPage() {
   const formatDate = (value?: string) => {
     if (!value) return "—";
     return value;
+  };
+
+  const contextSummary = (approval: ApprovalRequest) => {
+    const context = approval.request_context;
+    if (!context) return "";
+    const method = typeof context.http_method === "string" ? context.http_method : "";
+    const path = typeof context.path === "string" ? context.path : "";
+    if (method || path) {
+      return `${method} ${path}`.trim();
+    }
+    const mcpMethod = typeof context.method === "string" ? context.method : "";
+    const toolName = typeof context.tool_name === "string" ? context.tool_name : "";
+    if (mcpMethod || toolName) {
+      return `${mcpMethod} ${toolName}`.trim();
+    }
+    return "";
   };
 
   const selectedStatusLabel = status.toLowerCase().replace("_", " ");
@@ -237,6 +253,11 @@ export function ApprovalsPage() {
                       <div className="text-xs text-muted-foreground">
                         {approval.action_summary || approval.tool_id}
                       </div>
+                      {contextSummary(approval) ? (
+                        <div className="text-xs text-muted-foreground mt-1 font-mono">
+                          {contextSummary(approval)}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>{approval.risk ?? "—"}</TableCell>
                     <TableCell>
@@ -309,6 +330,11 @@ export function ApprovalsPage() {
               </div>
               {activeApproval.action_summary ? (
                 <div className="mt-2 text-sm text-foreground">{activeApproval.action_summary}</div>
+              ) : null}
+              {activeApproval.request_context ? (
+                <pre className="mt-2 max-h-44 overflow-auto rounded bg-background p-2 font-mono text-[11px] leading-relaxed text-foreground">
+                  {JSON.stringify(activeApproval.request_context, null, 2)}
+                </pre>
               ) : null}
             </div>
           ) : null}

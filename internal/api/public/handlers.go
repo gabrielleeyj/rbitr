@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
+	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
@@ -29,12 +31,14 @@ import (
 )
 
 type Dependencies struct {
-	Store     store.StoreAPI
-	Policy    policy.EvaluatorAPI
-	Connector connector.Connector
-	Metrics   *telemetry.Metrics
-	Config    config.Config
-	Notifier  *notifications.Service
+	Store             store.StoreAPI
+	Policy            policy.EvaluatorAPI
+	Connector         connector.Connector
+	Metrics           *telemetry.Metrics
+	Config            config.Config
+	Notifier          *notifications.Service
+	ToolCache         *cache.TTLCache[models.Tool]
+	RiskOverrideCache *cache.TTLCache[string]
 }
 
 type ToolCallRequest struct {
@@ -70,6 +74,8 @@ const decisionInvalidReason = "policy output invalid"
 const approvalHeaderID = "X-Approval-Request-Id"
 const approvalHeaderToken = "X-Approval-Token"
 const defaultApprovalTTL = 15 * time.Minute
+const approvalExecutionRetryWindow = 60 * time.Second
+const xTenantKeySunset = "Tue, 31 Mar 2026 00:00:00 GMT"
 
 var errToolNotFound = errors.New("tool not found")
 var errConnectorMissing = errors.New("connector not configured")
@@ -88,13 +94,11 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		d.Metrics.GatewayRequests.Inc()
 	}
 
-	tenantKey := c.Request().Header.Get(auth.TenantKeyHeader)
-	agentID := c.Request().Header.Get(auth.AgentIDHeader)
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
 
-	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	tenant, agentID, err := d.authenticateTenantRequest(c)
 	if err != nil {
 		return authError(c, err)
 	}
@@ -174,7 +178,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			approvalToken:         approvalToken,
 		})
 	}
-	if overrideRisk, lookupErr := d.Store.GetRiskOverride(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
+	if overrideRisk, lookupErr := d.getRiskOverrideCached(c.Request().Context(), tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
 		classificationResult.ActionRisk = overrideRisk
 	} else if !errors.Is(lookupErr, store.ErrNotFound) {
 		if d.Metrics != nil {
@@ -315,6 +319,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			ToolID:            toolID,
 			ActionType:        classificationResult.ActionType,
 			RequestHash:       requestHash,
+			RequestContext:    buildApprovalRequestContext(payload),
 			Status:            "PENDING",
 			ApprovalTokenHash: utils.HashString(token),
 			ExpiresAt:         expiresAt,
@@ -419,7 +424,7 @@ type approvedToolCallParams struct {
 
 func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedToolCallParams) error {
 	ctx := c.Request().Context()
-	approval, err := d.Store.GetApprovalRequest(ctx, params.tenantID, params.approvalID)
+	approval, err := d.Store.GetApprovalForExecution(ctx, params.tenantID, params.approvalID)
 	if err != nil {
 		d.Metrics.ErrorsTotal.Inc()
 		if errors.Is(err, store.ErrNotFound) {
@@ -430,32 +435,8 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 	}
 
 	now := time.Now().UTC()
-	if approval.Status == "EXECUTED" {
-		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
-		}
-		return approvalError(c, http.StatusConflict, "approval_already_executed")
-	}
-	if approval.Status == "EXPIRED" {
-		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("expired").Inc()
-		}
-		return approvalError(c, http.StatusForbidden, "approval_expired")
-	}
-	if approval.Status != "APPROVED" {
-		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("not_approved").Inc()
-		}
-		return approvalError(c, http.StatusForbidden, "approval_not_approved")
-	}
-	if now.After(approval.ExpiresAt) {
-		_ = d.Store.MarkApprovalExpired(ctx, params.tenantID, params.approvalID, now)
-		if d.Metrics != nil {
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("expired").Inc()
-		}
-		return approvalError(c, http.StatusForbidden, "approval_expired")
-	}
-	if utils.HashString(params.approvalToken) != approval.ApprovalTokenHash {
+	tokenHash := utils.HashString(params.approvalToken)
+	if !utils.SecureCompare(tokenHash, approval.ApprovalTokenHash) {
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("token_invalid").Inc()
 		}
@@ -468,6 +449,72 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		}
 		d.emitTokenAbuse(c, params, "approval_request_hash_mismatch")
 		return approvalError(c, http.StatusForbidden, "approval_request_hash_mismatch")
+	}
+	if approval.Status == "EXPIRED" || now.After(approval.ExpiresAt) {
+		_ = d.Store.MarkApprovalExpired(ctx, params.tenantID, params.approvalID, now)
+		if d.Metrics != nil {
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("expired").Inc()
+		}
+		return approvalError(c, http.StatusForbidden, "approval_expired")
+	}
+
+	switch approval.Status {
+	case "APPROVED":
+		if err := d.Store.ClaimApprovalExecution(ctx, params.tenantID, params.approvalID, tokenHash, params.requestHash, now); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return approvalError(c, http.StatusForbidden, "approval_token_invalid")
+			}
+			if errors.Is(err, store.ErrInvalidState) {
+				latest, stateErr := d.Store.GetApprovalForExecution(ctx, params.tenantID, params.approvalID)
+				if stateErr != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "approval lookup failed"})
+				}
+				if latest.Status == "EXECUTING" {
+					if !approvalRetryAllowed(latest, now) {
+						if d.Metrics != nil {
+							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
+						}
+						return approvalError(c, http.StatusConflict, "approval_retry_window_exceeded")
+					}
+				} else if latest.Status == "EXECUTED" {
+					if d.Metrics != nil {
+						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+					}
+					return approvalError(c, http.StatusConflict, "approval_already_executed")
+				} else {
+					if d.Metrics != nil {
+						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_claimed").Inc()
+					}
+					return approvalError(c, http.StatusConflict, "approval_already_claimed")
+				}
+				approval = latest
+			} else {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to claim approval"})
+			}
+		} else {
+			approval.Status = "EXECUTING"
+			approval.ExecutingAt = &now
+			if approval.ExecutionID == "" {
+				approval.ExecutionID = approval.ApprovalRequestID
+			}
+		}
+	case "EXECUTING":
+		if !approvalRetryAllowed(approval, now) {
+			if d.Metrics != nil {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
+			}
+			return approvalError(c, http.StatusConflict, "approval_retry_window_exceeded")
+		}
+	case "EXECUTED":
+		if d.Metrics != nil {
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+		}
+		return approvalError(c, http.StatusConflict, "approval_already_executed")
+	default:
+		if d.Metrics != nil {
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_claimed").Inc()
+		}
+		return approvalError(c, http.StatusConflict, "approval_already_claimed")
 	}
 
 	actionType := approval.ActionType
@@ -488,17 +535,24 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 	toolStart := time.Now()
 	resp, err := d.executeToolCall(ctx, params.tenantID, params.toolID, params.payload, params.bodyBytes, params.filteredHeaders)
 	if err != nil {
+		errorCode := "UPSTREAM_ERROR"
+		httpStatus := http.StatusBadGateway
+		responseCode := "upstream_error"
+		if isUpstreamTimeoutError(err) {
+			errorCode = "UPSTREAM_TIMEOUT"
+			httpStatus = http.StatusGatewayTimeout
+			responseCode = "upstream_timeout"
+		}
+		_ = d.Store.MarkApprovalExecutionFailed(ctx, params.tenantID, params.approvalID, errorCode, time.Now().UTC())
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("tool_failed").Inc()
+			if errorCode == "UPSTREAM_TIMEOUT" {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_timeout").Inc()
+			} else {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_failed").Inc()
+			}
 		}
-		if errors.Is(err, errToolNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
-		}
-		if errors.Is(err, errConnectorMissing) {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
-		}
-		return c.JSON(http.StatusBadGateway, map[string]string{"error": "tool execution failed"})
+		return c.JSON(httpStatus, map[string]string{"error": responseCode})
 	}
 	if d.Metrics != nil {
 		d.Metrics.ToolLatencyMs.Observe(float64(time.Since(toolStart).Milliseconds()))
@@ -538,25 +592,25 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		ApprovalRequestID: approval.ApprovalRequestID,
 		CreatedAt:         time.Now().UTC(),
 	}
-	if err := d.Store.InsertADR(ctx, adr); err != nil {
-		if d.Metrics != nil {
-			d.Metrics.ErrorsTotal.Inc()
-			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("adr_failed").Inc()
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
-	}
 	if err := d.Store.MarkApprovalExecuted(ctx, params.tenantID, params.approvalID, params.requestID, decisionID, time.Now().UTC()); err != nil {
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("update_failed").Inc()
 		}
 		if errors.Is(err, store.ErrInvalidState) {
-			return approvalError(c, http.StatusConflict, "approval_already_executed")
+			return approvalError(c, http.StatusConflict, "approval_already_claimed")
 		}
 		if errors.Is(err, store.ErrNotFound) {
 			return approvalError(c, http.StatusForbidden, "approval_token_invalid")
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update approval"})
+	}
+	if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("adr_failed").Inc()
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
 	}
 
 	if d.Metrics != nil {
@@ -577,8 +631,57 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 	})
 }
 
-func (d *Dependencies) executeToolCall(ctx context.Context, tenantID, toolID string, payload ToolCallRequest, bodyBytes []byte, filteredHeaders map[string]string) (connector.Response, error) {
+func (d *Dependencies) getToolCached(ctx context.Context, tenantID, toolID string) (models.Tool, error) {
+	cacheKey := tenantID + ":" + toolID
+	if d.ToolCache != nil {
+		if tool, ok := d.ToolCache.Get(cacheKey); ok {
+			d.recordCacheMetric("tool", true)
+			return tool, nil
+		}
+		d.recordCacheMetric("tool", false)
+	}
 	tool, err := d.Store.GetTool(ctx, tenantID, toolID)
+	if err != nil {
+		return models.Tool{}, err
+	}
+	if d.ToolCache != nil {
+		d.ToolCache.Set(cacheKey, tool)
+	}
+	return tool, nil
+}
+
+func (d *Dependencies) getRiskOverrideCached(ctx context.Context, tenantID, actionType string) (string, error) {
+	cacheKey := tenantID + ":" + actionType
+	if d.RiskOverrideCache != nil {
+		if risk, ok := d.RiskOverrideCache.Get(cacheKey); ok {
+			d.recordCacheMetric("risk_override", true)
+			return risk, nil
+		}
+		d.recordCacheMetric("risk_override", false)
+	}
+	risk, err := d.Store.GetRiskOverride(ctx, tenantID, actionType)
+	if err != nil {
+		return "", err
+	}
+	if d.RiskOverrideCache != nil {
+		d.RiskOverrideCache.Set(cacheKey, risk)
+	}
+	return risk, nil
+}
+
+func (d *Dependencies) recordCacheMetric(cacheName string, hit bool) {
+	if d.Metrics == nil {
+		return
+	}
+	if hit {
+		d.Metrics.CacheHitsTotal.WithLabelValues(cacheName).Inc()
+	} else {
+		d.Metrics.CacheMissesTotal.WithLabelValues(cacheName).Inc()
+	}
+}
+
+func (d *Dependencies) executeToolCall(ctx context.Context, tenantID, toolID string, payload ToolCallRequest, bodyBytes []byte, filteredHeaders map[string]string) (connector.Response, error) {
+	tool, err := d.getToolCached(ctx, tenantID, toolID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return connector.Response{}, errToolNotFound
@@ -687,9 +790,7 @@ func (d *Dependencies) handleEvidence(c *echo.Context) error {
 		}
 	}
 
-	tenantKey := c.Request().Header.Get(auth.TenantKeyHeader)
-	agentID := c.Request().Header.Get(auth.AgentIDHeader)
-	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	tenant, agentID, err := d.authenticateTenantRequest(c)
 	if err != nil {
 		return authError(c, err)
 	}
@@ -768,9 +869,34 @@ func (d *Dependencies) emitNotification(c *echo.Context, tenantID, eventType, se
 	}, msg)
 }
 
+func (d *Dependencies) authenticateTenantRequest(c *echo.Context) (models.Tenant, string, error) {
+	agentID := c.Request().Header.Get(auth.AgentIDHeader)
+	tenantKey, usedFallback := auth.TenantKeyFromRequest(c.Request(), d.Config.DisableXTenantKey)
+	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	if err != nil {
+		return models.Tenant{}, "", err
+	}
+	if usedFallback {
+		c.Response().Header().Set("Deprecation", "true")
+		c.Response().Header().Set("Sunset", xTenantKeySunset)
+		if d.Metrics != nil && d.Metrics.TenantAuthFallbackTotal != nil {
+			d.Metrics.TenantAuthFallbackTotal.Inc()
+		}
+		c.Logger().Warn("deprecated tenant auth header used",
+			"tenant_id", tenant.TenantID,
+			"agent_id", agentID,
+			"request_id", c.Request().Header.Get("X-Request-Id"),
+		)
+	}
+	return tenant, agentID, nil
+}
+
 func authError(c *echo.Context, err error) error {
 	if errors.Is(err, auth.ErrUnauthorized) {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+	if errors.Is(err, auth.ErrInvalidAgentID) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid agent_id: must be 1-128 chars, alphanumeric/underscore/dash/dot only"})
 	}
 	if errors.Is(err, auth.ErrForbidden) {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
@@ -787,6 +913,69 @@ func parsePositiveInt(value string) (int, error) {
 		return 0, strconv.ErrSyntax
 	}
 	return parsed, nil
+}
+
+func approvalRetryAllowed(approval models.ApprovalRequest, now time.Time) bool {
+	if approval.ExecutingAt == nil {
+		return false
+	}
+	return now.Sub(*approval.ExecutingAt) <= approvalExecutionRetryWindow
+}
+
+func buildApprovalRequestContext(payload ToolCallRequest) map[string]any {
+	context := map[string]any{
+		"http_method": payload.HTTPMethod,
+		"path":        payload.Path,
+		"query":       payload.Query,
+	}
+	if len(payload.Headers) > 0 {
+		context["headers"] = redactApprovalContextHeaders(payload.Headers)
+	}
+	body := strings.TrimSpace(payload.Body)
+	if body != "" {
+		var bodyJSON any
+		if err := json.Unmarshal([]byte(body), &bodyJSON); err == nil {
+			context["body_json"] = bodyJSON
+		} else {
+			context["body"] = payload.Body
+		}
+	}
+	return context
+}
+
+func redactApprovalContextHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	redacted := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if isSensitiveApprovalContextHeader(key) {
+			redacted[key] = "[REDACTED]"
+			continue
+		}
+		redacted[key] = value
+	}
+	return redacted
+}
+
+func isSensitiveApprovalContextHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "authorization", "proxy-authorization", "x-api-key", "api-key", "x-admin-key", "x-tenant-key", "cookie", "set-cookie":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUpstreamTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func applyToolAuth(headers map[string]string, tool *models.Tool) {

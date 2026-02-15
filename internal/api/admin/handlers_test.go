@@ -465,16 +465,19 @@ func TestHandleRiskOverrideUpdate(t *testing.T) {
 
 func newTestMetrics() *telemetry.Metrics {
 	return &telemetry.Metrics{
-		DecisionsTotal:         prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total_admin"}, []string{"decision", "action_type"}),
-		GatewayRequests:        prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total_admin"}),
-		ToolExecTotal:          prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total_admin"}),
-		ErrorsTotal:            prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total_admin"}),
-		DecisionLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
-		ToolLatencyMs:          prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
-		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total_admin"}, []string{"reason"}),
-		ApprovalsCreatedTotal:  prometheus.NewCounter(prometheus.CounterOpts{Name: "test_approvals_created_total_admin"}),
-		ApprovalsResolvedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_resolved_total_admin"}, []string{"resolution"}),
-		ApprovalsExecuteTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_execute_total_admin"}, []string{"result"}),
+		DecisionsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total_admin"}, []string{"decision", "action_type"}),
+		GatewayRequests:         prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total_admin"}),
+		ToolExecTotal:           prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total_admin"}),
+		ErrorsTotal:             prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total_admin"}),
+		DecisionLatencyMs:       prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms_admin"}),
+		ToolLatencyMs:           prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms_admin"}),
+		PolicyEvalInvalidTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total_admin"}, []string{"reason"}),
+		ApprovalsCreatedTotal:   prometheus.NewCounter(prometheus.CounterOpts{Name: "test_approvals_created_total_admin"}),
+		ApprovalsResolvedTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_resolved_total_admin"}, []string{"resolution"}),
+		ApprovalsExecuteTotal:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_execute_total_admin"}, []string{"result"}),
+		CacheHitsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_hits_total_admin"}, []string{"cache"}),
+		CacheMissesTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_misses_total_admin"}, []string{"cache"}),
+		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tenant_auth_fallback_total_admin"}),
 	}
 }
 

@@ -186,6 +186,15 @@ export function ApprovalDetailPage() {
               <div className="font-mono text-xs break-all">{approval.request_hash}</div>
             </div>
 
+            {approval.request_context ? (
+              <div className="text-sm">
+                <div className="text-xs text-muted-foreground">Request context</div>
+                <pre className="mt-1 max-h-72 overflow-auto rounded border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed">
+                  {JSON.stringify(approval.request_context, null, 2)}
+                </pre>
+              </div>
+            ) : null}
+
             {approval.reasons && approval.reasons.length > 0 ? (
               <div className="text-sm">
                 <div className="text-xs text-muted-foreground">Reasons</div>

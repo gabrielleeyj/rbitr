@@ -73,7 +73,7 @@ func TestHandleMCP_Authentication(t *testing.T) {
 			tenantID:  "t_wrong",
 			setupMock: func(m *store.MockStoreAPI) {
 				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			},
 			expectedError:  true,
 			expectedErrMsg: "tenant mismatch",
@@ -127,7 +127,7 @@ func TestHandleMCP_Authentication(t *testing.T) {
 func TestHandleMCP_ValidRequest(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:          "test_tool",
@@ -208,7 +208,7 @@ func TestHandleMCP_InvalidJSONRPC(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
 			deps := &Dependencies{
 				Store:   mockStore,
@@ -285,7 +285,7 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			tt.setupMock(mockStore)
 
 			deps := &Dependencies{
@@ -330,7 +330,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 			name: "returns tools with descriptions and schemas",
 			setupMock: func(m *store.MockStoreAPI) {
 				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 					{
 						ToolID:          "jira",
@@ -366,7 +366,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 			name: "provides defaults for missing description and schema",
 			setupMock: func(m *store.MockStoreAPI) {
 				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 					{
 						ToolID:   "minimal_tool",
@@ -387,7 +387,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 			name: "returns empty list when no tools",
 			setupMock: func(m *store.MockStoreAPI) {
 				m.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-					Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+					Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
 			},
 			validateTools: func(t *testing.T, tools []mcp.Tool) {
@@ -447,7 +447,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 func TestHandleMCP_ToolsList_StoreError(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").
 		Return([]models.Tool{}, assert.AnError)
 
@@ -520,7 +520,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockStore := &store.MockStoreAPI{}
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-				Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			mockStore.On("ListTools", mock.Anything, "t_demo").Maybe().Return([]models.Tool{}, nil)
 
 			deps := &Dependencies{
@@ -568,7 +568,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 func TestHandleMCP_ToolsCall_ApprovalResubmitRequiresApprovalRequestID(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
 		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: "http://upstream-mcp.local"}, nil)
 
@@ -662,10 +662,10 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
 		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: upstreamServer.URL}, nil)
-	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
+	mockStore.On("GetApprovalForExecution", mock.Anything, "t_demo", "ar_123").
 		Return(models.ApprovalRequest{
 			ApprovalRequestID: "ar_123",
 			TenantID:          "t_demo",
@@ -679,6 +679,8 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 			PolicyVersion:     "p_v1",
 			RuleID:            "rule_approve",
 		}, nil)
+	mockStore.On("ClaimApprovalExecution", mock.Anything, "t_demo", "ar_123", utils.HashString("apt_123"), expectedHash, mock.Anything).
+		Return(nil)
 	mockStore.On("MarkApprovalExecuted", mock.Anything, "t_demo", "ar_123", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(adr models.ActionDecisionRecord) bool {
@@ -763,10 +765,10 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
 		Return(models.Tool{ToolID: "jira", TenantID: "t_demo", Transport: "mcp_streamable_http", MCPUpstreamURL: upstreamServer.URL}, nil)
-	mockStore.On("GetApprovalRequest", mock.Anything, "t_demo", "ar_123").
+	mockStore.On("GetApprovalForExecution", mock.Anything, "t_demo", "ar_123").
 		Return(models.ApprovalRequest{
 			ApprovalRequestID: "ar_123",
 			TenantID:          "t_demo",
@@ -778,6 +780,8 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 			Risk:              "MEDIUM",
 			ActionSummary:     "MCP tool call: jira",
 		}, nil)
+	mockStore.On("ClaimApprovalExecution", mock.Anything, "t_demo", "ar_123", utils.HashString("apt_123"), expectedHash, mock.Anything).
+		Return(nil)
 	mockStore.On("MarkApprovalExecuted", mock.Anything, "t_demo", "ar_123", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
 	mockStore.On("InsertADR", mock.Anything, mock.Anything).Return(assert.AnError)
@@ -827,7 +831,7 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 func TestHandleMCP_NotificationWithoutIDReturns202(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
 
 	deps := &Dependencies{
@@ -855,7 +859,7 @@ func TestHandleMCP_NotificationWithoutIDReturns202(t *testing.T) {
 func TestHandleMCP_InitializeAndInitializedFlow(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
 	deps := &Dependencies{
 		Store:   mockStore,
@@ -916,7 +920,7 @@ func TestHandleMCP_InitializeAndInitializedFlow(t *testing.T) {
 func TestHandleMCPStream_GetEndpoint(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
 	deps := &Dependencies{
 		Store:   mockStore,
@@ -961,7 +965,7 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1013,7 +1017,7 @@ func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1065,7 +1069,7 @@ func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
 
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1107,7 +1111,7 @@ func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
 func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
-		Return(models.Tenant{TenantID: "t_demo", Name: "Demo"}, nil)
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	// Only non-MCP tools available - should fall back to method not found
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{

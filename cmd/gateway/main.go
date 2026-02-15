@@ -16,9 +16,11 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/api/admin"
 	"github.com/gabrielleeyj/rbitr/internal/api/public"
+	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/db"
+	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
 	"github.com/gabrielleeyj/rbitr/internal/retention"
@@ -29,6 +31,7 @@ import (
 const (
 	requestTimeout  = 15 * time.Second
 	gracefulTimeout = 10 * time.Second
+	cacheTTL        = 30 * time.Second
 )
 
 func main() {
@@ -62,15 +65,27 @@ func main() {
 	e.GET("/healthz", func(c *echo.Context) error {
 		return c.NoContent(http.StatusOK)
 	})
+	e.GET("/readyz", func(c *echo.Context) error {
+		ctx := c.Request().Context()
+		if err := dbConn.PingContext(ctx); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "not ready", "reason": "database unreachable"})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"status": "ready"})
+	})
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
+	toolCache := cache.New[models.Tool](cacheTTL)
+	riskOverrideCache := cache.New[string](cacheTTL)
+
 	public.RegisterRoutes(e, &public.Dependencies{
-		Store:     st,
-		Policy:    policyEval,
-		Connector: restConnector,
-		Metrics:   metrics,
-		Config:    cfg,
-		Notifier:  notificationService,
+		Store:             st,
+		Policy:            policyEval,
+		Connector:         restConnector,
+		Metrics:           metrics,
+		Config:            cfg,
+		Notifier:          notificationService,
+		ToolCache:         toolCache,
+		RiskOverrideCache: riskOverrideCache,
 	})
 	admin.RegisterRoutes(e, &admin.Dependencies{
 		Store:         st,

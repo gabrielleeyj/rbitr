@@ -45,9 +45,20 @@ func TestHandleApprovalsList(t *testing.T) {
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("ListApprovalRequests", context.Background(), "t1", "APPROVED", 10, 0).
-					Return([]models.ApprovalRequest{{ApprovalRequestID: "ar1", Status: "APPROVED", ExpiresAt: time.Now().Add(10 * time.Minute)}}, nil)
+					Return([]models.ApprovalRequest{{
+						ApprovalRequestID: "ar1",
+						Status:            "APPROVED",
+						ExpiresAt:         time.Now().Add(10 * time.Minute),
+						RequestContext:    map[string]any{"http_method": "POST", "path": "/refund"},
+					}}, nil)
 			},
 			expectedCode: http.StatusOK,
+			validateBody: func(t *testing.T, body []byte) {
+				var payload []models.ApprovalRequest
+				require.NoError(t, json.Unmarshal(body, &payload))
+				require.Len(t, payload, 1)
+				require.Equal(t, "/refund", payload[0].RequestContext["path"])
+			},
 		},
 		{
 			name:     "expired auto-update",

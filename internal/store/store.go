@@ -53,11 +53,14 @@ type StoreAPI interface {
 	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
 	ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error)
 	GetApprovalRequest(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
+	GetApprovalForExecution(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
 	CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error)
 	ApproveApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
 	DenyApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
 	RevokeApprovalRequest(ctx context.Context, tenantID, approvalRequestID, decidedBy, comment string, decidedAt time.Time) error
+	ClaimApprovalExecution(ctx context.Context, tenantID, approvalRequestID, tokenHash, requestHash string, executingAt time.Time) error
 	MarkApprovalExecuted(ctx context.Context, tenantID, approvalRequestID, requestID, decisionID string, executedAt time.Time) error
+	MarkApprovalExecutionFailed(ctx context.Context, tenantID, approvalRequestID, errorCode string, failedAt time.Time) error
 	MarkApprovalExpired(ctx context.Context, tenantID, approvalRequestID string, expiredAt time.Time) error
 	ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error)
 	ListEvidenceFiltered(ctx context.Context, tenantID, decision, actionType, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error)
@@ -94,6 +97,15 @@ type StoreAPI interface {
 	ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error)
 	TryAdvisoryLock(ctx context.Context, key int64) (bool, error)
 	ReleaseAdvisoryLock(ctx context.Context, key int64) error
+
+	// Tenant management (Epic 7)
+	CreateTenant(ctx context.Context, tenantID, name string) error
+	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
+
+	// Tenant key lifecycle (Epic 7)
+	CreateTenantKey(ctx context.Context, key models.TenantKey) error
+	ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error)
+	RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
 }
 
 // Store wraps database operations.
@@ -107,12 +119,14 @@ func New(db *sql.DB) StoreAPI {
 
 func (s *Store) GetTenantByKeyHash(ctx context.Context, keyHash string) (models.Tenant, error) {
 	var tenant models.Tenant
-	query := `SELECT t.tenant_id, t.name
+	query := `SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`
 	row := s.db.QueryRowContext(ctx, query, keyHash)
-	if err := row.Scan(&tenant.TenantID, &tenant.Name); err != nil {
+	if err := row.Scan(&tenant.TenantID, &tenant.Name, &tenant.Enabled); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Tenant{}, ErrNotFound
 		}
@@ -495,8 +509,16 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
-		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
+		request_decision_id, action_summary, risk, rule_id, request_context, reasons
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`
+	var requestContextJSON []byte
+	if len(req.RequestContext) > 0 {
+		var err error
+		requestContextJSON, err = json.Marshal(req.RequestContext)
+		if err != nil {
+			return err
+		}
+	}
 	var reasonsJSON []byte
 	if len(req.Reasons) > 0 {
 		var err error
@@ -527,6 +549,7 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 		nullableString(req.ActionSummary),
 		nullableString(req.Risk),
 		nullableString(req.RuleID),
+		requestContextJSON,
 		reasonsJSON,
 	)
 	return err
@@ -551,7 +574,7 @@ func (s *Store) ListApprovalRequests(ctx context.Context, tenantID, status strin
 	query := fmt.Sprintf(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE %s
 		ORDER BY created_at DESC
@@ -578,7 +601,7 @@ func (s *Store) GetApprovalRequest(ctx context.Context, tenantID, approvalReques
 	row := s.db.QueryRowContext(ctx, `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`, tenantID, approvalRequestID)
 	approval, err := scanApprovalRequest(row)
@@ -588,6 +611,93 @@ func (s *Store) GetApprovalRequest(ctx context.Context, tenantID, approvalReques
 		}
 		return models.ApprovalRequest{}, err
 	}
+	return approval, nil
+}
+
+func (s *Store) GetApprovalForExecution(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+		approval_token_hash, expires_at, created_at, policy_version, action_summary, risk, rule_id, request_context, reasons,
+		executing_at, execution_id, failed_at, last_error_code
+		FROM rbitr.approval_requests
+		WHERE tenant_id = $1 AND approval_request_id = $2`, tenantID, approvalRequestID)
+
+	var (
+		policyVersion sql.NullString
+		actionSummary sql.NullString
+		risk          sql.NullString
+		ruleID        sql.NullString
+		requestJSON   []byte
+		reasonsJSON   []byte
+		executingAt   sql.NullTime
+		executionID   sql.NullString
+		failedAt      sql.NullTime
+		lastErrorCode sql.NullString
+	)
+
+	var approval models.ApprovalRequest
+	if err := row.Scan(
+		&approval.ApprovalRequestID,
+		&approval.TenantID,
+		&approval.AgentID,
+		&approval.ToolID,
+		&approval.ActionType,
+		&approval.RequestHash,
+		&approval.Status,
+		&approval.ApprovalTokenHash,
+		&approval.ExpiresAt,
+		&approval.CreatedAt,
+		&policyVersion,
+		&actionSummary,
+		&risk,
+		&ruleID,
+		&requestJSON,
+		&reasonsJSON,
+		&executingAt,
+		&executionID,
+		&failedAt,
+		&lastErrorCode,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.ApprovalRequest{}, ErrNotFound
+		}
+		return models.ApprovalRequest{}, err
+	}
+
+	if policyVersion.Valid {
+		approval.PolicyVersion = policyVersion.String
+	}
+	if actionSummary.Valid {
+		approval.ActionSummary = actionSummary.String
+	}
+	if risk.Valid {
+		approval.Risk = risk.String
+	}
+	if ruleID.Valid {
+		approval.RuleID = ruleID.String
+	}
+	if len(requestJSON) > 0 {
+		if err := json.Unmarshal(requestJSON, &approval.RequestContext); err != nil {
+			return models.ApprovalRequest{}, err
+		}
+	}
+	if len(reasonsJSON) > 0 {
+		if err := json.Unmarshal(reasonsJSON, &approval.Reasons); err != nil {
+			return models.ApprovalRequest{}, err
+		}
+	}
+	if executingAt.Valid {
+		approval.ExecutingAt = &executingAt.Time
+	}
+	if executionID.Valid {
+		approval.ExecutionID = executionID.String
+	}
+	if failedAt.Valid {
+		approval.FailedAt = &failedAt.Time
+	}
+	if lastErrorCode.Valid {
+		approval.LastErrorCode = lastErrorCode.String
+	}
+
 	return approval, nil
 }
 
@@ -616,11 +726,52 @@ func (s *Store) RevokeApprovalRequest(ctx context.Context, tenantID, approvalReq
 	return s.updateApprovalDecision(ctx, tenantID, approvalRequestID, "REVOKED", decidedBy, comment, decidedAt)
 }
 
+func (s *Store) ClaimApprovalExecution(ctx context.Context, tenantID, approvalRequestID, tokenHash, requestHash string, executingAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
+		SET status = 'EXECUTING', executing_at = $1, execution_id = COALESCE(execution_id, approval_request_id), last_error_code = NULL
+		WHERE tenant_id = $2
+			AND approval_request_id = $3
+			AND status = 'APPROVED'
+			AND expires_at > $4
+			AND approval_token_hash = $5
+			AND request_hash = $6`,
+		executingAt, tenantID, approvalRequestID, executingAt, tokenHash, requestHash)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return s.approvalStateError(ctx, tenantID, approvalRequestID)
+	}
+	return nil
+}
+
 func (s *Store) MarkApprovalExecuted(ctx context.Context, tenantID, approvalRequestID, requestID, decisionID string, executedAt time.Time) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
-		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3
-		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'APPROVED'`,
+		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL
+		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'EXECUTING'`,
 		executedAt, requestID, decisionID, tenantID, approvalRequestID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return s.approvalStateError(ctx, tenantID, approvalRequestID)
+	}
+	return nil
+}
+
+func (s *Store) MarkApprovalExecutionFailed(ctx context.Context, tenantID, approvalRequestID, errorCode string, failedAt time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
+		SET status = 'FAILED', failed_at = $1, last_error_code = $2
+		WHERE tenant_id = $3 AND approval_request_id = $4 AND status = 'EXECUTING'`,
+		failedAt, nullableString(errorCode), tenantID, approvalRequestID)
 	if err != nil {
 		return err
 	}
@@ -1816,12 +1967,15 @@ func (s *Store) ListNotificationSuppressions(ctx context.Context, tenantID strin
 	return suppressions, rows.Err()
 }
 
+// ListApprovalsExpiring returns approvals nearing expiry across all tenants.
+// Used by the background scheduler for cross-tenant notification processing.
+// Each result includes tenant_id for tenant-scoped notification dispatch.
 func (s *Store) ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error) {
 	cutoff := now.Add(window)
 	query := `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE status IN ('PENDING','APPROVED')
 			AND expires_at > $1
@@ -1844,11 +1998,13 @@ func (s *Store) ListApprovalsExpiring(ctx context.Context, now time.Time, window
 	return approvals, rows.Err()
 }
 
+// ListApprovalsExpired returns expired approvals across all tenants.
+// Used by the background scheduler for cross-tenant expiry processing.
 func (s *Store) ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error) {
 	query := `SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE status IN ('PENDING','APPROVED')
 			AND expires_at <= $1
@@ -1888,6 +2044,82 @@ func (s *Store) ReleaseAdvisoryLock(ctx context.Context, key int64) error {
 	return nil
 }
 
+// Tenant management (Epic 7)
+
+func (s *Store) CreateTenant(ctx context.Context, tenantID, name string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO rbitr.tenants (tenant_id, name) VALUES ($1, $2)`,
+		tenantID, name)
+	return err
+}
+
+func (s *Store) SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rbitr.tenants SET enabled = $1 WHERE tenant_id = $2`,
+		enabled, tenantID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Tenant key lifecycle (Epic 7)
+
+func (s *Store) CreateTenantKey(ctx context.Context, key models.TenantKey) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO rbitr.tenant_keys (key_id, tenant_id, key_hash, key_prefix, created_at)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		key.KeyID, key.TenantID, key.KeyHash, key.KeyPrefix, key.CreatedAt)
+	return err
+}
+
+func (s *Store) ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT key_id, tenant_id, key_prefix, created_at, revoked_at, rotated_at
+		 FROM rbitr.tenant_keys
+		 WHERE tenant_id = $1
+		 ORDER BY created_at DESC`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var keys []models.TenantKey
+	for rows.Next() {
+		var k models.TenantKey
+		if err := rows.Scan(&k.KeyID, &k.TenantID, &k.KeyPrefix, &k.CreatedAt, &k.RevokedAt, &k.RotatedAt); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+func (s *Store) RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rbitr.tenant_keys SET revoked_at = $1
+		 WHERE key_id = $2 AND tenant_id = $3 AND revoked_at IS NULL`,
+		revokedAt, keyID, tenantID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func hashKey(key string) string {
 	return utils.HashString(key)
 }
@@ -1913,6 +2145,7 @@ func scanApprovalRequest(scanner rowScanner) (models.ApprovalRequest, error) {
 		actionSummary      sql.NullString
 		risk               sql.NullString
 		ruleID             sql.NullString
+		requestContextJSON []byte
 		reasonsJSON        []byte
 	)
 
@@ -1939,6 +2172,7 @@ func scanApprovalRequest(scanner rowScanner) (models.ApprovalRequest, error) {
 		&actionSummary,
 		&risk,
 		&ruleID,
+		&requestContextJSON,
 		&reasonsJSON,
 	); err != nil {
 		return models.ApprovalRequest{}, err
@@ -1976,6 +2210,11 @@ func scanApprovalRequest(scanner rowScanner) (models.ApprovalRequest, error) {
 	}
 	if ruleID.Valid {
 		approval.RuleID = ruleID.String
+	}
+	if len(requestContextJSON) > 0 {
+		if err := json.Unmarshal(requestContextJSON, &approval.RequestContext); err != nil {
+			return models.ApprovalRequest{}, err
+		}
 	}
 	if len(reasonsJSON) > 0 {
 		if err := json.Unmarshal(reasonsJSON, &approval.Reasons); err != nil {

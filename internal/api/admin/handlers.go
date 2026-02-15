@@ -98,6 +98,13 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
 	adminGroup.PUT("/config/write-lock", deps.handleAdminWriteLock)
 	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
+
+	// Tenant management (Epic 7)
+	adminGroup.POST("/tenants", deps.handleTenantCreate)
+	adminGroup.PUT("/tenants/:tenant_id/enabled", deps.handleTenantSetEnabled)
+	adminGroup.GET("/tenants/:tenant_id/keys", deps.handleTenantKeysList)
+	adminGroup.POST("/tenants/:tenant_id/keys/rotate", deps.handleTenantKeyRotate)
+	adminGroup.POST("/tenants/:tenant_id/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
 }
 
 func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {

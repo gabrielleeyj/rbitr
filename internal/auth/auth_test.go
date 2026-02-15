@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -14,7 +15,7 @@ import (
 
 func TestAuthenticateTenant(t *testing.T) {
 	errStoreBoom := errors.New("boom")
-	tenant := models.Tenant{TenantID: "t1", Name: "Tenant"}
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 	cases := []struct {
 		name       string
 		tenantKey  string
@@ -32,6 +33,28 @@ func TestAuthenticateTenant(t *testing.T) {
 			name:      "missing agent id",
 			tenantKey: "key",
 			err:       ErrForbidden,
+		},
+		{
+			name:      "agent id too long",
+			tenantKey: "key",
+			agentID:   strings.Repeat("a", 129),
+			err:       ErrInvalidAgentID,
+		},
+		{
+			name:      "agent id invalid chars",
+			tenantKey: "key",
+			agentID:   "agent with spaces",
+			err:       ErrInvalidAgentID,
+		},
+		{
+			name:      "agent id valid chars",
+			tenantKey: "key",
+			agentID:   "agent_v2.0-beta",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantByKeyHash", t.Context(), mock.Anything).
+					Return(tenant, nil)
+			},
+			expected: tenant,
 		},
 		{
 			name:      "tenant key not found",
@@ -213,6 +236,67 @@ func TestBearerToken(t *testing.T) {
 			t.Parallel()
 			if got := bearerToken(tc.value); got != tc.expect {
 				t.Fatalf("expected %q got %q", tc.expect, got)
+			}
+		})
+	}
+}
+
+func TestTenantKeyFromRequest(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name              string
+		authorization     string
+		xTenantKey        string
+		disableXTenantKey bool
+		expectKey         string
+		expectFallback    bool
+	}{
+		{
+			name:           "bearer preferred over fallback",
+			authorization:  "Bearer bearer_key",
+			xTenantKey:     "legacy_key",
+			expectKey:      "bearer_key",
+			expectFallback: false,
+		},
+		{
+			name:           "fallback used when bearer missing",
+			xTenantKey:     "legacy_key",
+			expectKey:      "legacy_key",
+			expectFallback: true,
+		},
+		{
+			name:              "fallback disabled",
+			xTenantKey:        "legacy_key",
+			disableXTenantKey: true,
+			expectKey:         "",
+			expectFallback:    false,
+		},
+		{
+			name:           "no auth headers",
+			expectKey:      "",
+			expectFallback: false,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			if tc.authorization != "" {
+				req.Header.Set(AuthorizationHeader, tc.authorization)
+			}
+			if tc.xTenantKey != "" {
+				req.Header.Set(TenantKeyHeader, tc.xTenantKey)
+			}
+
+			key, fallback := TenantKeyFromRequest(req, tc.disableXTenantKey)
+			if key != tc.expectKey {
+				t.Fatalf("expected key %q got %q", tc.expectKey, key)
+			}
+			if fallback != tc.expectFallback {
+				t.Fatalf("expected fallback %v got %v", tc.expectFallback, fallback)
 			}
 		})
 	}

@@ -1462,7 +1462,7 @@ func marshalAuditPayload(resourceType string, payload map[string]any) (json.RawM
 
 func isApprovalStatus(value string) bool {
 	switch value {
-	case "PENDING", "APPROVED", "DENIED", "EXECUTED", "EXPIRED", "REVOKED":
+	case "PENDING", "APPROVED", "DENIED", "EXECUTING", "EXECUTED", "FAILED", "EXPIRED", "REVOKED":
 		return true
 	default:
 		return false

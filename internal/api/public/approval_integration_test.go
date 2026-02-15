@@ -29,12 +29,14 @@ func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {
 	defer db.Close()
 
 	tenantKeyHash := utils.HashString("tenant_demo_key")
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 		WithArgs(tenantKeyHash).
-		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	payload := ToolCallRequest{
 		HTTPMethod: "POST",
@@ -151,12 +153,14 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	defer db.Close()
 
 	tenantKeyHash := utils.HashString("tenant_demo_key")
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 		WithArgs(tenantKeyHash).
-		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT action_risk FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`)).
 		WithArgs("t_demo", "ACCESS.ROLE_CHANGE").
@@ -392,12 +396,14 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	adminEcho.ServeHTTP(adminRec, adminReq)
 	require.Equal(t, http.StatusOK, adminRec.Code)
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 		WithArgs(tenantKeyHash).
-		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
@@ -474,12 +480,14 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, rec2.Code)
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 		WithArgs(tenantKeyHash).
-		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
@@ -564,12 +572,14 @@ func TestApprovalResubmissionInvalidCases(t *testing.T) {
 			defer db.Close()
 
 			tenantKeyHash := utils.HashString("tenant_demo_key")
-			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name
+			sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, t.enabled
 		FROM rbitr.tenant_keys tk
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
-		WHERE tk.key_hash = $1`)).
+		WHERE tk.key_hash = $1
+		  AND tk.revoked_at IS NULL
+		  AND t.enabled = true`)).
 				WithArgs(tenantKeyHash).
-				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name"}).AddRow("t_demo", "Demo"))
+				WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 			payload := ToolCallRequest{
 				HTTPMethod: "POST",

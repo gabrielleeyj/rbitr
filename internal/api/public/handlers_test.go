@@ -26,7 +26,7 @@ import (
 )
 
 func TestHandleToolCall(t *testing.T) {
-	tenant := models.Tenant{TenantID: "t1", Name: "Tenant"}
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 	tool := models.Tool{ToolID: "mock_internal", TenantID: "t1", BaseURL: "http://example", AuthType: "api_key", AuthValue: "key"}
 
 	cases := []struct {
@@ -88,7 +88,12 @@ func TestHandleToolCall(t *testing.T) {
 				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
 					Return("", store.ErrNotFound)
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
-				storeMock.On("InsertApprovalRequest", context.Background(), mock.Anything).Return(nil)
+				storeMock.On("InsertApprovalRequest", context.Background(), mock.MatchedBy(func(req models.ApprovalRequest) bool {
+					path, _ := req.RequestContext["path"].(string)
+					method, _ := req.RequestContext["http_method"].(string)
+					_, hasBody := req.RequestContext["body_json"]
+					return path == "/refund" && method == "POST" && hasBody
+				})).Return(nil)
 				storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusConflict,
@@ -118,7 +123,7 @@ func TestHandleToolCall(t *testing.T) {
 				}
 				requestHash := utils.HashCanonical(&canonical)
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
-				storeMock.On("GetApprovalRequest", context.Background(), "t1", "ar1").Return(models.ApprovalRequest{
+				storeMock.On("GetApprovalForExecution", context.Background(), "t1", "ar1").Return(models.ApprovalRequest{
 					ApprovalRequestID: "ar1",
 					TenantID:          "t1",
 					AgentID:           "agent",
@@ -133,6 +138,8 @@ func TestHandleToolCall(t *testing.T) {
 					Risk:              "MEDIUM",
 					RuleID:            "rule_approval",
 				}, nil)
+				storeMock.On("ClaimApprovalExecution", context.Background(), "t1", "ar1", utils.HashString("token123"), requestHash, mock.Anything).
+					Return(nil)
 				storeMock.On("GetTool", context.Background(), tenant.TenantID, "mock_internal").Return(tool, nil)
 				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
 					return record.Decision == "ALLOW" && record.ApprovalRequestID == "ar1"
@@ -253,7 +260,7 @@ func TestHandleEvidence(t *testing.T) {
 			pathTenant:   "t2",
 			expectedCode: http.StatusForbidden,
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1"}, nil)
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 			},
 		},
 		{
@@ -262,7 +269,7 @@ func TestHandleEvidence(t *testing.T) {
 			pathTenant:   "t1",
 			expectedCode: http.StatusOK,
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1"}, nil)
+				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 				storeMock.On("ListEvidence", context.Background(), "t1", 50).Return([]models.ActionDecisionRecord{
 					{
 						DecisionID:      "d1",
@@ -323,10 +330,86 @@ func TestHandleEvidence(t *testing.T) {
 	}
 }
 
+func TestHandleEvidenceTenantAuthBearerPreferred(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantByKeyHash", context.Background(), utils.HashString("bearer_key")).
+		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
+	storeMock.On("ListEvidence", context.Background(), "t1", 50).
+		Return([]models.ActionDecisionRecord{}, nil)
+
+	deps := Dependencies{
+		Store:   storeMock,
+		Metrics: newTestMetrics(),
+		Config:  config.Config{BodyLimitSize: 256 * 1024},
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		nil,
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+	)
+	req.Header.Set(auth.AuthorizationHeader, "Bearer bearer_key")
+	req.Header.Set(auth.TenantKeyHeader, "legacy_key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleEvidence(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Empty(t, rec.Header().Get("Deprecation"))
+}
+
+func TestHandleEvidenceTenantAuthFallbackSetsDeprecationHeaders(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantByKeyHash", context.Background(), utils.HashString("legacy_key")).
+		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
+	storeMock.On("ListEvidence", context.Background(), "t1", 50).
+		Return([]models.ActionDecisionRecord{}, nil)
+
+	deps := Dependencies{
+		Store:   storeMock,
+		Metrics: newTestMetrics(),
+		Config:  config.Config{BodyLimitSize: 256 * 1024},
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		nil,
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "legacy_key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleEvidence(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "true", rec.Header().Get("Deprecation"))
+	require.Equal(t, xTenantKeySunset, rec.Header().Get("Sunset"))
+}
+
+func TestHandleEvidenceTenantAuthFallbackDisabled(t *testing.T) {
+	deps := Dependencies{
+		Store:   store.NewMockStoreAPI(t),
+		Metrics: newTestMetrics(),
+		Config:  config.Config{BodyLimitSize: 256 * 1024, DisableXTenantKey: true},
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		nil,
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "legacy_key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleEvidence(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 func TestHandleEvidenceIncludesApprovalMetadata(t *testing.T) {
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).
-		Return(models.Tenant{TenantID: "t1"}, nil)
+		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 	storeMock.On("ListEvidence", context.Background(), "t1", 50).
 		Return([]models.ActionDecisionRecord{
 			{
@@ -412,16 +495,19 @@ func TestHandleEvidenceIncludesApprovalMetadata(t *testing.T) {
 
 func newTestMetrics() *telemetry.Metrics {
 	return &telemetry.Metrics{
-		DecisionsTotal:         prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total"}, []string{"decision", "action_type"}),
-		GatewayRequests:        prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total"}),
-		ToolExecTotal:          prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total"}),
-		ErrorsTotal:            prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total"}),
-		DecisionLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms"}),
-		ToolLatencyMs:          prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms"}),
-		PolicyEvalInvalidTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total"}, []string{"reason"}),
-		ApprovalsCreatedTotal:  prometheus.NewCounter(prometheus.CounterOpts{Name: "test_approvals_created_total"}),
-		ApprovalsResolvedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_resolved_total"}, []string{"resolution"}),
-		ApprovalsExecuteTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_execute_total"}, []string{"result"}),
+		DecisionsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_decisions_total"}, []string{"decision", "action_type"}),
+		GatewayRequests:         prometheus.NewCounter(prometheus.CounterOpts{Name: "test_gateway_requests_total"}),
+		ToolExecTotal:           prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tool_exec_total"}),
+		ErrorsTotal:             prometheus.NewCounter(prometheus.CounterOpts{Name: "test_errors_total"}),
+		DecisionLatencyMs:       prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_decision_latency_ms"}),
+		ToolLatencyMs:           prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_tool_latency_ms"}),
+		PolicyEvalInvalidTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_policy_eval_invalid_total"}, []string{"reason"}),
+		ApprovalsCreatedTotal:   prometheus.NewCounter(prometheus.CounterOpts{Name: "test_approvals_created_total"}),
+		ApprovalsResolvedTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_resolved_total"}, []string{"resolution"}),
+		ApprovalsExecuteTotal:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_approvals_execute_total"}, []string{"result"}),
+		CacheHitsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_hits_total"}, []string{"cache"}),
+		CacheMissesTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_misses_total"}, []string{"cache"}),
+		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tenant_auth_fallback_total"}),
 	}
 }
 
