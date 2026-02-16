@@ -51,32 +51,39 @@ type RiskOverrideRequest struct {
 
 func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup := e.Group("/admin")
-	adminGroup.PUT("/tenants/:tenant_id/config", deps.handleTenantConfigUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/policy", deps.handlePolicyUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
+
 	adminGroup.GET("/tenants", deps.handleTenantList)
 	adminGroup.GET("/tenants/:tenant_id", deps.handleTenantDetail)
 	adminGroup.GET("/tenants/:tenant_id/evidence", deps.handleEvidenceList)
+	adminGroup.PUT("/tenants/:tenant_id/config", deps.handleTenantConfigUpdate)
+	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
+	adminGroup.PUT("/tenants/:tenant_id/policy", deps.handlePolicyUpdate)
+
 	adminGroup.GET("/tenants/:tenant_id/policies", deps.handlePolicyVersions)
 	adminGroup.GET("/tenants/:tenant_id/policies/:policy_version", deps.handlePolicyVersionGet)
 	adminGroup.POST("/tenants/:tenant_id/policies", deps.handlePolicyCreate)
+	adminGroup.POST("/tenants/:tenant_id/policies/simulate", deps.handlePolicySimulate)
 	adminGroup.PUT("/tenants/:tenant_id/policies/:policy_version/publish", deps.handlePolicyPublish)
 	adminGroup.PUT("/tenants/:tenant_id/policies/rollback", deps.handlePolicyRollback)
-	adminGroup.POST("/tenants/:tenant_id/policies/simulate", deps.handlePolicySimulate)
+
 	adminGroup.GET("/tenants/:tenant_id/risk-overrides", deps.handleRiskOverridesList)
+	adminGroup.PUT("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
 	adminGroup.DELETE("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideDelete)
+
 	adminGroup.GET("/tenants/:tenant_id/approvals", deps.handleApprovalsList)
 	adminGroup.GET("/tenants/:tenant_id/approvals/:approval_request_id", deps.handleApprovalDetail)
 	adminGroup.GET("/tenants/:tenant_id/approvals/pending-count", deps.handleApprovalsPendingCount)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/approve", deps.handleApprovalApprove)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/deny", deps.handleApprovalDeny)
 	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
+
 	adminGroup.GET("/tenants/:tenant_id/tools", deps.handleToolsList)
 	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
+
 	adminGroup.GET("/tenants/:tenant_id/audit", deps.handleAuditList)
 	adminGroup.GET("/tenants/:tenant_id/audit/export", deps.handleAuditExport)
 	adminGroup.GET("/tenants/:tenant_id/audit/resource-types", deps.handleAuditResourceTypes)
+
 	adminGroup.GET("/tenants/:tenant_id/notifications", deps.handleNotificationConfigGet)
 	adminGroup.PUT("/tenants/:tenant_id/notifications", deps.handleNotificationConfigUpdate)
 	adminGroup.PUT("/tenants/:tenant_id/notifications/slack-secret-ref", deps.handleNotificationSlackSecretRefSet)
@@ -85,26 +92,27 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.POST("/tenants/:tenant_id/notifications/test/slack-bot", deps.handleNotificationTestSlackBot)
 	adminGroup.POST("/tenants/:tenant_id/notifications/test/email", deps.handleNotificationTestEmail)
 	adminGroup.GET("/tenants/:tenant_id/notifications/suppressions", deps.handleNotificationSuppressions)
-	adminGroup.GET("/notifications/event-types", deps.handleNotificationEventTypes)
-	adminGroup.GET("/action-types", deps.handleActionTypes)
+
 	adminGroup.GET("/tenants/:tenant_id/mailing-lists", deps.handleMailingListsList)
 	adminGroup.POST("/tenants/:tenant_id/mailing-lists", deps.handleMailingListCreate)
 	adminGroup.PUT("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListUpdate)
 	adminGroup.DELETE("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListDelete)
-	adminGroup.GET("/audit", deps.handleAuditListAll)
-	adminGroup.GET("/settings", deps.handleSettingsGet)
-	adminGroup.PUT("/settings/default-approval-ttl", deps.handleDefaultApprovalTTLUpdate)
-	adminGroup.PUT("/settings/audit-retention", deps.handleAuditRetentionUpdate)
-	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
-	adminGroup.PUT("/config/write-lock", deps.handleAdminWriteLock)
-	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
 
-	// Tenant management (Epic 7)
 	adminGroup.POST("/tenants", deps.handleTenantCreate)
 	adminGroup.PUT("/tenants/:tenant_id/enabled", deps.handleTenantSetEnabled)
 	adminGroup.GET("/tenants/:tenant_id/keys", deps.handleTenantKeysList)
 	adminGroup.POST("/tenants/:tenant_id/keys/rotate", deps.handleTenantKeyRotate)
 	adminGroup.POST("/tenants/:tenant_id/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
+
+	adminGroup.GET("/action-types", deps.handleActionTypes)
+	adminGroup.GET("/audit", deps.handleAuditListAll)
+	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
+	adminGroup.PUT("/config/write-lock", deps.handleAdminWriteLock)
+	adminGroup.GET("/notifications/event-types", deps.handleNotificationEventTypes)
+	adminGroup.GET("/settings", deps.handleSettingsGet)
+	adminGroup.PUT("/settings/default-approval-ttl", deps.handleDefaultApprovalTTLUpdate)
+	adminGroup.PUT("/settings/audit-retention", deps.handleAuditRetentionUpdate)
+	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
 }
 
 func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
