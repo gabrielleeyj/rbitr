@@ -9,9 +9,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getNotificationConfig, getPendingApprovalsCount, listTenants } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { TenantSummary, useTenant } from "@/lib/tenant";
+import { scopeApprovalsRead, scopeNotificationsRead, scopeTenantsRead } from "@/lib/scopes";
 
 export function TenantsPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant, setSelectedTenant } = useTenant();
   const navigate = useNavigate();
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
@@ -30,12 +31,19 @@ export function TenantsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const lastLoadedKeyRef = useRef<string | null>(null);
+  const canReadTenants = hasScope(scopeTenantsRead);
+  const canReadNotifications = hasScope(scopeNotificationsRead);
+  const canReadApprovals = hasScope(scopeApprovalsRead);
 
   useEffect(() => {
     let isMounted = true;
 
     const load = async () => {
-      if (!adminKey) {
+      if (!adminKey || !canReadTenants) {
+        if (isMounted) {
+          setTenants([]);
+          setLoading(false);
+        }
         return;
       }
       const loadKey = adminKey;
@@ -62,10 +70,11 @@ export function TenantsPage() {
     return () => {
       isMounted = false;
     };
-  }, [adminKey]);
+  }, [adminKey, canReadTenants]);
 
   useEffect(() => {
-    if (!adminKey || tenants.length === 0) {
+    if (!adminKey || !canReadNotifications || tenants.length === 0) {
+      setNotificationStatus({});
       return;
     }
     let mounted = true;
@@ -114,10 +123,11 @@ export function TenantsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenants]);
+  }, [adminKey, tenants, canReadNotifications]);
 
   useEffect(() => {
-    if (!adminKey || tenants.length === 0) {
+    if (!adminKey || !canReadApprovals || tenants.length === 0) {
+      setPendingCounts({});
       return;
     }
     let mounted = true;
@@ -145,7 +155,7 @@ export function TenantsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenants]);
+  }, [adminKey, tenants, canReadApprovals]);
 
   const legendFlags = useMemo(() => {
     const values = Object.values(notificationStatus);
@@ -164,7 +174,7 @@ export function TenantsPage() {
       <CardHeader>
         <CardTitle>Tenants</CardTitle>
         <CardDescription>Select a tenant to manage policies and evidence.</CardDescription>
-        {tenants.length > 0 ? (
+        {canReadNotifications && tenants.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Notification status:</span>
             {legendFlags.showSlackOn ? <Badge variant="default">Slack On</Badge> : null}
@@ -182,6 +192,11 @@ export function TenantsPage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
+        {!canReadTenants ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopeTenantsRead}</AlertDescription>
+          </Alert>
+        ) : null}
         {loading ? (
           <div className="text-sm text-muted-foreground">Loading tenants...</div>
         ) : (
@@ -191,8 +206,8 @@ export function TenantsPage() {
                 <TableHead>Tenant</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Active policy</TableHead>
-                <TableHead>Notifications</TableHead>
-                <TableHead>Pending approvals</TableHead>
+                {canReadNotifications ? <TableHead>Notifications</TableHead> : null}
+                {canReadApprovals ? <TableHead>Pending approvals</TableHead> : null}
                 <TableHead>Tools</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -203,41 +218,45 @@ export function TenantsPage() {
                   <TableCell className="font-medium">{tenant.tenant_id}</TableCell>
                   <TableCell>{tenant.name ?? "—"}</TableCell>
                   <TableCell>{tenant.active_policy_version ?? "—"}</TableCell>
-                  <TableCell>
-                    {notificationStatus[tenant.tenant_id]?.error ? (
-                      <Badge variant="outline">Unavailable</Badge>
-                    ) : notificationStatus[tenant.tenant_id]?.configured ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant={notificationStatus[tenant.tenant_id]?.slackEnabled ? "default" : "outline"}>
-                          Slack {notificationStatus[tenant.tenant_id]?.slackEnabled ? "On" : "Off"}
-                        </Badge>
-                        <Badge variant={notificationStatus[tenant.tenant_id]?.emailEnabled ? "default" : "outline"}>
-                          Email {notificationStatus[tenant.tenant_id]?.emailEnabled ? "On" : "Off"}
-                        </Badge>
-                      </div>
-                    ) : (
-                      <Badge variant="outline">None</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {pendingCounts[tenant.tenant_id] !== undefined ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="px-2"
-                        onClick={() => {
-                          setSelectedTenant(tenant);
-                          navigate("/approvals");
-                        }}
-                      >
-                        <Badge variant={pendingCounts[tenant.tenant_id] > 0 ? "default" : "outline"}>
-                          {pendingCounts[tenant.tenant_id]}
-                        </Badge>
-                      </Button>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
+                  {canReadNotifications ? (
+                    <TableCell>
+                      {notificationStatus[tenant.tenant_id]?.error ? (
+                        <Badge variant="outline">Unavailable</Badge>
+                      ) : notificationStatus[tenant.tenant_id]?.configured ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant={notificationStatus[tenant.tenant_id]?.slackEnabled ? "default" : "outline"}>
+                            Slack {notificationStatus[tenant.tenant_id]?.slackEnabled ? "On" : "Off"}
+                          </Badge>
+                          <Badge variant={notificationStatus[tenant.tenant_id]?.emailEnabled ? "default" : "outline"}>
+                            Email {notificationStatus[tenant.tenant_id]?.emailEnabled ? "On" : "Off"}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <Badge variant="outline">None</Badge>
+                      )}
+                    </TableCell>
+                  ) : null}
+                  {canReadApprovals ? (
+                    <TableCell>
+                      {pendingCounts[tenant.tenant_id] !== undefined ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="px-2"
+                          onClick={() => {
+                            setSelectedTenant(tenant);
+                            navigate("/approvals");
+                          }}
+                        >
+                          <Badge variant={pendingCounts[tenant.tenant_id] > 0 ? "default" : "outline"}>
+                            {pendingCounts[tenant.tenant_id]}
+                          </Badge>
+                        </Button>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                  ) : null}
                   <TableCell>{tenant.tool_count ?? "—"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex flex-wrap justify-end gap-2">
@@ -251,6 +270,7 @@ export function TenantsPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={!canReadNotifications}
                         onClick={() => {
                           setSelectedTenant(tenant);
                           navigate("/notifications");

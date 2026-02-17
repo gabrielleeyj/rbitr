@@ -152,6 +152,66 @@ func TestAuthenticateAdmin(t *testing.T) {
 			},
 			expected: adminKey,
 		},
+		{
+			name:  "granular read allowed by legacy read umbrella",
+			key:   "key",
+			scope: "admin:tools:read",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}, nil)
+			},
+			expected: models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}},
+		},
+		{
+			name:  "granular write allowed by legacy write umbrella",
+			key:   "key",
+			scope: "admin:tools:write",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:write"}}, nil)
+			},
+			expected: models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:write"}},
+		},
+		{
+			name:  "export allowed by legacy read umbrella",
+			key:   "key",
+			scope: "admin:audit:export",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}, nil)
+			},
+			expected: models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}},
+		},
+		{
+			name:  "simulate allowed by legacy read umbrella",
+			key:   "key",
+			scope: "admin:policies:simulate",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}, nil)
+			},
+			expected: models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}},
+		},
+		{
+			name:  "granular explicit scope works",
+			key:   "key",
+			scope: "admin:approvals:decide",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:approvals:decide"}}, nil)
+			},
+			expected: models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:approvals:decide"}},
+		},
+		{
+			name:  "granular write denied for read-only umbrella",
+			key:   "key",
+			scope: "admin:settings:write",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}, nil)
+			},
+			err: ErrForbidden,
+		},
 	}
 
 	for _, tc := range cases {
@@ -165,6 +225,67 @@ func TestAuthenticateAdmin(t *testing.T) {
 			if tc.err != nil {
 				require.Error(t, err)
 				require.True(t, errors.Is(err, tc.err))
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestAuthenticateAdminAny(t *testing.T) {
+	adminKey := models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}
+	cases := []struct {
+		name       string
+		key        string
+		storeSetup func(*store.MockStoreAPI)
+		expected   models.AdminKey
+		err        error
+	}{
+		{
+			name: "missing admin key",
+			err:  ErrUnauthorized,
+		},
+		{
+			name: "key not found",
+			key:  "key",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{}, store.ErrNotFound)
+			},
+			err: ErrUnauthorized,
+		},
+		{
+			name: "store error",
+			key:  "key",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(models.AdminKey{}, errors.New("boom"))
+			},
+			err: errors.New("boom"),
+		},
+		{
+			name: "success",
+			key:  "key",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminKeyByHash", t.Context(), mock.Anything).
+					Return(adminKey, nil)
+			},
+			expected: adminKey,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockStore := store.NewMockStoreAPI(t)
+			var storeAPI store.StoreAPI = mockStore
+			if tc.storeSetup != nil {
+				tc.storeSetup(mockStore)
+			}
+			got, err := AuthenticateAdminAny(t.Context(), storeAPI, tc.key)
+			if tc.err != nil {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.err.Error())
 				return
 			}
 			require.NoError(t, err)
@@ -298,6 +419,39 @@ func TestTenantKeyFromRequest(t *testing.T) {
 			if fallback != tc.expectFallback {
 				t.Fatalf("expected fallback %v got %v", tc.expectFallback, fallback)
 			}
+		})
+	}
+}
+
+func TestHasScopeGranularCompatibilityMatrix(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		scopes   []string
+		required string
+		allowed  bool
+	}{
+		{name: "explicit tenants read", scopes: []string{"admin:tenants:read"}, required: "admin:tenants:read", allowed: true},
+		{name: "legacy read allows tenants read", scopes: []string{"admin:read"}, required: "admin:tenants:read", allowed: true},
+		{name: "legacy write does not imply read", scopes: []string{"admin:write"}, required: "admin:tenants:read", allowed: false},
+		{name: "explicit tenants write", scopes: []string{"admin:tenants:write"}, required: "admin:tenants:write", allowed: true},
+		{name: "legacy write allows tenants write", scopes: []string{"admin:write"}, required: "admin:tenants:write", allowed: true},
+		{name: "legacy read does not allow tenants write", scopes: []string{"admin:read"}, required: "admin:tenants:write", allowed: false},
+		{name: "legacy write allows keys rotate", scopes: []string{"admin:write"}, required: "admin:keys:rotate", allowed: true},
+		{name: "legacy write allows policy publish", scopes: []string{"admin:write"}, required: "admin:policies:publish", allowed: true},
+		{name: "legacy read allows policy simulate", scopes: []string{"admin:read"}, required: "admin:policies:simulate", allowed: true},
+		{name: "legacy read allows audit export", scopes: []string{"admin:read"}, required: "admin:audit:export", allowed: true},
+		{name: "legacy write allows notification test", scopes: []string{"admin:write"}, required: "admin:notifications:test", allowed: true},
+		{name: "legacy write allows settings write", scopes: []string{"admin:write"}, required: "admin:settings:write", allowed: true},
+		{name: "explicit mismatch denied", scopes: []string{"admin:tools:read"}, required: "admin:tools:write", allowed: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.allowed, hasScope(tc.scopes, tc.required))
 		})
 	}
 }

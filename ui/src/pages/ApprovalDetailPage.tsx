@@ -20,9 +20,10 @@ import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import type { ApprovalRequest } from "@/lib/api";
 import { toast } from "sonner";
+import { scopeApprovalsDecide, scopeApprovalsRead } from "@/lib/scopes";
 
 export function ApprovalDetailPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const { approvalId } = useParams();
@@ -33,6 +34,8 @@ export function ApprovalDetailPage() {
   const [action, setAction] = useState<"approve" | "deny" | "revoke" | null>(null);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const canReadApprovals = hasScope(scopeApprovalsRead);
+  const canDecideApprovals = hasScope(scopeApprovalsDecide);
 
   const dialogTitle = useMemo(() => {
     if (!action) return "";
@@ -44,7 +47,8 @@ export function ApprovalDetailPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey || !tenantId || !approvalId) {
+      if (!adminKey || !tenantId || !approvalId || !canReadApprovals) {
+        setApproval(null);
         setLoading(false);
         return;
       }
@@ -64,16 +68,19 @@ export function ApprovalDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId, approvalId]);
+  }, [adminKey, tenantId, approvalId, canReadApprovals]);
 
   const openDialog = (nextAction: "approve" | "deny" | "revoke") => {
+    if (!canDecideApprovals) {
+      return;
+    }
     setAction(nextAction);
     setComment("");
     setDialogOpen(true);
   };
 
   const handleDecision = async () => {
-    if (!adminKey || !tenantId || !approval || !action) return;
+    if (!adminKey || !tenantId || !approval || !action || !canDecideApprovals) return;
     try {
       setSubmitting(true);
       if (action === "approve") {
@@ -114,6 +121,11 @@ export function ApprovalDetailPage() {
       {error ? (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {!canReadApprovals ? (
+        <Alert>
+          <AlertDescription>Missing scope: {scopeApprovalsRead}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -209,7 +221,7 @@ export function ApprovalDetailPage() {
             ) : null}
 
             <div className="flex flex-wrap gap-2">
-              {approval.status === "PENDING" ? (
+              {approval.status === "PENDING" && canDecideApprovals ? (
                 <>
                   <Button size="sm" onClick={() => openDialog("approve")}>
                     Approve
@@ -219,7 +231,7 @@ export function ApprovalDetailPage() {
                   </Button>
                 </>
               ) : null}
-              {approval.status === "APPROVED" ? (
+              {approval.status === "APPROVED" && canDecideApprovals ? (
                 <Button size="sm" variant="outline" onClick={() => openDialog("revoke")}>
                   Revoke
                 </Button>
@@ -247,7 +259,7 @@ export function ApprovalDetailPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleDecision} disabled={submitting}>
+            <Button onClick={handleDecision} disabled={submitting || !canDecideApprovals}>
               {submitting ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>

@@ -27,6 +27,11 @@ import {
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
+import {
+  scopeNotificationsRead,
+  scopeNotificationsTest,
+  scopeNotificationsWrite,
+} from "@/lib/scopes";
 
 const emptyConfig = {
   slack_webhook_enabled: false,
@@ -45,7 +50,7 @@ const emptyConfig = {
 };
 
 export function NotificationsPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const [config, setConfig] = useState(emptyConfig);
@@ -91,6 +96,9 @@ export function NotificationsPage() {
     severities: string[];
     channels: string[];
   } | null>(null);
+  const canReadNotifications = hasScope(scopeNotificationsRead);
+  const canWriteNotifications = hasScope(scopeNotificationsWrite);
+  const canTestNotifications = hasScope(scopeNotificationsTest);
 
   const isEditingList = Boolean(listForm.mailing_list_id);
 
@@ -102,7 +110,7 @@ export function NotificationsPage() {
   }, [listForm.members]);
 
   const load = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadNotifications) return;
     const [configResult, lists, suppressionResult] = await Promise.allSettled([
       getNotificationConfig({ adminKey }, tenantId),
       listMailingLists({ adminKey }, tenantId),
@@ -153,7 +161,15 @@ export function NotificationsPage() {
   useEffect(() => {
     let mounted = true;
     const init = async () => {
-      if (!adminKey || !tenantId) {
+      if (!adminKey || !tenantId || !canReadNotifications) {
+        setConfig(emptyConfig);
+        setStatus({
+          slack_webhook_configured: false,
+          slack_bot_configured: false,
+          email_configured: false,
+        });
+        setMailingLists([]);
+        setSuppressions([]);
         setLoading(false);
         return;
       }
@@ -171,12 +187,17 @@ export function NotificationsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId]);
+  }, [adminKey, tenantId, canReadNotifications]);
 
   useEffect(() => {
     let mounted = true;
     const loadMetadata = async () => {
-      if (!adminKey) return;
+      if (!adminKey || !canReadNotifications) {
+        if (mounted) {
+          setNotificationMeta(null);
+        }
+        return;
+      }
       try {
         const meta = await getNotificationMetadata({ adminKey });
         if (mounted) {
@@ -192,10 +213,10 @@ export function NotificationsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey]);
+  }, [adminKey, canReadNotifications]);
 
   const handleConfigSave = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteNotifications) return;
     setActionError("");
     try {
       await updateNotificationConfig({ adminKey }, tenantId, config);
@@ -207,7 +228,7 @@ export function NotificationsPage() {
   };
 
   const handleSlackSecretSave = async () => {
-    if (!adminKey || !tenantId || !slackSecretRef) return;
+    if (!adminKey || !tenantId || !slackSecretRef || !canWriteNotifications) return;
     setActionError("");
     try {
       await setSlackSecretRef({ adminKey }, tenantId, slackSecretRef);
@@ -220,7 +241,7 @@ export function NotificationsPage() {
   };
 
   const handleEmailSecretSave = async () => {
-    if (!adminKey || !tenantId || !emailSecretRef) return;
+    if (!adminKey || !tenantId || !emailSecretRef || !canWriteNotifications) return;
     setActionError("");
     try {
       await setEmailSecretRef({ adminKey }, tenantId, emailSecretRef);
@@ -233,7 +254,7 @@ export function NotificationsPage() {
   };
 
   const handleSlackTest = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canTestNotifications) return;
     setActionError("");
     try {
       await sendSlackTest({ adminKey }, tenantId);
@@ -244,7 +265,7 @@ export function NotificationsPage() {
   };
 
   const handleSlackBotTest = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canTestNotifications) return;
     setActionError("");
     try {
       await sendSlackBotTest({ adminKey }, tenantId);
@@ -255,7 +276,7 @@ export function NotificationsPage() {
   };
 
   const handleEmailTest = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canTestNotifications) return;
     setActionError("");
     try {
       await sendEmailTest({ adminKey }, tenantId);
@@ -266,7 +287,7 @@ export function NotificationsPage() {
   };
 
   const handleListSubmit = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteNotifications) return;
     setActionError("");
     if (!listForm.name) {
       setActionError("Mailing list name is required.");
@@ -305,7 +326,7 @@ export function NotificationsPage() {
   };
 
   const handleListDelete = async (id: string) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteNotifications) return;
     setActionError("");
     try {
       await deleteMailingList({ adminKey }, tenantId, id);
@@ -321,7 +342,7 @@ export function NotificationsPage() {
   };
 
   const refreshSuppressions = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadNotifications) return;
     try {
       const data = await listNotificationSuppressions({ adminKey }, tenantId, {
         limit: 50,
@@ -347,6 +368,11 @@ export function NotificationsPage() {
           <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       ) : null}
+      {!canReadNotifications ? (
+        <Alert>
+          <AlertDescription>Missing scope: {scopeNotificationsRead}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -368,7 +394,7 @@ export function NotificationsPage() {
                   onCheckedChange={(checked) =>
                     setConfig((prev) => ({ ...prev, slack_webhook_enabled: checked }))
                   }
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="space-y-2">
@@ -380,7 +406,7 @@ export function NotificationsPage() {
                     setConfig((prev) => ({ ...prev, slack_webhook_default_channel: event.target.value }))
                   }
                   placeholder="#alerts"
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="space-y-2">
@@ -391,14 +417,23 @@ export function NotificationsPage() {
                     value={slackSecretRef}
                     onChange={(event) => setSlackSecretRefInput(event.target.value)}
                     placeholder="env://RBTR_SLACK_WEBHOOK"
+                    disabled={!canWriteNotifications}
                   />
-                  <Button variant="outline" onClick={handleSlackSecretSave} disabled={!slackSecretRef}>
+                  <Button
+                    variant="outline"
+                    onClick={handleSlackSecretSave}
+                    disabled={!slackSecretRef || !canWriteNotifications}
+                  >
                     Save ref
                   </Button>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleSlackTest} disabled={!status.slack_webhook_configured}>
+                <Button
+                  variant="outline"
+                  onClick={handleSlackTest}
+                  disabled={!status.slack_webhook_configured || !canTestNotifications}
+                >
                   Send Slack test
                 </Button>
               </div>
@@ -413,7 +448,7 @@ export function NotificationsPage() {
                 <Switch
                   checked={config.slack_bot_enabled}
                   onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, slack_bot_enabled: checked }))}
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="space-y-2">
@@ -425,11 +460,15 @@ export function NotificationsPage() {
                     setConfig((prev) => ({ ...prev, slack_bot_default_channel: event.target.value }))
                   }
                   placeholder="C01234567"
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleSlackBotTest} disabled={!status.slack_bot_configured}>
+                <Button
+                  variant="outline"
+                  onClick={handleSlackBotTest}
+                  disabled={!status.slack_bot_configured || !canTestNotifications}
+                >
                   Send Slack bot test
                 </Button>
               </div>
@@ -446,7 +485,7 @@ export function NotificationsPage() {
                 <Switch
                   checked={config.email_enabled}
                   onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, email_enabled: checked }))}
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="space-y-2">
@@ -454,8 +493,9 @@ export function NotificationsPage() {
                 <Select
                   value={config.email_provider || undefined}
                   onValueChange={(value) => setConfig((prev) => ({ ...prev, email_provider: value }))}
+                  disabled={!canWriteNotifications}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger disabled={!canWriteNotifications}>
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -472,7 +512,7 @@ export function NotificationsPage() {
                   value={config.email_from}
                   onChange={(event) => setConfig((prev) => ({ ...prev, email_from: event.target.value }))}
                   placeholder="alerts@example.com"
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               {config.email_provider === "ses" ? (
@@ -483,7 +523,7 @@ export function NotificationsPage() {
                     value={config.email_region}
                     onChange={(event) => setConfig((prev) => ({ ...prev, email_region: event.target.value }))}
                     placeholder="us-east-1"
-                    disabled={loading}
+                    disabled={loading || !canWriteNotifications}
                   />
                 </div>
               ) : null}
@@ -495,7 +535,7 @@ export function NotificationsPage() {
                     value={config.email_domain}
                     onChange={(event) => setConfig((prev) => ({ ...prev, email_domain: event.target.value }))}
                     placeholder="mg.example.com"
-                    disabled={loading}
+                    disabled={loading || !canWriteNotifications}
                   />
                 </div>
               ) : null}
@@ -508,7 +548,7 @@ export function NotificationsPage() {
                     setConfig((prev) => ({ ...prev, email_default_mailing_list_id: event.target.value }))
                   }
                   placeholder="ml_security"
-                  disabled={loading}
+                  disabled={loading || !canWriteNotifications}
                 />
               </div>
               <div className="space-y-2">
@@ -519,14 +559,23 @@ export function NotificationsPage() {
                     value={emailSecretRef}
                     onChange={(event) => setEmailSecretRefInput(event.target.value)}
                     placeholder="env://RBTR_EMAIL_PROVIDER_KEY"
+                    disabled={!canWriteNotifications}
                   />
-                  <Button variant="outline" onClick={handleEmailSecretSave} disabled={!emailSecretRef}>
+                  <Button
+                    variant="outline"
+                    onClick={handleEmailSecretSave}
+                    disabled={!emailSecretRef || !canWriteNotifications}
+                  >
                     Save ref
                   </Button>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleEmailTest} disabled={!status.email_configured}>
+                <Button
+                  variant="outline"
+                  onClick={handleEmailTest}
+                  disabled={!status.email_configured || !canTestNotifications}
+                >
                   Send Email test
                 </Button>
               </div>
@@ -542,6 +591,7 @@ export function NotificationsPage() {
                   id="notify-approval-expiring"
                   checked={config.notify_approval_expiring}
                   onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, notify_approval_expiring: checked }))}
+                  disabled={!canWriteNotifications}
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -552,6 +602,7 @@ export function NotificationsPage() {
                   id="notify-token-abuse"
                   checked={config.notify_token_abuse}
                   onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, notify_token_abuse: checked }))}
+                  disabled={!canWriteNotifications}
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -562,10 +613,11 @@ export function NotificationsPage() {
                   id="notify-policy-invalid"
                   checked={config.notify_policy_invalid}
                   onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, notify_policy_invalid: checked }))}
+                  disabled={!canWriteNotifications}
                 />
               </div>
               <div className="pt-2">
-                <Button onClick={handleConfigSave} disabled={loading}>
+                <Button onClick={handleConfigSave} disabled={loading || !canWriteNotifications}>
                   Save notification config
                 </Button>
               </div>
@@ -593,6 +645,7 @@ export function NotificationsPage() {
                 id="mailing-name"
                 value={listForm.name}
                 onChange={(event) => setListForm((prev) => ({ ...prev, name: event.target.value }))}
+                disabled={!canWriteNotifications}
               />
             </div>
             <div className="space-y-2">
@@ -601,6 +654,7 @@ export function NotificationsPage() {
                 id="mailing-description"
                 value={listForm.description}
                 onChange={(event) => setListForm((prev) => ({ ...prev, description: event.target.value }))}
+                disabled={!canWriteNotifications}
               />
             </div>
             <div className="md:col-span-2 space-y-2">
@@ -611,6 +665,7 @@ export function NotificationsPage() {
                 onChange={(event) => setListForm((prev) => ({ ...prev, members: event.target.value }))}
                 placeholder="ops@example.com, security@example.com"
                 rows={3}
+                disabled={!canWriteNotifications}
               />
               {isEditingList ? (
                 <div className="text-xs text-muted-foreground">
@@ -619,11 +674,11 @@ export function NotificationsPage() {
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={handleListSubmit} disabled={!tenantId}>
+              <Button onClick={handleListSubmit} disabled={!tenantId || !canWriteNotifications}>
                 {isEditingList ? "Update list" : "Create list"}
               </Button>
               {isEditingList ? (
-                <Button variant="outline" onClick={resetListForm}>
+                <Button variant="outline" onClick={resetListForm} disabled={!canWriteNotifications}>
                   Cancel edit
                 </Button>
               ) : null}
@@ -656,10 +711,16 @@ export function NotificationsPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleListEdit(list.mailing_list_id, list.name, list.description)}
+                          disabled={!canWriteNotifications}
                         >
                           Edit
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleListDelete(list.mailing_list_id)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleListDelete(list.mailing_list_id)}
+                          disabled={!canWriteNotifications}
+                        >
                           Delete
                         </Button>
                       </div>
@@ -684,8 +745,9 @@ export function NotificationsPage() {
               <Select
                 value={suppressionFilters.event_type}
                 onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, event_type: value }))}
+                disabled={!canReadNotifications}
               >
-                <SelectTrigger id="suppression-event">
+                <SelectTrigger id="suppression-event" disabled={!canReadNotifications}>
                   <SelectValue placeholder="All events" />
                 </SelectTrigger>
                 <SelectContent>
@@ -703,8 +765,9 @@ export function NotificationsPage() {
               <Select
                 value={suppressionFilters.channel}
                 onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, channel: value }))}
+                disabled={!canReadNotifications}
               >
-                <SelectTrigger id="suppression-channel">
+                <SelectTrigger id="suppression-channel" disabled={!canReadNotifications}>
                   <SelectValue placeholder="All channels" />
                 </SelectTrigger>
                 <SelectContent>
@@ -720,8 +783,9 @@ export function NotificationsPage() {
               <Select
                 value={suppressionFilters.severity}
                 onValueChange={(value) => setSuppressionFilters((prev) => ({ ...prev, severity: value }))}
+                disabled={!canReadNotifications}
               >
-                <SelectTrigger id="suppression-severity">
+                <SelectTrigger id="suppression-severity" disabled={!canReadNotifications}>
                   <SelectValue placeholder="All severities" />
                 </SelectTrigger>
                 <SelectContent>
@@ -733,7 +797,7 @@ export function NotificationsPage() {
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <Button variant="outline" onClick={refreshSuppressions} disabled={!tenantId}>
+              <Button variant="outline" onClick={refreshSuppressions} disabled={!tenantId || !canReadNotifications}>
                 Refresh
               </Button>
             </div>

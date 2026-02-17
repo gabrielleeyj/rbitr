@@ -145,7 +145,7 @@ type ToolResponse struct {
 }
 
 func (d Dependencies) handleTenantList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeTenantsRead); err != nil {
 		return err
 	}
 	items, err := d.Store.ListTenants(c.Request().Context())
@@ -156,7 +156,7 @@ func (d Dependencies) handleTenantList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleTenantDetail(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeTenantsRead); err != nil {
 		return err
 	}
 
@@ -172,7 +172,7 @@ func (d Dependencies) handleTenantDetail(c *echo.Context) error {
 }
 
 func (d Dependencies) handleEvidenceList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
 
@@ -241,7 +241,7 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleApprovalsList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
 
@@ -276,7 +276,7 @@ func (d Dependencies) handleApprovalsList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -291,7 +291,7 @@ func (d Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
 }
 
 func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
 
@@ -327,7 +327,7 @@ func (d Dependencies) handleApprovalRevoke(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
 
@@ -350,7 +350,7 @@ func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyVersionGet(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
 
@@ -367,7 +367,7 @@ func (d Dependencies) handlePolicyVersionGet(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
 	}
@@ -414,7 +414,7 @@ func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesPub)
 	if err != nil {
 		return err
 	}
@@ -451,7 +451,7 @@ func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesRB)
 	if err != nil {
 		return err
 	}
@@ -495,7 +495,7 @@ func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
 }
 
 func (d Dependencies) handlePolicySimulate(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopePoliciesSim); err != nil {
 		return err
 	}
 
@@ -581,7 +581,7 @@ func simulationMatchedRules(rules []opa.MatchedRule) []map[string]any {
 }
 
 func (d Dependencies) handleRiskOverridesList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
 
@@ -594,7 +594,7 @@ func (d Dependencies) handleRiskOverridesList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
 	}
@@ -618,7 +618,7 @@ func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 }
 
 func (d Dependencies) handleToolsList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeToolsRead); err != nil {
 		return err
 	}
 
@@ -658,7 +658,7 @@ func (d Dependencies) handleToolsList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleSettingsGet(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeSettingsRead); err != nil {
 		return err
 	}
 	tenantID := strings.TrimSpace(c.QueryParam("tenant_id"))
@@ -697,7 +697,7 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 }
 
 func (d Dependencies) handleAuditList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
 	limit, err := parseLimit(c.QueryParam("limit"))
@@ -731,7 +731,7 @@ func (d Dependencies) handleAuditList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleAuditResourceTypes(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -745,7 +745,7 @@ func (d Dependencies) handleAuditResourceTypes(c *echo.Context) error {
 }
 
 func (d Dependencies) handleAuditExport(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeAuditExport); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -814,7 +814,7 @@ func (d Dependencies) handleAuditExportResponse(c *echo.Context, tenantID string
 }
 
 func (d Dependencies) handleAuditListAll(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
 	limit, err := parseLimit(c.QueryParam("limit"))
@@ -847,7 +847,7 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -881,7 +881,7 @@ func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -956,7 +956,7 @@ func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -992,7 +992,7 @@ func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error
 }
 
 func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -1028,7 +1028,7 @@ func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error
 }
 
 func (d Dependencies) handleMailingListsList(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -1040,7 +1040,7 @@ func (d Dependencies) handleMailingListsList(c *echo.Context) error {
 }
 
 func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -1081,7 +1081,7 @@ func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -1127,7 +1127,7 @@ func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleMailingListDelete(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
 	}
@@ -1150,7 +1150,7 @@ func (d Dependencies) handleMailingListDelete(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
 	if d.Notifications == nil {
@@ -1184,7 +1184,7 @@ func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
 	if d.Notifications == nil {
@@ -1225,7 +1225,7 @@ func (d Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:write"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
 	if d.Notifications == nil {
@@ -1259,7 +1259,7 @@ func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
 	tenantID := c.Param("tenant_id")
@@ -1282,7 +1282,7 @@ func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 }
 
 func (d Dependencies) handleNotificationEventTypes(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
 	channels := []string{
@@ -1299,7 +1299,7 @@ func (d Dependencies) handleNotificationEventTypes(c *echo.Context) error {
 }
 
 func (d Dependencies) handleActionTypes(c *echo.Context) error {
-	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
+	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
 	return c.JSON(http.StatusOK, map[string][]string{
@@ -1308,7 +1308,7 @@ func (d Dependencies) handleActionTypes(c *echo.Context) error {
 }
 
 func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
 	}
@@ -1341,7 +1341,7 @@ func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
 	}
@@ -1371,7 +1371,7 @@ func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
 	}
@@ -1418,7 +1418,7 @@ func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 }
 
 func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeApprovalsDec)
 	if err != nil {
 		return err
 	}

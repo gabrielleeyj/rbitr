@@ -1,0 +1,25 @@
+package admin
+
+const (
+	scopeTenantsRead   = "admin:tenants:read"
+	scopeTenantsWrite  = "admin:tenants:write"
+	scopeKeysRead      = "admin:keys:read"
+	scopeKeysRotate    = "admin:keys:rotate"
+	scopeKeysRevoke    = "admin:keys:revoke"
+	scopePoliciesRead  = "admin:policies:read"
+	scopePoliciesWrite = "admin:policies:write"
+	scopePoliciesPub   = "admin:policies:publish"
+	scopePoliciesRB    = "admin:policies:rollback"
+	scopePoliciesSim   = "admin:policies:simulate"
+	scopeToolsRead     = "admin:tools:read"
+	scopeToolsWrite    = "admin:tools:write"
+	scopeApprovalsRead = "admin:approvals:read"
+	scopeApprovalsDec  = "admin:approvals:decide"
+	scopeAuditRead     = "admin:audit:read"
+	scopeAuditExport   = "admin:audit:export"
+	scopeNotifRead     = "admin:notifications:read"
+	scopeNotifWrite    = "admin:notifications:write"
+	scopeNotifTest     = "admin:notifications:test"
+	scopeSettingsRead  = "admin:settings:read"
+	scopeSettingsWrite = "admin:settings:write"
+)

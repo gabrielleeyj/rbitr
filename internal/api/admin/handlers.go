@@ -104,6 +104,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.POST("/tenants/:tenant_id/keys/rotate", deps.handleTenantKeyRotate)
 	adminGroup.POST("/tenants/:tenant_id/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
 
+	adminGroup.GET("/me", deps.handleAdminMe)
 	adminGroup.GET("/action-types", deps.handleActionTypes)
 	adminGroup.GET("/audit", deps.handleAuditListAll)
 	adminGroup.PUT("/bootstrap/complete", deps.handleBootstrapComplete)
@@ -120,7 +121,7 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeTenantsWrite)
 	if err != nil {
 		return err
 	}
@@ -169,7 +170,7 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeToolsWrite)
 	if err != nil {
 		return err
 	}
@@ -213,7 +214,7 @@ func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeToolsWrite)
 	if err != nil {
 		return err
 	}
@@ -277,7 +278,7 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
 	}
@@ -314,7 +315,7 @@ func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
 	}
@@ -354,7 +355,7 @@ func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
 	}
@@ -386,6 +387,22 @@ func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) (models
 		c.Set(telemetry.CtxAdminID, key.AdminKeyID)
 	}
 	return key, nil
+}
+
+func (d Dependencies) handleAdminMe(c *echo.Context) error {
+	adminKey := auth.AdminKeyFromRequest(c.Request())
+	key, err := auth.AuthenticateAdminAny(c.Request().Context(), d.Store, adminKey)
+	if err != nil {
+		_ = authError(c, err)
+		return err
+	}
+	if key.AdminKeyID != "" {
+		c.Set(telemetry.CtxAdminID, key.AdminKeyID)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"admin_key_id": key.AdminKeyID,
+		"scopes":       key.Scopes,
+	})
 }
 
 func authError(c *echo.Context, err error) error {

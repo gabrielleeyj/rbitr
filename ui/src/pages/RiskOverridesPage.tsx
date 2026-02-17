@@ -11,9 +11,10 @@ import { deleteRiskOverride, getActionTypes, listRiskOverrides, upsertRiskOverri
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
+import { scopePoliciesRead, scopePoliciesWrite } from "@/lib/scopes";
 
 export function RiskOverridesPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const [actionType, setActionType] = useState("");
@@ -23,9 +24,11 @@ export function RiskOverridesPage() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionTypes, setActionTypes] = useState<string[]>([]);
+  const canReadOverrides = hasScope(scopePoliciesRead);
+  const canWriteOverrides = hasScope(scopePoliciesWrite);
 
   const refresh = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadOverrides) return;
     const data = await listRiskOverrides({ adminKey }, tenantId);
     setOverrides(data ?? []);
   };
@@ -33,7 +36,8 @@ export function RiskOverridesPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey || !tenantId) {
+      if (!adminKey || !tenantId || !canReadOverrides) {
+        setOverrides([]);
         setLoading(false);
         return;
       }
@@ -52,12 +56,17 @@ export function RiskOverridesPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId]);
+  }, [adminKey, tenantId, canReadOverrides]);
 
   useEffect(() => {
     let mounted = true;
     const loadActionTypes = async () => {
-      if (!adminKey) return;
+      if (!adminKey || !canReadOverrides) {
+        if (mounted) {
+          setActionTypes([]);
+        }
+        return;
+      }
       try {
         const data = await getActionTypes({ adminKey });
         if (mounted) {
@@ -73,10 +82,10 @@ export function RiskOverridesPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey]);
+  }, [adminKey, canReadOverrides]);
 
   const handleUpsert = async () => {
-    if (!adminKey || !tenantId || !actionType) return;
+    if (!adminKey || !tenantId || !actionType || !canWriteOverrides) return;
     setActionError("");
     try {
       await upsertRiskOverride({ adminKey }, tenantId, actionType, actionRisk);
@@ -89,7 +98,7 @@ export function RiskOverridesPage() {
   };
 
   const handleDelete = async (type?: string) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteOverrides) return;
     const target = type ?? actionType;
     if (!target) return;
     setActionError("");
@@ -117,6 +126,11 @@ export function RiskOverridesPage() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
+        {!canReadOverrides ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopePoliciesRead}</AlertDescription>
+          </Alert>
+        ) : null}
         {actionError ? (
           <Alert variant="destructive">
             <AlertDescription>{actionError}</AlertDescription>
@@ -127,7 +141,7 @@ export function RiskOverridesPage() {
             <Label htmlFor="action-type">Action type</Label>
             {actionTypes.length > 0 ? (
               <Select value={actionType} onValueChange={setActionType}>
-                <SelectTrigger id="action-type">
+                <SelectTrigger id="action-type" disabled={!canWriteOverrides}>
                   <SelectValue placeholder="Select action type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -144,13 +158,14 @@ export function RiskOverridesPage() {
                 value={actionType}
                 onChange={(event) => setActionType(event.target.value)}
                 placeholder="DATA.EXPORT"
+                disabled={!canWriteOverrides}
               />
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="risk">Risk</Label>
-            <Select value={actionRisk} onValueChange={setActionRisk}>
-              <SelectTrigger id="risk">
+            <Select value={actionRisk} onValueChange={setActionRisk} disabled={!canWriteOverrides}>
+              <SelectTrigger id="risk" disabled={!canWriteOverrides}>
                 <SelectValue placeholder="Select risk" />
               </SelectTrigger>
               <SelectContent>
@@ -162,10 +177,10 @@ export function RiskOverridesPage() {
             </Select>
           </div>
           <div className="flex items-end gap-2">
-            <Button onClick={handleUpsert} disabled={!tenantId}>
+            <Button onClick={handleUpsert} disabled={!tenantId || !canWriteOverrides}>
               Upsert
             </Button>
-            <Button variant="outline" onClick={() => handleDelete()} disabled={!tenantId}>
+            <Button variant="outline" onClick={() => handleDelete()} disabled={!tenantId || !canWriteOverrides}>
               Delete
             </Button>
           </div>
@@ -199,7 +214,12 @@ export function RiskOverridesPage() {
                     <TableCell>{override.action_risk}</TableCell>
                     <TableCell>{override.updated_at ? new Date(override.updated_at).toLocaleString() : "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => handleDelete(override.action_type)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(override.action_type)}
+                        disabled={!canWriteOverrides}
+                      >
                         Delete
                       </Button>
                     </TableCell>

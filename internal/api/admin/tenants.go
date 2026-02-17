@@ -32,7 +32,7 @@ func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeTenantsWrite)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (d Dependencies) handleTenantKeysList(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	_, err := requireAdminScope(c, d.Store, "admin:read")
+	_, err := requireAdminScope(c, d.Store, scopeKeysRead)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeKeysRotate)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func (d Dependencies) handleTenantKeyRevoke(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeKeysRevoke)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (d Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
-	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	adminKey, err := requireAdminScope(c, d.Store, scopeTenantsWrite)
 	if err != nil {
 		return err
 	}

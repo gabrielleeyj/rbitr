@@ -13,9 +13,10 @@ import { listTools, updateTool, updateToolMetadata, type ToolConfig } from "@/li
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
+import { scopeToolsRead, scopeToolsWrite } from "@/lib/scopes";
 
 export function ToolsPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const [tools, setTools] = useState<ToolConfig[]>([]);
@@ -36,13 +37,16 @@ export function ToolsPage() {
     input_schema_json: "",
   });
   const [schemaError, setSchemaError] = useState("");
+  const canReadTools = hasScope(scopeToolsRead);
+  const canWriteTools = hasScope(scopeToolsWrite);
 
   useEffect(() => {
     loadTools();
-  }, [adminKey, tenantId]);
+  }, [adminKey, tenantId, canReadTools]);
 
   const loadTools = async () => {
-    if (!adminKey || !tenantId) {
+    if (!adminKey || !tenantId || !canReadTools) {
+      setTools([]);
       setLoading(false);
       return;
     }
@@ -68,7 +72,7 @@ export function ToolsPage() {
   };
 
   const handleHttpUpdate = async (tool: ToolConfig) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteTools) return;
     const edit = httpEdits[tool.tool_id] ?? {
       baseUrl: tool.http?.base_url || "",
       authType: tool.http?.auth_type || "",
@@ -89,6 +93,7 @@ export function ToolsPage() {
   };
 
   const openMcpCreateDialog = () => {
+    if (!canWriteTools) return;
     setMcpCreateMode(true);
     setSelectedTool(null);
     setMcpForm({
@@ -102,6 +107,7 @@ export function ToolsPage() {
   };
 
   const openMcpEditDialog = (tool: ToolConfig) => {
+    if (!canWriteTools) return;
     setMcpCreateMode(false);
     setSelectedTool(tool);
     setMcpForm({
@@ -115,7 +121,7 @@ export function ToolsPage() {
   };
 
   const handleMcpUpdate = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWriteTools) return;
 
     // In create mode, validate tool_id is provided
     if (mcpCreateMode && !mcpForm.tool_id.trim()) {
@@ -178,6 +184,11 @@ export function ToolsPage() {
   return (
     <>
       <div className="space-y-6">
+        {!canReadTools ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopeToolsRead}</AlertDescription>
+          </Alert>
+        ) : null}
         {/* HTTP Tools Section */}
         <Card>
           <CardHeader>
@@ -212,12 +223,14 @@ export function ToolsPage() {
                           <Input
                             value={edit.baseUrl}
                             onChange={(e) => handleHttpEdit(tool.tool_id, "baseUrl", e.target.value)}
+                            disabled={!canWriteTools}
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             value={edit.authType}
                             onChange={(e) => handleHttpEdit(tool.tool_id, "authType", e.target.value)}
+                            disabled={!canWriteTools}
                           />
                         </TableCell>
                         <TableCell>
@@ -226,10 +239,11 @@ export function ToolsPage() {
                             placeholder={tool.http?.auth_set ? "••••••" : "Not set"}
                             value={edit.authValue}
                             onChange={(e) => handleHttpEdit(tool.tool_id, "authValue", e.target.value)}
+                            disabled={!canWriteTools}
                           />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" onClick={() => handleHttpUpdate(tool)}>Update</Button>
+                          <Button size="sm" onClick={() => handleHttpUpdate(tool)} disabled={!canWriteTools}>Update</Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -251,8 +265,8 @@ export function ToolsPage() {
                 <CardDescription>Model Context Protocol endpoints with schema definitions</CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button variant="default" size="sm" onClick={openMcpCreateDialog}>Add MCP Connection</Button>
-                <Button variant="outline" size="sm" onClick={loadTools}>Refresh</Button>
+                <Button variant="default" size="sm" onClick={openMcpCreateDialog} disabled={!canWriteTools}>Add MCP Connection</Button>
+                <Button variant="outline" size="sm" onClick={loadTools} disabled={!canReadTools}>Refresh</Button>
               </div>
             </div>
           </CardHeader>
@@ -290,7 +304,7 @@ export function ToolsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => openMcpEditDialog(tool)}>
+                        <Button size="sm" variant="outline" onClick={() => openMcpEditDialog(tool)} disabled={!canWriteTools}>
                           Edit
                         </Button>
                       </TableCell>
@@ -325,6 +339,7 @@ export function ToolsPage() {
                   placeholder="e.g., github, slack, custom-tool"
                   value={mcpForm.tool_id}
                   onChange={(e) => setMcpForm({ ...mcpForm, tool_id: e.target.value })}
+                  disabled={!canWriteTools}
                 />
                 <p className="text-xs text-muted-foreground">
                   Unique identifier for this MCP tool
@@ -340,6 +355,7 @@ export function ToolsPage() {
                 value={mcpForm.description}
                 onChange={(e) => setMcpForm({ ...mcpForm, description: e.target.value })}
                 rows={2}
+                disabled={!canWriteTools}
               />
             </div>
 
@@ -350,6 +366,7 @@ export function ToolsPage() {
                 placeholder="https://example.com/mcp"
                 value={mcpForm.upstream_url}
                 onChange={(e) => setMcpForm({ ...mcpForm, upstream_url: e.target.value })}
+                disabled={!canWriteTools}
               />
               <p className="text-xs text-muted-foreground">
                 The upstream MCP server endpoint to forward governed requests
@@ -368,6 +385,7 @@ export function ToolsPage() {
                 }}
                 rows={10}
                 className="font-mono text-xs"
+                disabled={!canWriteTools}
               />
               <p className="text-xs text-muted-foreground">
                 JSON Schema for tools/call validation. Leave empty for permissive schema.
@@ -382,7 +400,7 @@ export function ToolsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMcpDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleMcpUpdate}>{mcpCreateMode ? "Add Connection" : "Save"}</Button>
+            <Button onClick={handleMcpUpdate} disabled={!canWriteTools}>{mcpCreateMode ? "Add Connection" : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

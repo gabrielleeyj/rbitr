@@ -8,6 +8,11 @@ export interface ApiConfig {
   adminKey: string;
 }
 
+export interface AdminMeResponse {
+  admin_key_id: string;
+  scopes: string[];
+}
+
 export interface EvidenceRecord {
   decision_id: string;
   request_id: string;
@@ -277,6 +282,10 @@ async function request<T>(path: string, config: ApiConfig, init?: RequestInit): 
 
 export function listTenants(config: ApiConfig): Promise<TenantSummary[]> {
   return request<TenantSummary[]>("/admin/tenants", config);
+}
+
+export function getAdminMe(config: ApiConfig): Promise<AdminMeResponse> {
+  return request<AdminMeResponse>("/admin/me", config);
 }
 
 export function listEvidence(

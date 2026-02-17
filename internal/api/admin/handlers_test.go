@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -16,6 +17,60 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
 )
+
+func TestHandleAdminMe(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "success",
+			adminKey:     "key",
+			scopes:       []string{"admin:policies:read"},
+			expectedCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodGet, nil, nil)
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			var storeAPI store.StoreAPI = storeMock
+			deps := Dependencies{Store: storeAPI, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleAdminMe(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				var payload struct {
+					AdminKeyID string   `json:"admin_key_id"`
+					Scopes     []string `json:"scopes"`
+				}
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+				require.Equal(t, "admin", payload.AdminKeyID)
+				require.Equal(t, tc.scopes, payload.Scopes)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
 
 func TestHandleTenantConfigUpdate(t *testing.T) {
 	cases := []struct {

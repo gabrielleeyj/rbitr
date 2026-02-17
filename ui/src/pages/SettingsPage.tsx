@@ -10,9 +10,10 @@ import { getSettings, setAdminWriteLock, setAuditRetentionDays, setDefaultApprov
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
+import { scopeAuditRead, scopeSettingsRead, scopeSettingsWrite } from "@/lib/scopes";
 
 export function SettingsPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const [locked, setLocked] = useState(false);
   const [defaultTTLMinutes, setDefaultTTLMinutes] = useState(15);
@@ -21,11 +22,14 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
+  const canReadSettings = hasScope(scopeSettingsRead);
+  const canWriteSettings = hasScope(scopeSettingsWrite);
+  const canReadAudit = hasScope(scopeAuditRead);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey) {
+      if (!adminKey || !canReadSettings) {
         setLoading(false);
         return;
       }
@@ -55,10 +59,10 @@ export function SettingsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, selectedTenant?.tenant_id]);
+  }, [adminKey, selectedTenant?.tenant_id, canReadSettings]);
 
   const handleToggle = async (value: boolean) => {
-    if (!adminKey) return;
+    if (!adminKey || !canWriteSettings) return;
     setActionError("");
     setLocked(value);
     try {
@@ -70,7 +74,7 @@ export function SettingsPage() {
   };
 
   const handleTTLUpdate = async () => {
-    if (!adminKey) return;
+    if (!adminKey || !canWriteSettings) return;
     setActionError("");
     const seconds = Math.round(defaultTTLMinutes * 60);
     try {
@@ -82,7 +86,7 @@ export function SettingsPage() {
   };
 
   const handleAuditRetentionUpdate = async () => {
-    if (!adminKey) return;
+    if (!adminKey || !canWriteSettings) return;
     setActionError("");
     try {
       await setAuditRetentionDays({ adminKey }, auditRetentionDays);
@@ -93,7 +97,7 @@ export function SettingsPage() {
   };
 
   const handleEnforcementModeToggle = async (value: boolean) => {
-    if (!adminKey || !selectedTenant?.tenant_id) return;
+    if (!adminKey || !selectedTenant?.tenant_id || !canWriteSettings) return;
     const nextMode = value ? "shadow" : "enforce";
     setActionError("");
     setEnforcementModeState(nextMode);
@@ -121,6 +125,11 @@ export function SettingsPage() {
               <AlertDescription>{actionError}</AlertDescription>
             </Alert>
           ) : null}
+          {!canReadSettings ? (
+            <Alert>
+              <AlertDescription>Missing scope: {scopeSettingsRead}</AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex items-center justify-between">
             <Label htmlFor="enforcement-mode" className="text-sm">
               Shadow mode (evaluate deny, execute anyway)
@@ -129,7 +138,7 @@ export function SettingsPage() {
               id="enforcement-mode"
               checked={enforcementMode === "shadow"}
               onCheckedChange={handleEnforcementModeToggle}
-              disabled={loading || !selectedTenant}
+              disabled={loading || !selectedTenant || !canWriteSettings}
             />
           </div>
           <div className="text-xs text-muted-foreground">
@@ -157,7 +166,7 @@ export function SettingsPage() {
             <Label htmlFor="write-lock" className="text-sm">
               Write lock enabled
             </Label>
-            <Switch id="write-lock" checked={locked} onCheckedChange={handleToggle} disabled={loading} />
+            <Switch id="write-lock" checked={locked} onCheckedChange={handleToggle} disabled={loading || !canWriteSettings} />
           </div>
         </CardContent>
       </Card>
@@ -185,9 +194,9 @@ export function SettingsPage() {
                 value={defaultTTLMinutes}
                 onChange={(event) => setDefaultTTLMinutes(Number(event.target.value) || 15)}
                 className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
-                disabled={loading}
+                disabled={loading || !canWriteSettings}
               />
-              <Button variant="outline" onClick={handleTTLUpdate} disabled={loading}>
+              <Button variant="outline" onClick={handleTTLUpdate} disabled={loading || !canWriteSettings}>
                 Save
               </Button>
             </div>
@@ -219,17 +228,23 @@ export function SettingsPage() {
                 value={auditRetentionDays}
                 onChange={(event) => setAuditRetentionDaysState(Number(event.target.value) || 365)}
                 className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
-                disabled={loading}
+                disabled={loading || !canWriteSettings}
               />
-              <Button variant="outline" onClick={handleAuditRetentionUpdate} disabled={loading}>
+              <Button variant="outline" onClick={handleAuditRetentionUpdate} disabled={loading || !canWriteSettings}>
                 Save
               </Button>
             </div>
           </div>
           <div className="text-xs text-muted-foreground">Min 30 days, max 3650 days.</div>
-          <Button variant="outline" asChild>
-            <Link to="/audit">View audit log</Link>
-          </Button>
+          {canReadAudit ? (
+            <Button variant="outline" asChild>
+              <Link to="/audit">View audit log</Link>
+            </Button>
+          ) : (
+            <Button variant="outline" disabled>
+              View audit log
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

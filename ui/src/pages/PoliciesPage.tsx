@@ -34,9 +34,16 @@ import {
 } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import {
+  scopePoliciesPublish,
+  scopePoliciesRead,
+  scopePoliciesRollback,
+  scopePoliciesSimulate,
+  scopePoliciesWrite,
+} from "@/lib/scopes";
 
 export function PoliciesPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const [versions, setVersions] = useState<PolicyVersion[]>([]);
   const [activeVersion, setActiveVersion] = useState("");
@@ -60,6 +67,11 @@ export function PoliciesPage() {
   const [diffPreview, setDiffPreview] = useState("");
   const lastLoadedKeyRef = useRef<string | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
+  const canReadPolicies = hasScope(scopePoliciesRead);
+  const canWritePolicies = hasScope(scopePoliciesWrite);
+  const canPublishPolicies = hasScope(scopePoliciesPublish);
+  const canRollbackPolicies = hasScope(scopePoliciesRollback);
+  const canSimulatePolicies = hasScope(scopePoliciesSimulate);
 
   const tenantId = selectedTenant?.tenant_id;
   const sortedVersions = useMemo(
@@ -196,7 +208,9 @@ export function PoliciesPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey || !tenantId) {
+      if (!adminKey || !tenantId || !canReadPolicies) {
+        setVersions([]);
+        setActiveVersion("");
         setLoading(false);
         return;
       }
@@ -246,7 +260,7 @@ export function PoliciesPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId]);
+  }, [adminKey, tenantId, canReadPolicies]);
 
   useEffect(() => {
     setDiffPreview(computeDiffPreview(baseRego, regoModule));
@@ -259,7 +273,7 @@ export function PoliciesPage() {
   }, [regoModule]);
 
   const refresh = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadPolicies) return;
     if (refreshInFlight.current) {
       await refreshInFlight.current;
       return;
@@ -285,7 +299,7 @@ export function PoliciesPage() {
   };
 
   const handlePublish = async (version: string) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canPublishPolicies) return;
     setActionError("");
     try {
       await publishPolicyVersion({ adminKey }, tenantId, version);
@@ -301,7 +315,7 @@ export function PoliciesPage() {
   };
 
   const handleRollback = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canRollbackPolicies) return;
     setActionError("");
     try {
       await rollbackPolicyVersion(
@@ -319,7 +333,7 @@ export function PoliciesPage() {
   };
 
   const handleCreate = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWritePolicies) return;
     setActionError("");
     const normalized = normalizeMultilineStrings(regoModule);
     try {
@@ -340,7 +354,7 @@ export function PoliciesPage() {
   };
 
   const handleCreateAndPublish = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canWritePolicies || !canPublishPolicies) return;
     setActionError("");
     const normalized = normalizeMultilineStrings(regoModule);
     try {
@@ -369,7 +383,7 @@ export function PoliciesPage() {
   };
 
   const handleCompileCheck = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canSimulatePolicies) return;
     const lintIssues = findMultilineStrings(regoModule);
     if (lintIssues.length > 0) {
       setCompileStatus("error");
@@ -395,7 +409,7 @@ export function PoliciesPage() {
   };
 
   const handleSimulate = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canSimulatePolicies) return;
     const lintIssues = findMultilineStrings(regoModule);
     if (lintIssues.length > 0) {
       setSimulateStatus("error");
@@ -453,6 +467,11 @@ export function PoliciesPage() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           ) : null}
+          {!canReadPolicies ? (
+            <Alert>
+              <AlertDescription>Missing scope: {scopePoliciesRead}</AlertDescription>
+            </Alert>
+          ) : null}
           {!tenantId ? (
             <div className="text-sm text-muted-foreground">
               Select a tenant to view policies.
@@ -464,7 +483,7 @@ export function PoliciesPage() {
           ) : (
             <div className="space-y-3">
               <div className="flex justify-end">
-                <Button variant="outline" size="sm" onClick={refresh}>
+                <Button variant="outline" size="sm" onClick={refresh} disabled={!canReadPolicies}>
                   Refresh
                 </Button>
               </div>
@@ -508,7 +527,7 @@ export function PoliciesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={activeVersion === version.policy_version}
+                            disabled={activeVersion === version.policy_version || !canPublishPolicies}
                             onClick={() =>
                               handlePublish(version.policy_version)
                             }
@@ -533,13 +552,14 @@ export function PoliciesPage() {
                 value={rollbackVersion}
                 onChange={(event) => setRollbackVersion(event.target.value)}
                 placeholder="Leave empty to rollback to previous"
+                disabled={!canRollbackPolicies}
               />
             </div>
             <div className="flex items-end">
               <Button
                 variant="outline"
                 onClick={handleRollback}
-                disabled={!tenantId}
+                disabled={!tenantId || !canRollbackPolicies}
               >
                 Rollback
               </Button>
@@ -592,14 +612,14 @@ export function PoliciesPage() {
             <Button
               variant="outline"
               onClick={handleCompileCheck}
-              disabled={!tenantId}
+              disabled={!tenantId || !canSimulatePolicies}
             >
               Run compile check
             </Button>
             <Button
               variant="outline"
               onClick={handleSimulate}
-              disabled={!tenantId}
+              disabled={!tenantId || !canSimulatePolicies}
             >
               Run simulation
             </Button>
@@ -710,16 +730,16 @@ export function PoliciesPage() {
             </div>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button onClick={handleCreate} disabled={!tenantId}>
+            <Button onClick={handleCreate} disabled={!tenantId || !canWritePolicies}>
               Save new version
             </Button>
             <Button
               onClick={handleCreateAndPublish}
-              disabled={!tenantId || !publishReady}
+              disabled={!tenantId || !publishReady || !canWritePolicies || !canPublishPolicies}
             >
               Create &amp; publish
             </Button>
-            <Button variant="outline" onClick={refresh} disabled={!tenantId}>
+            <Button variant="outline" onClick={refresh} disabled={!tenantId || !canReadPolicies}>
               Refresh list
             </Button>
           </div>

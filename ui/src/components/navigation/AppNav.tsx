@@ -20,28 +20,40 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
+import { useAdminKey } from "@/lib/auth";
+import {
+  scopeApprovalsRead,
+  scopeAuditRead,
+  scopeNotificationsRead,
+  scopePoliciesRead,
+  scopeSettingsRead,
+  scopeTenantsRead,
+  scopeToolsRead,
+} from "@/lib/scopes";
 
 const navItems = [
-  { to: "/tenants", label: "Tenants", icon: Building2 },
-  { to: "/evidence", label: "Evidence", icon: FileSearch },
-  { to: "/approvals", label: "Approvals", icon: CheckCircle2 },
-  { to: "/policies", label: "Policies", icon: ShieldCheck },
-  { to: "/risk-overrides", label: "Risk Overrides", icon: ShieldAlert },
-  { to: "/tools", label: "Tools", icon: Wrench },
-  { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/notifications", label: "Notifications", icon: BellRing },
-  { to: "/audit", label: "Audit", icon: ClipboardList },
+  { to: "/tenants", label: "Tenants", icon: Building2, scope: scopeTenantsRead },
+  { to: "/evidence", label: "Evidence", icon: FileSearch, scope: scopeAuditRead },
+  { to: "/approvals", label: "Approvals", icon: CheckCircle2, scope: scopeApprovalsRead },
+  { to: "/policies", label: "Policies", icon: ShieldCheck, scope: scopePoliciesRead },
+  { to: "/risk-overrides", label: "Risk Overrides", icon: ShieldAlert, scope: scopePoliciesRead },
+  { to: "/tools", label: "Tools", icon: Wrench, scope: scopeToolsRead },
+  { to: "/settings", label: "Settings", icon: Settings, scope: scopeSettingsRead },
+  { to: "/notifications", label: "Notifications", icon: BellRing, scope: scopeNotificationsRead },
+  { to: "/audit", label: "Audit", icon: ClipboardList, scope: scopeAuditRead },
 ];
 
 export function AppNav() {
   const { selectedTenant } = useTenant();
+  const { hasScope, scopesLoading } = useAdminKey();
+  const visibleItems = navItems.filter((item) => hasScope(item.scope));
 
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Control Plane</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
             const Icon = item.icon;
             return (
               <SidebarMenuItem key={item.to}>
@@ -64,6 +76,13 @@ export function AppNav() {
               </SidebarMenuItem>
             );
           })}
+          {!scopesLoading && visibleItems.length === 0 ? (
+            <SidebarMenuItem>
+              <div className="px-2 py-1 text-xs text-sidebar-foreground/70">
+                No pages available for current scopes.
+              </div>
+            </SidebarMenuItem>
+          ) : null}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

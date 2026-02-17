@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { EvidenceRecord, listEvidence } from "@/lib/api";
+import { EvidenceRecord, getActionTypes, listEvidence } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -17,22 +17,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { scopeAuditRead, scopePoliciesRead } from "@/lib/scopes";
 
-const decisions = ["ALLOW", "DENY", "REQUIRE_APPROVAL"];
-const risks = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const decisions = ["ALL", "ALLOW", "DENY", "REQUIRE_APPROVAL"];
+const risks = ["ALL", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 export function EvidencePage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
-  const [decisionFilter, setDecisionFilter] = useState<string>("");
-  const [riskFilter, setRiskFilter] = useState<string>("");
-  const [actionType, setActionType] = useState("");
+  const [decisionFilter, setDecisionFilter] = useState<string>("ALL");
+  const [riskFilter, setRiskFilter] = useState<string>("ALL");
+  const [actionType, setActionType] = useState("ALL");
   const [since, setSince] = useState("");
   const [records, setRecords] = useState<EvidenceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [actionTypes, setActionTypes] = useState<string[]>([]);
+  const canReadEvidence = hasScope(scopeAuditRead);
+  const canReadActionTypes = hasScope(scopePoliciesRead);
 
-  const canQuery = useMemo(() => Boolean(adminKey && selectedTenant), [adminKey, selectedTenant]);
+  const canQuery = useMemo(
+    () => Boolean(adminKey && selectedTenant && canReadEvidence),
+    [adminKey, selectedTenant, canReadEvidence]
+  );
 
   const loadEvidence = async () => {
     if (!adminKey || !selectedTenant) {
@@ -46,9 +53,9 @@ export function EvidencePage() {
         selectedTenant.tenant_id,
         {
           limit: 50,
-          decision: decisionFilter || undefined,
-          action_type: actionType || undefined,
-          risk: riskFilter || undefined,
+          decision: decisionFilter !== "ALL" ? decisionFilter : undefined,
+          action_type: actionType && actionType !== "ALL" ? actionType : undefined,
+          risk: riskFilter !== "ALL" ? riskFilter : undefined,
           since: since || undefined,
         }
       );
@@ -93,9 +100,35 @@ export function EvidencePage() {
   useEffect(() => {
     if (canQuery) {
       loadEvidence();
+    } else {
+      setRecords([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canQuery]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadActionTypes = async () => {
+      if (!adminKey || !canReadActionTypes) {
+        if (mounted) {
+          setActionTypes([]);
+        }
+        return;
+      }
+      try {
+        const data = await getActionTypes({ adminKey });
+        if (!mounted) return;
+        setActionTypes(data.action_types ?? []);
+      } catch {
+        if (!mounted) return;
+        setActionTypes([]);
+      }
+    };
+    loadActionTypes();
+    return () => {
+      mounted = false;
+    };
+  }, [adminKey, canReadActionTypes]);
 
   return (
     <Card>
@@ -109,12 +142,17 @@ export function EvidencePage() {
             <AlertDescription>Select a tenant to view evidence.</AlertDescription>
           </Alert>
         ) : null}
+        {!canReadEvidence ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopeAuditRead}</AlertDescription>
+          </Alert>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
             <Label>Decision</Label>
             <Select value={decisionFilter} onValueChange={setDecisionFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder="All decisions" />
               </SelectTrigger>
               <SelectContent>
                 {decisions.map((decision) => (
@@ -129,7 +167,7 @@ export function EvidencePage() {
             <Label>Risk</Label>
             <Select value={riskFilter} onValueChange={setRiskFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder="All risks" />
               </SelectTrigger>
               <SelectContent>
                 {risks.map((risk) => (
@@ -142,7 +180,27 @@ export function EvidencePage() {
           </div>
           <div className="space-y-2">
             <Label>Action type</Label>
-            <Input value={actionType} onChange={(event) => setActionType(event.target.value)} />
+            {actionTypes.length > 0 ? (
+              <Select value={actionType} onValueChange={setActionType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All action types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {actionTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                value={actionType === "ALL" ? "" : actionType}
+                onChange={(event) => setActionType(event.target.value)}
+                placeholder="DATA.EXPORT"
+              />
+            )}
           </div>
           <div className="space-y-2">
             <Label>Since (ISO)</Label>

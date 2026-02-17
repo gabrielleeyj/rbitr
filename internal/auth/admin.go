@@ -40,6 +40,17 @@ func bearerToken(value string) string {
 }
 
 func AuthenticateAdmin(ctx context.Context, st store.StoreAPI, adminKey, requiredScope string) (models.AdminKey, error) {
+	key, err := AuthenticateAdminAny(ctx, st, adminKey)
+	if err != nil {
+		return models.AdminKey{}, err
+	}
+	if !hasScope(key.Scopes, requiredScope) {
+		return models.AdminKey{}, ErrForbidden
+	}
+	return key, nil
+}
+
+func AuthenticateAdminAny(ctx context.Context, st store.StoreAPI, adminKey string) (models.AdminKey, error) {
 	if adminKey == "" {
 		return models.AdminKey{}, ErrUnauthorized
 	}
@@ -51,12 +62,28 @@ func AuthenticateAdmin(ctx context.Context, st store.StoreAPI, adminKey, require
 		}
 		return models.AdminKey{}, err
 	}
-	if !hasScope(key.Scopes, requiredScope) {
-		return models.AdminKey{}, ErrForbidden
-	}
 	return key, nil
 }
 
 func hasScope(scopes []string, required string) bool {
-	return slices.Contains(scopes, required)
+	if slices.Contains(scopes, required) {
+		return true
+	}
+
+	// Backward compatibility during scope migration:
+	// - admin:read remains an umbrella for all read-like granular scopes.
+	// - admin:write remains an umbrella for all non-read granular scopes.
+	if isReadLikeScope(required) {
+		return slices.Contains(scopes, "admin:read")
+	}
+	return slices.Contains(scopes, "admin:write")
+}
+
+func isReadLikeScope(required string) bool {
+	if required == "admin:read" {
+		return true
+	}
+	return strings.HasSuffix(required, ":read") ||
+		strings.HasSuffix(required, ":export") ||
+		strings.HasSuffix(required, ":simulate")
 }

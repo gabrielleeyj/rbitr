@@ -22,11 +22,12 @@ import { useTenant } from "@/lib/tenant";
 import type { ApprovalRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { scopeApprovalsDecide, scopeApprovalsRead } from "@/lib/scopes";
 
 const statusTabs = ["PENDING", "APPROVED", "EXECUTING", "EXECUTED", "FAILED", "DENIED", "EXPIRED"];
 
 export function ApprovalsPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -41,13 +42,15 @@ export function ApprovalsPage() {
   const [comment, setComment] = useState("");
   const [activeApproval, setActiveApproval] = useState<ApprovalRequest | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const canReadApprovals = hasScope(scopeApprovalsRead);
+  const canDecideApprovals = hasScope(scopeApprovalsDecide);
 
   const pageNumber = Math.floor(offset / limit) + 1;
   const canPrev = offset > 0;
   const canNext = hasMore;
 
   const refresh = async (nextOffset = offset) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadApprovals) return;
     const data = await listApprovals(
       { adminKey },
       tenantId,
@@ -60,7 +63,8 @@ export function ApprovalsPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey || !tenantId) {
+      if (!adminKey || !tenantId || !canReadApprovals) {
+        setApprovals([]);
         setLoading(false);
         return;
       }
@@ -86,7 +90,7 @@ export function ApprovalsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId, status, limit, offset]);
+  }, [adminKey, tenantId, status, limit, offset, canReadApprovals]);
 
   const dialogTitle = useMemo(() => {
     if (!action) return "";
@@ -96,6 +100,9 @@ export function ApprovalsPage() {
   }, [action]);
 
   const openDialog = (approval: ApprovalRequest, nextAction: "approve" | "deny" | "revoke") => {
+    if (!canDecideApprovals) {
+      return;
+    }
     setActiveApproval(approval);
     setAction(nextAction);
     setComment("");
@@ -103,7 +110,7 @@ export function ApprovalsPage() {
   };
 
   const handleDecision = async () => {
-    if (!adminKey || !tenantId || !activeApproval || !action) return;
+    if (!adminKey || !tenantId || !activeApproval || !action || !canDecideApprovals) return;
     try {
       setSubmitting(true);
       if (action === "approve") {
@@ -163,6 +170,11 @@ export function ApprovalsPage() {
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {!canReadApprovals ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopeApprovalsRead}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -279,7 +291,7 @@ export function ApprovalsPage() {
                         <Button size="sm" variant="ghost" asChild>
                           <Link to={`/approvals/${approval.approval_request_id}`}>View</Link>
                         </Button>
-                        {approval.status === "PENDING" ? (
+                        {approval.status === "PENDING" && canDecideApprovals ? (
                           <>
                             <Button size="sm" onClick={() => openDialog(approval, "approve")}>
                               Approve
@@ -293,7 +305,7 @@ export function ApprovalsPage() {
                             </Button>
                           </>
                         ) : null}
-                        {approval.status === "APPROVED" ? (
+                        {approval.status === "APPROVED" && canDecideApprovals ? (
                           <Button
                             size="sm"
                             variant="outline"
@@ -348,7 +360,7 @@ export function ApprovalsPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleDecision} disabled={submitting}>
+            <Button onClick={handleDecision} disabled={submitting || !canDecideApprovals}>
               {submitting ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>

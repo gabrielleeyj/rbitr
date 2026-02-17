@@ -8,9 +8,10 @@ import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { scopeAuditExport, scopeAuditRead } from "@/lib/scopes";
 
 export function AuditPage() {
-  const { adminKey } = useAdminKey();
+  const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
   const tenantId = selectedTenant?.tenant_id;
   const [events, setEvents] = useState<
@@ -41,6 +42,8 @@ export function AuditPage() {
   const [includeDetails, setIncludeDetails] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [resourceTypeOptions, setResourceTypeOptions] = useState<string[]>([]);
+  const canReadAudit = hasScope(scopeAuditRead);
+  const canExportAudit = hasScope(scopeAuditExport);
 
   const pageNumber = Math.floor(offset / limit) + 1;
   const canPrev = offset > 0;
@@ -52,7 +55,11 @@ export function AuditPage() {
   }, [events]);
 
   const actorOptions = useMemo(() => {
-    const values = new Set(events.map((event) => event.actor_id ?? event.actor_display).filter(Boolean));
+    const values = new Set(
+      events
+        .map((event) => event.actor_id ?? event.actor_display)
+        .filter((value): value is string => Boolean(value && value.trim() !== ""))
+    );
     return Array.from(values).sort();
   }, [events]);
 
@@ -96,7 +103,7 @@ export function AuditPage() {
   }, [tenantId, actionFilter, resourceTypeFilter, actorIDFilter, includeDetails, fromDate, toDate]);
 
   const handleExport = async () => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canExportAudit) return;
     try {
       const response = await fetch(exportUrl, {
         headers: {
@@ -121,7 +128,7 @@ export function AuditPage() {
   };
 
   const refresh = async (nextOffset = offset) => {
-    if (!adminKey || !tenantId) return;
+    if (!adminKey || !tenantId || !canReadAudit) return;
     const data = await listAuditEvents(
       { adminKey },
       tenantId,
@@ -142,7 +149,8 @@ export function AuditPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!adminKey || !tenantId) {
+      if (!adminKey || !tenantId || !canReadAudit) {
+        setEvents([]);
         setLoading(false);
         return;
       }
@@ -175,12 +183,17 @@ export function AuditPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId, limit, offset, actionFilter, resourceTypeFilter, actorIDFilter, fromDate, toDate]);
+  }, [adminKey, tenantId, limit, offset, actionFilter, resourceTypeFilter, actorIDFilter, fromDate, toDate, canReadAudit]);
 
   useEffect(() => {
     let mounted = true;
     const loadResourceTypes = async () => {
-      if (!adminKey || !tenantId) return;
+      if (!adminKey || !tenantId || !canReadAudit) {
+        if (mounted) {
+          setResourceTypeOptions([]);
+        }
+        return;
+      }
       try {
         const data = await listAuditResourceTypes({ adminKey }, tenantId);
         if (mounted) {
@@ -196,7 +209,7 @@ export function AuditPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, tenantId]);
+  }, [adminKey, tenantId, canReadAudit]);
 
   return (
     <Card>
@@ -208,6 +221,11 @@ export function AuditPage() {
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {!canReadAudit ? (
+          <Alert>
+            <AlertDescription>Missing scope: {scopeAuditRead}</AlertDescription>
           </Alert>
         ) : null}
         {!tenantId ? (
@@ -355,7 +373,13 @@ export function AuditPage() {
                       Warning: details may include sensitive configuration data.
                     </div>
                   ) : null}
-                  <Button variant="outline" size="sm" className="w-full md:w-auto" onClick={handleExport}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full md:w-auto"
+                    onClick={handleExport}
+                    disabled={!canExportAudit}
+                  >
                     Export CSV
                   </Button>
                 </div>
