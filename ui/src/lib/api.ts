@@ -69,6 +69,13 @@ export interface PolicySimulationResponse {
     reasons: { code: string; message: string }[];
     constraints: Record<string, unknown>;
     tags?: string[];
+    matched_rules?: Array<{
+      rule_id: string;
+      priority: number;
+      effect: "DENY" | "REQUIRE_APPROVAL" | "ALLOW";
+      reasons?: { code: string; message: string }[];
+      constraints_summary?: Record<string, unknown>;
+    }>;
   };
 }
 

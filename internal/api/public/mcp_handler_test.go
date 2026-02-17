@@ -1367,3 +1367,65 @@ func TestHandleMCP_ToolsCallPolicyInputStripsInternalArgs(t *testing.T) {
 	require.NotNil(t, resp.Error)
 	require.Equal(t, mcp.ErrorDeniedByPolicy, resp.Error.Code)
 }
+
+func TestHandleMCP_ToolsCallDeniedIncludesMatchedRules(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
+		Return(models.Tool{
+			ToolID:         "mock_internal",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: "http://example.test",
+		}, nil)
+	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
+		Return("", store.ErrNotFound)
+	mockStore.On("InsertADR", mock.Anything, mock.Anything).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.
+		On("Evaluate", mock.Anything, "t_demo", mock.Anything).
+		Return(policy.Result{
+			Version:     "2026-01-20",
+			Decision:    "DENY",
+			Risk:        "MEDIUM",
+			Rule:        models.DecisionRule{ID: "rule_deny_high", Priority: 100},
+			Reasons:     []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
+			Constraints: map[string]any{},
+			MatchedRules: []models.DecisionMatchedRule{
+				{RuleID: "rule_deny_high", Priority: 100, Effect: "DENY"},
+				{RuleID: "rule_allow_low", Priority: 10, Effect: "ALLOW"},
+			},
+			PolicyVersion: "p_v1",
+		}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Policy:  policyMock,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"mr-1","method":"tools/call","params":{"name":"mock_internal","arguments":{"branch":"main"}}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Error)
+	require.Equal(t, mcp.ErrorDeniedByPolicy, resp.Error.Code)
+	var data map[string]any
+	require.NoError(t, json.Unmarshal(resp.Error.Data, &data))
+	matchedRules, ok := data["matched_rules"].([]any)
+	require.True(t, ok)
+	require.Len(t, matchedRules, 2)
+}

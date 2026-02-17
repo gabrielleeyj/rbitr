@@ -183,3 +183,96 @@ func TestParseResultErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestParseResultMatchedRulesResolution(t *testing.T) {
+	t.Parallel()
+
+	resultSet := rego.ResultSet{
+		{
+			Expressions: []*rego.ExpressionValue{{
+				Value: map[string]any{
+					"version":  "2026-01-20",
+					"decision": "ALLOW",
+					"risk":     "HIGH",
+					"rule": map[string]any{
+						"id":       "rule_allow_default",
+						"priority": float64(10),
+					},
+					"reasons": []any{
+						map[string]any{"code": "ALLOW", "message": "default allow"},
+					},
+					"constraints": map[string]any{},
+					"matched_rules": []any{
+						map[string]any{
+							"rule_id":  "rule_allow_low",
+							"priority": float64(50),
+							"effect":   "ALLOW",
+							"reasons": []any{
+								map[string]any{"code": "ALLOW", "message": "allow path"},
+							},
+						},
+						map[string]any{
+							"rule_id":  "rule_deny_high",
+							"priority": float64(100),
+							"effect":   "DENY",
+							"reasons": []any{
+								map[string]any{"code": "DENY", "message": "deny path"},
+							},
+						},
+						map[string]any{
+							"rule_id":  "rule_approval_high",
+							"priority": float64(100),
+							"effect":   "REQUIRE_APPROVAL",
+							"reasons": []any{
+								map[string]any{"code": "APPROVAL", "message": "approval path"},
+							},
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	result, err := parseResult(resultSet)
+	require.NoError(t, err)
+	require.Equal(t, "DENY", result.Decision)
+	require.Equal(t, "rule_deny_high", result.Rule.ID)
+	require.Equal(t, 100, result.Rule.Priority)
+	require.Len(t, result.Reasons, 1)
+	require.Equal(t, "DENY", result.Reasons[0].Code)
+	require.Len(t, result.MatchedRules, 3)
+	require.Equal(t, "rule_deny_high", result.MatchedRules[0].RuleID)
+	require.Equal(t, "rule_approval_high", result.MatchedRules[1].RuleID)
+}
+
+func TestParseResultMatchedRulesSchemaViolation(t *testing.T) {
+	t.Parallel()
+
+	resultSet := rego.ResultSet{
+		{
+			Expressions: []*rego.ExpressionValue{{
+				Value: map[string]any{
+					"version":     "2026-01-20",
+					"decision":    "ALLOW",
+					"risk":        "HIGH",
+					"rule":        map[string]any{"id": "rule_allow", "priority": float64(10)},
+					"reasons":     []any{map[string]any{"code": "ALLOW", "message": "ok"}},
+					"constraints": map[string]any{},
+					"matched_rules": []any{
+						map[string]any{
+							"rule_id":  "rule_bad",
+							"priority": float64(100),
+							"effect":   "MAYBE",
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	_, err := parseResult(resultSet)
+	require.Error(t, err)
+	var outputErr PolicyOutputError
+	require.ErrorAs(t, err, &outputErr)
+	require.Equal(t, "schema_violation", outputErr.Reason)
+}

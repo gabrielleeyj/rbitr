@@ -22,6 +22,7 @@ type Result struct {
 	Reasons       []models.DecisionReason
 	Constraints   map[string]any
 	Tags          []string
+	MatchedRules  []models.DecisionMatchedRule
 	PolicyVersion string
 }
 
@@ -98,6 +99,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 			Reasons:       toDecisionReasons(result.Reasons),
 			Constraints:   result.Constraints,
 			Tags:          result.Tags,
+			MatchedRules:  toDecisionMatchedRules(result.MatchedRules),
 			PolicyVersion: policy.PolicyVersion,
 		}, nil
 	}
@@ -129,6 +131,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 		Reasons:       toDecisionReasons(result.Reasons),
 		Constraints:   result.Constraints,
 		Tags:          result.Tags,
+		MatchedRules:  toDecisionMatchedRules(result.MatchedRules),
 		PolicyVersion: policy.PolicyVersion,
 	}, nil
 }
@@ -140,6 +143,23 @@ func toDecisionReasons(reasons []opa.Reason) []models.DecisionReason {
 	out := make([]models.DecisionReason, 0, len(reasons))
 	for _, reason := range reasons {
 		out = append(out, models.DecisionReason{Code: reason.Code, Message: reason.Message})
+	}
+	return out
+}
+
+func toDecisionMatchedRules(rules []opa.MatchedRule) []models.DecisionMatchedRule {
+	if len(rules) == 0 {
+		return nil
+	}
+	out := make([]models.DecisionMatchedRule, 0, len(rules))
+	for _, rule := range rules {
+		out = append(out, models.DecisionMatchedRule{
+			RuleID:             rule.RuleID,
+			Priority:           rule.Priority,
+			Effect:             rule.Effect,
+			Reasons:            toDecisionReasons(rule.Reasons),
+			ConstraintsSummary: rule.ConstraintsSummary,
+		})
 	}
 	return out
 }

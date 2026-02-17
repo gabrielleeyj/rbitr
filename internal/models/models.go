@@ -122,6 +122,14 @@ type DecisionReason struct {
 	Message string `json:"message"`
 }
 
+type DecisionMatchedRule struct {
+	RuleID             string           `json:"rule_id"`
+	Priority           int              `json:"priority"`
+	Effect             string           `json:"effect"`
+	Reasons            []DecisionReason `json:"reasons,omitempty"`
+	ConstraintsSummary map[string]any   `json:"constraints_summary,omitempty"`
+}
+
 type ActionDecisionExport struct {
 	DecisionID                 string           `json:"decision_id"`
 	RequestID                  string           `json:"request_id"`

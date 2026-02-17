@@ -513,6 +513,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		decisionResult.Rule.ID = "rule_default_deny"
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
+	decisionResult.Constraints = withMatchedRulesConstraint(decisionResult.Constraints, decisionResult.MatchedRules)
 
 	rateLimitViolation, err := d.enforceRateLimit(
 		ctx,
@@ -669,6 +670,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			"rule_id":        decisionResult.Rule.ID,
 			"risk":           decisionResult.Risk,
 			"reasons":        formatReasons(decisionResult.Reasons),
+			"matched_rules":  matchedRulesFromConstraints(decisionResult.Constraints),
 		})
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,

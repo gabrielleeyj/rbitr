@@ -532,15 +532,46 @@ func (d Dependencies) handlePolicySimulate(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]any{
 		"decision": map[string]any{
-			"version":     result.Version,
-			"decision":    result.Decision,
-			"risk":        result.Risk,
-			"rule":        result.Rule,
-			"reasons":     result.Reasons,
-			"constraints": result.Constraints,
-			"tags":        result.Tags,
+			"version":       result.Version,
+			"decision":      result.Decision,
+			"risk":          result.Risk,
+			"rule":          map[string]any{"id": result.Rule.ID, "priority": result.Rule.Priority},
+			"reasons":       simulationReasons(result.Reasons),
+			"constraints":   result.Constraints,
+			"tags":          result.Tags,
+			"matched_rules": simulationMatchedRules(result.MatchedRules),
 		},
 	})
+}
+
+func simulationReasons(reasons []opa.Reason) []map[string]any {
+	out := make([]map[string]any, 0, len(reasons))
+	for _, reason := range reasons {
+		out = append(out, map[string]any{
+			"code":    reason.Code,
+			"message": reason.Message,
+		})
+	}
+	return out
+}
+
+func simulationMatchedRules(rules []opa.MatchedRule) []map[string]any {
+	out := make([]map[string]any, 0, len(rules))
+	for _, rule := range rules {
+		item := map[string]any{
+			"rule_id":  rule.RuleID,
+			"priority": rule.Priority,
+			"effect":   rule.Effect,
+		}
+		if len(rule.Reasons) > 0 {
+			item["reasons"] = simulationReasons(rule.Reasons)
+		}
+		if len(rule.ConstraintsSummary) > 0 {
+			item["constraints_summary"] = rule.ConstraintsSummary
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (d Dependencies) handleRiskOverridesList(c *echo.Context) error {

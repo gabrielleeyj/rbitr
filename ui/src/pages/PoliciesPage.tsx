@@ -72,6 +72,33 @@ export function PoliciesPage() {
 
   const publishReady =
     compileStatus === "ok" && simulateStatus === "ok" && diffPreview !== "";
+  const simulationSummary = useMemo(() => {
+    if (!simulateResult) {
+      return null;
+    }
+    const topMatchedRule = simulateResult.decision.matched_rules?.[0];
+    const effectiveRule = topMatchedRule
+      ? {
+          id: topMatchedRule.rule_id,
+          priority: topMatchedRule.priority,
+          effect: topMatchedRule.effect,
+          reasons:
+            topMatchedRule.reasons && topMatchedRule.reasons.length > 0
+              ? topMatchedRule.reasons
+              : simulateResult.decision.reasons,
+        }
+      : {
+          id: simulateResult.decision.rule.id,
+          priority: simulateResult.decision.rule.priority,
+          effect: simulateResult.decision.decision,
+          reasons: simulateResult.decision.reasons,
+        };
+    return {
+      decision: simulateResult.decision.decision,
+      risk: simulateResult.decision.risk,
+      rule: effectiveRule,
+    };
+  }, [simulateResult]);
 
   const generateVersion = () => {
     const now = new Date();
@@ -648,6 +675,34 @@ export function PoliciesPage() {
           </div>
           {simulateResult ? (
             <div className="rounded-md border p-3 text-sm">
+              {simulationSummary ? (
+                <div className="mb-3 rounded-md border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">
+                    Effective decision
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{simulationSummary.decision}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      Risk {simulationSummary.risk}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    Top matched rule
+                  </div>
+                  <div className="mt-1 font-mono text-xs">
+                    {simulationSummary.rule.id} (priority{" "}
+                    {simulationSummary.rule.priority}, effect{" "}
+                    {simulationSummary.rule.effect})
+                  </div>
+                  {simulationSummary.rule.reasons.length > 0 ? (
+                    <div className="mt-2 text-xs">
+                      {simulationSummary.rule.reasons
+                        .map((reason) => `${reason.code}: ${reason.message}`)
+                        .join(" | ")}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="font-medium">Simulation result</div>
               <pre className="mt-2 whitespace-pre-wrap text-xs">
                 {JSON.stringify(simulateResult.decision, null, 2)}

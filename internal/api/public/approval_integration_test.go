@@ -59,27 +59,42 @@ func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {
 	requestHash := utils.HashCanonical(&canonical)
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
-		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
-		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		approval_token_hash, expires_at, created_at, policy_version, action_summary, risk, rule_id, request_context, reasons,
+		executing_at, execution_id, failed_at, last_error_code
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 		WithArgs("t_demo", "ar_1").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
-			"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
-			"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-			"risk", "rule_id", "reasons",
+			"approval_token_hash", "expires_at", "created_at", "policy_version", "action_summary", "risk", "rule_id", "request_context", "reasons",
+			"executing_at", "execution_id", "failed_at", "last_error_code",
 		}).AddRow(
 			"ar_1", "t_demo", "agent_demo", "mock_internal", "PAYMENT.REFUND", requestHash, "APPROVED",
-			utils.HashString("token123"), time.Now().UTC().Add(5*time.Minute), time.Now().UTC(), "p_v1", nil, nil, nil,
-			nil, nil, nil, "d_req", "Refund", "MEDIUM", "rule_approval", nil,
+			utils.HashString("token123"), time.Now().UTC().Add(5*time.Minute), time.Now().UTC(), "p_v1", "Refund", "MEDIUM", "rule_approval", nil, nil,
+			nil, nil, nil, nil,
 		))
+
+	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
+		SET status = 'EXECUTING', executing_at = $1, execution_id = COALESCE(execution_id, approval_request_id), last_error_code = NULL
+		WHERE tenant_id = $2
+			AND approval_request_id = $3
+			AND status = 'APPROVED'
+			AND expires_at > $4
+			AND approval_token_hash = $5
+			AND request_hash = $6`)).
+		WithArgs(sqlmock.AnyArg(), "t_demo", "ar_1", sqlmock.AnyArg(), utils.HashString("token123"), requestHash).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
 		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
 			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
+
+	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
+		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL
+		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'EXECUTING'`)).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t_demo", "ar_1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
@@ -111,12 +126,6 @@ func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
-		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3
-		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'APPROVED'`)).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t_demo", "ar_1").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	storeAPI := store.New(db)
@@ -185,8 +194,8 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		status, approval_token_hash, expires_at, created_at, policy_version,
 		decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id,
-		request_decision_id, action_summary, risk, rule_id, reasons
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`)).
+		request_decision_id, action_summary, risk, rule_id, request_context, reasons
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`)).
 		WithArgs(
 			sqlmock.AnyArg(),
 			"t_demo",
@@ -195,6 +204,7 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 			"ACCESS.ROLE_CHANGE",
 			sqlmock.AnyArg(),
 			"PENDING",
+			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
@@ -305,7 +315,7 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 		WithArgs("t_demo", sqlmock.AnyArg()).
@@ -313,11 +323,11 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 			"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 			"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
 			"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-			"risk", "rule_id", "reasons",
+			"risk", "rule_id", "request_context", "reasons",
 		}).AddRow(
 			approvalResp.ApprovalRequestID, "t_demo", "agent_demo", "mock_internal", "ACCESS.ROLE_CHANGE", requestHash, "PENDING",
 			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", nil, nil, nil,
-			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
+			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil, nil,
 		))
 
 	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
@@ -329,7 +339,7 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		risk, rule_id, request_context, reasons
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 		WithArgs("t_demo", sqlmock.AnyArg()).
@@ -337,11 +347,11 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 			"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
 			"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
 			"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-			"risk", "rule_id", "reasons",
+			"risk", "rule_id", "request_context", "reasons",
 		}).AddRow(
 			approvalResp.ApprovalRequestID, "t_demo", "agent_demo", "mock_internal", "ACCESS.ROLE_CHANGE", requestHash, "APPROVED",
 			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", time.Now().UTC(), "admin_demo", "ok",
-			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
+			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil, nil,
 		))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT event_hash
@@ -406,27 +416,42 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
-		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
-		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		approval_token_hash, expires_at, created_at, policy_version, action_summary, risk, rule_id, request_context, reasons,
+		executing_at, execution_id, failed_at, last_error_code
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 		WithArgs("t_demo", approvalResp.ApprovalRequestID).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
-			"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
-			"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-			"risk", "rule_id", "reasons",
+			"approval_token_hash", "expires_at", "created_at", "policy_version", "action_summary", "risk", "rule_id", "request_context", "reasons",
+			"executing_at", "execution_id", "failed_at", "last_error_code",
 		}).AddRow(
 			approvalResp.ApprovalRequestID, "t_demo", "agent_demo", "mock_internal", "ACCESS.ROLE_CHANGE", requestHash, "APPROVED",
-			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", time.Now().UTC(), "admin_demo", "ok",
-			nil, nil, nil, "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
+			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", "Change role", "HIGH", "rule_require_approval", nil, nil,
+			nil, nil, nil, nil,
 		))
+
+	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
+		SET status = 'EXECUTING', executing_at = $1, execution_id = COALESCE(execution_id, approval_request_id), last_error_code = NULL
+		WHERE tenant_id = $2
+			AND approval_request_id = $3
+			AND status = 'APPROVED'
+			AND expires_at > $4
+			AND approval_token_hash = $5
+			AND request_hash = $6`)).
+		WithArgs(sqlmock.AnyArg(), "t_demo", approvalResp.ApprovalRequestID, sqlmock.AnyArg(), utils.HashString(approvalResp.ApprovalToken), requestHash).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
 		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
 			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
+
+	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
+		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL
+		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'EXECUTING'`)).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t_demo", approvalResp.ApprovalRequestID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	sm.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.action_decisions (
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
@@ -460,12 +485,6 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
-		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3
-		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'APPROVED'`)).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "t_demo", approvalResp.ApprovalRequestID).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
 	ctx2, req2, rec2 := testhelpers.MakeRequestWithParams(
 		http.MethodPost,
 		testhelpers.MakeBody(payload),
@@ -490,21 +509,19 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "enabled"}).AddRow("t_demo", "Demo", true))
 
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
-		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
-		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		approval_token_hash, expires_at, created_at, policy_version, action_summary, risk, rule_id, request_context, reasons,
+		executing_at, execution_id, failed_at, last_error_code
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 		WithArgs("t_demo", approvalResp.ApprovalRequestID).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
-			"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
-			"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-			"risk", "rule_id", "reasons",
+			"approval_token_hash", "expires_at", "created_at", "policy_version", "action_summary", "risk", "rule_id", "request_context", "reasons",
+			"executing_at", "execution_id", "failed_at", "last_error_code",
 		}).AddRow(
 			approvalResp.ApprovalRequestID, "t_demo", "agent_demo", "mock_internal", "ACCESS.ROLE_CHANGE", requestHash, "EXECUTED",
-			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", time.Now().UTC(), "admin_demo", "ok",
-			time.Now().UTC(), "req_exec", "dec_exec", "dec_req", "Change role", "HIGH", "rule_require_approval", nil,
+			utils.HashString(approvalResp.ApprovalToken), time.Now().UTC().Add(10*time.Minute), time.Now().UTC(), "p_v1", "Change role", "HIGH", "rule_require_approval", nil, nil,
+			nil, approvalResp.ApprovalRequestID, nil, nil,
 		))
 
 	ctx3, req3, rec3 := testhelpers.MakeRequestWithParams(
@@ -615,21 +632,19 @@ func TestApprovalResubmissionInvalidCases(t *testing.T) {
 			}
 
 			sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
-		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
-		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, reasons
+		approval_token_hash, expires_at, created_at, policy_version, action_summary, risk, rule_id, request_context, reasons,
+		executing_at, execution_id, failed_at, last_error_code
 		FROM rbitr.approval_requests
 		WHERE tenant_id = $1 AND approval_request_id = $2`)).
 				WithArgs("t_demo", "ar_1").
 				WillReturnRows(sqlmock.NewRows([]string{
 					"approval_request_id", "tenant_id", "agent_id", "tool_id", "action_type", "request_hash", "status",
-					"approval_token_hash", "expires_at", "created_at", "policy_version", "decided_at", "decided_by", "decision_comment",
-					"executed_at", "executed_request_id", "executed_decision_id", "request_decision_id", "action_summary",
-					"risk", "rule_id", "reasons",
+					"approval_token_hash", "expires_at", "created_at", "policy_version", "action_summary", "risk", "rule_id", "request_context", "reasons",
+					"executing_at", "execution_id", "failed_at", "last_error_code",
 				}).AddRow(
 					"ar_1", "t_demo", "agent_demo", "mock_internal", "PAYMENT.REFUND", storedHash, tc.approvalStatus,
-					utils.HashString("token123"), tc.expiresAt, time.Now().UTC(), "p_v1", nil, nil, nil,
-					nil, nil, nil, "dec_req", "Refund", "HIGH", "rule_approval", nil,
+					utils.HashString("token123"), tc.expiresAt, time.Now().UTC(), "p_v1", "Refund", "HIGH", "rule_approval", nil, nil,
+					nil, nil, nil, nil,
 				))
 
 			if tc.expectExpireExec {

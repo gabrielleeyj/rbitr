@@ -5,18 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 )
 
 type Result struct {
-	Version     string
-	Decision    string
-	Risk        string
-	Rule        Rule
-	Reasons     []Reason
-	Constraints map[string]any
-	Tags        []string
+	Version      string
+	Decision     string
+	Risk         string
+	Rule         Rule
+	Reasons      []Reason
+	Constraints  map[string]any
+	Tags         []string
+	MatchedRules []MatchedRule
 }
 
 var ErrInvalidPolicyOutput = errors.New("invalid policy output")
@@ -29,6 +31,14 @@ type Rule struct {
 type Reason struct {
 	Code    string
 	Message string
+}
+
+type MatchedRule struct {
+	RuleID             string
+	Priority           int
+	Effect             string
+	Reasons            []Reason
+	ConstraintsSummary map[string]any
 }
 
 type PolicyOutputError struct {
@@ -129,25 +139,9 @@ func parseResult(resultSet rego.ResultSet) (Result, error) {
 	if !ok {
 		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
 	}
-	reasonsValue, ok := value["reasons"].([]any)
-	if !ok || len(reasonsValue) == 0 {
+	reasons, ok := parseReasons(value["reasons"], true)
+	if !ok {
 		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
-	}
-	reasons := make([]Reason, 0, len(reasonsValue))
-	for _, item := range reasonsValue {
-		itemMap, ok := item.(map[string]any)
-		if !ok {
-			return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
-		}
-		code, ok := itemMap["code"].(string)
-		if !ok || code == "" {
-			return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
-		}
-		message, ok := itemMap["message"].(string)
-		if !ok || message == "" {
-			return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
-		}
-		reasons = append(reasons, Reason{Code: code, Message: message})
 	}
 	constraintsValue, ok := value["constraints"].(map[string]any)
 	if !ok {
@@ -162,15 +156,157 @@ func parseResult(resultSet rego.ResultSet) (Result, error) {
 		}
 	}
 
+	matchedRules, ok := parseMatchedRules(value["matched_rules"])
+	if !ok {
+		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
+	}
+	decision, resolvedRule, resolvedReasons := resolveDecision(decision, Rule{ID: ruleID, Priority: rulePriority}, reasons, matchedRules)
+
 	return Result{
-		Version:     version,
-		Decision:    decision,
-		Risk:        risk,
-		Rule:        Rule{ID: ruleID, Priority: rulePriority},
-		Reasons:     reasons,
-		Constraints: constraintsValue,
-		Tags:        tags,
+		Version:      version,
+		Decision:     decision,
+		Risk:         risk,
+		Rule:         resolvedRule,
+		Reasons:      resolvedReasons,
+		Constraints:  constraintsValue,
+		Tags:         tags,
+		MatchedRules: matchedRules,
 	}, nil
+}
+
+func parseReasons(value any, required bool) ([]Reason, bool) {
+	if value == nil {
+		return nil, !required
+	}
+	reasonsValue, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	if required && len(reasonsValue) == 0 {
+		return nil, false
+	}
+	reasons := make([]Reason, 0, len(reasonsValue))
+	for _, item := range reasonsValue {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		code, ok := itemMap["code"].(string)
+		if !ok || code == "" {
+			return nil, false
+		}
+		message, ok := itemMap["message"].(string)
+		if !ok || message == "" {
+			return nil, false
+		}
+		reasons = append(reasons, Reason{Code: code, Message: message})
+	}
+	return reasons, true
+}
+
+func parseMatchedRules(value any) ([]MatchedRule, bool) {
+	if value == nil {
+		return nil, true
+	}
+	rulesValue, ok := value.([]any)
+	if !ok {
+		return nil, false
+	}
+	rules := make([]MatchedRule, 0, len(rulesValue))
+	for _, item := range rulesValue {
+		ruleMap, ok := item.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		ruleID, ok := ruleMap["rule_id"].(string)
+		if !ok || ruleID == "" {
+			return nil, false
+		}
+		priority, ok := parsePriority(ruleMap["priority"])
+		if !ok {
+			return nil, false
+		}
+		effect, ok := parseMatchedRuleEffect(ruleMap)
+		if !ok {
+			return nil, false
+		}
+		reasons, ok := parseReasons(ruleMap["reasons"], false)
+		if !ok {
+			return nil, false
+		}
+		constraintsSummary := map[string]any{}
+		if rawSummary, exists := ruleMap["constraints_summary"]; exists {
+			summary, ok := rawSummary.(map[string]any)
+			if !ok {
+				return nil, false
+			}
+			constraintsSummary = summary
+		}
+		rules = append(rules, MatchedRule{
+			RuleID:             ruleID,
+			Priority:           priority,
+			Effect:             effect,
+			Reasons:            reasons,
+			ConstraintsSummary: constraintsSummary,
+		})
+	}
+
+	sort.SliceStable(rules, func(i, j int) bool {
+		return matchedRuleLess(rules[i], rules[j])
+	})
+	return rules, true
+}
+
+func parseMatchedRuleEffect(rule map[string]any) (string, bool) {
+	if effect, ok := rule["effect"].(string); ok && isDecisionAllowed(effect) {
+		return effect, true
+	}
+	if decision, ok := rule["decision"].(string); ok && isDecisionAllowed(decision) {
+		return decision, true
+	}
+	return "", false
+}
+
+func resolveDecision(decision string, rule Rule, reasons []Reason, matchedRules []MatchedRule) (string, Rule, []Reason) {
+	if len(matchedRules) == 0 {
+		return decision, rule, reasons
+	}
+	winner := matchedRules[0]
+	resolvedReasons := reasons
+	if len(winner.Reasons) > 0 {
+		resolvedReasons = winner.Reasons
+	}
+	return winner.Effect, Rule{ID: winner.RuleID, Priority: winner.Priority}, resolvedReasons
+}
+
+func matchedRuleLess(left, right MatchedRule) bool {
+	if left.Priority != right.Priority {
+		return left.Priority > right.Priority
+	}
+	leftRank := decisionRank(left.Effect)
+	rightRank := decisionRank(right.Effect)
+	if leftRank != rightRank {
+		return leftRank > rightRank
+	}
+	if left.RuleID != right.RuleID {
+		return left.RuleID < right.RuleID
+	}
+	return false
+}
+
+func decisionRank(decision string) int {
+	// Fixed governance tie-break precedence for equal-priority rules:
+	// DENY > REQUIRE_APPROVAL > ALLOW.
+	switch decision {
+	case "DENY":
+		return 3
+	case "REQUIRE_APPROVAL":
+		return 2
+	case "ALLOW":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func parsePriority(value any) (int, bool) {

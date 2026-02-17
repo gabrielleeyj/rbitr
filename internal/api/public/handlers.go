@@ -257,6 +257,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		decisionResult.Rule.ID = "rule_default_deny"
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
+	decisionResult.Constraints = withMatchedRulesConstraint(decisionResult.Constraints, decisionResult.MatchedRules)
 
 	rateLimitViolation, err := d.enforceRateLimit(
 		c.Request().Context(),

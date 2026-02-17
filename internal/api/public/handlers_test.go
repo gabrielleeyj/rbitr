@@ -692,6 +692,79 @@ func TestHandleToolCallArgConstraintDenied(t *testing.T) {
 	connectorMock.AssertNotCalled(t, "Execute", mock.Anything, mock.Anything)
 }
 
+func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
+		Return("", store.ErrNotFound)
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		rawMatched, ok := record.Constraints["matched_rules"]
+		if !ok {
+			return false
+		}
+		matched, ok := rawMatched.([]map[string]any)
+		if !ok || len(matched) != 2 {
+			return false
+		}
+		firstRuleID, _ := matched[0]["rule_id"].(string)
+		secondRuleID, _ := matched[1]["rule_id"].(string)
+		return record.Decision == decisionDeny &&
+			firstRuleID == "rule_deny_high" &&
+			secondRuleID == "rule_allow_low"
+	})).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.On("Evaluate", context.Background(), tenant.TenantID, mock.Anything).Return(policy.Result{
+		Version:  "2026-01-20",
+		Decision: decisionDeny,
+		Risk:     "HIGH",
+		Rule:     models.DecisionRule{ID: "rule_deny_high", Priority: 100},
+		Reasons:  []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
+		Constraints: map[string]any{
+			"rate_limit": map[string]any{"per_minute": float64(60)},
+		},
+		MatchedRules: []models.DecisionMatchedRule{
+			{RuleID: "rule_deny_high", Priority: 100, Effect: decisionDeny},
+			{RuleID: "rule_allow_low", Priority: 10, Effect: "ALLOW"},
+		},
+		PolicyVersion: "p_v1",
+	}, nil)
+
+	connectorMock := connector.NewMockConnector(t)
+	var storeAPI store.StoreAPI = storeMock
+	deps := Dependencies{
+		Store:     storeAPI,
+		Policy:    policyMock,
+		Connector: connectorMock,
+		Metrics:   newTestMetrics(),
+		Config: config.Config{
+			BodyLimitSize:       256 * 1024,
+			ResponseLimit:       256 * 1024,
+			FeatureRateLimiting: false,
+		},
+	}
+
+	payload := ToolCallRequest{
+		HTTPMethod: "POST",
+		Path:       "/refund",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       "{}",
+	}
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		testhelpers.MakeBody(payload),
+		testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleToolCall(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
 func assertEvidenceWhitelist(t *testing.T, body []byte) {
 	validateEvidenceContract(t, body)
 
