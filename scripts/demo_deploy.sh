@@ -6,6 +6,8 @@ TENANT_KEY=${TENANT_KEY:-"tenant_demo_key"}
 AGENT_ID=${AGENT_ID:-"agent_demo"}
 TENANT_ID=${TENANT_ID:-"t_demo"}
 ADMIN_KEY=${ADMIN_KEY:-"admin_demo_key"}
+TENANT_AUTH_MODE=${TENANT_AUTH_MODE:-"bearer"} # bearer|x-tenant-key
+AUTO_RECOVER_TENANT_KEY=${AUTO_RECOVER_TENANT_KEY:-"true"}
 
 if [ -f docker-compose.yml ] || [ -f compose.yaml ] || [ -f compose.yml ]; then
 	echo "Starting docker compose services..."
@@ -29,10 +31,37 @@ pretty() {
 	fi
 }
 
+json_field() {
+	json="$1"
+	jq_expr="$2"
+	key="$3"
+	if command -v jq >/dev/null 2>&1; then
+		echo "$json" | jq -r "$jq_expr // empty"
+	else
+		echo "$json" | tr -d '\n' | sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p"
+	fi
+}
+
+response_is_unauthorized() {
+	json="$1"
+	err_field=$(json_field "$json" '.error' 'error')
+	[ "$err_field" = "unauthorized" ]
+}
+
+set_tenant_auth_header() {
+	tenant_auth_header_name="Authorization"
+	tenant_auth_header_value="Bearer $TENANT_KEY"
+	if [ "$TENANT_AUTH_MODE" = "x-tenant-key" ]; then
+		tenant_auth_header_name="X-Tenant-Key"
+		tenant_auth_header_value="$TENANT_KEY"
+	fi
+}
+set_tenant_auth_header
+
 call_tool() {
 	curl -sS -X POST "$GATEWAY_URL/v1/tools/mock_internal/call" \
 		-H "Content-Type: application/json" \
-		-H "X-Tenant-Key: $TENANT_KEY" \
+		-H "$tenant_auth_header_name: $tenant_auth_header_value" \
 		-H "X-Agent-Id: $AGENT_ID" \
 		-d "$1"
 }
@@ -43,6 +72,26 @@ deny_payload='{"http_method":"POST","path":"/export_customer_data","query":"","h
 
 printf "\n1) ALLOW (expected)\n"
 allow_resp=$(call_tool "$allow_payload")
+if response_is_unauthorized "$allow_resp" && [ "$AUTO_RECOVER_TENANT_KEY" = "true" ]; then
+	echo "Tenant key unauthorized. Attempting demo auto-recovery via admin key..."
+	curl -sS -X PUT "$GATEWAY_URL/admin/tenants/$TENANT_ID/enabled" \
+		-H "Content-Type: application/json" \
+		-H "Authorization: Bearer $ADMIN_KEY" \
+		-d '{"enabled":true}' >/dev/null || true
+	rotate_resp=$(curl -sS -X POST "$GATEWAY_URL/admin/tenants/$TENANT_ID/keys/rotate" \
+		-H "Content-Type: application/json" \
+		-H "Authorization: Bearer $ADMIN_KEY")
+	new_key=$(json_field "$rotate_resp" '.api_key' 'api_key')
+	if [ -n "$new_key" ]; then
+		TENANT_KEY="$new_key"
+		set_tenant_auth_header
+		echo "Obtained new tenant key for $TENANT_ID."
+		allow_resp=$(call_tool "$allow_payload")
+	else
+		echo "Failed to rotate demo tenant key automatically."
+		pretty "$rotate_resp"
+	fi
+fi
 pretty "$allow_resp"
 
 printf "\n2) REQUIRE_APPROVAL (expected)\n"
@@ -51,10 +100,8 @@ pretty "$approval_resp"
 
 approval_id=""
 approval_token=""
-if command -v jq >/dev/null 2>&1; then
-	approval_id=$(echo "$approval_resp" | jq -r '.approval_request_id // empty')
-	approval_token=$(echo "$approval_resp" | jq -r '.approval_token // empty')
-fi
+approval_id=$(json_field "$approval_resp" '.approval_request_id' 'approval_request_id')
+approval_token=$(json_field "$approval_resp" '.approval_token' 'approval_token')
 
 if [ -n "$approval_id" ] && [ -n "$approval_token" ]; then
 	printf "\n2b) Admin approve\n"
@@ -67,7 +114,7 @@ if [ -n "$approval_id" ] && [ -n "$approval_token" ]; then
 	printf "\n2c) Resubmit with approval token (expected ALLOW)\n"
 	approved_resp=$(curl -sS -X POST "$GATEWAY_URL/v1/tools/mock_internal/call" \
 		-H "Content-Type: application/json" \
-		-H "X-Tenant-Key: $TENANT_KEY" \
+		-H "$tenant_auth_header_name: $tenant_auth_header_value" \
 		-H "X-Agent-Id: $AGENT_ID" \
 		-H "X-Approval-Request-Id: $approval_id" \
 		-H "X-Approval-Token: $approval_token" \
@@ -83,7 +130,7 @@ pretty "$deny_resp"
 
 printf "\n4) Evidence Export\n"
 evidence_resp=$(curl -sS "$GATEWAY_URL/v1/tenants/$TENANT_ID/evidence?limit=50" \
-	-H "X-Tenant-Key: $TENANT_KEY" \
+	-H "$tenant_auth_header_name: $tenant_auth_header_value" \
 	-H "X-Agent-Id: $AGENT_ID")
 pretty "$evidence_resp"
 

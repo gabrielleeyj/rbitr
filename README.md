@@ -77,7 +77,7 @@ go run ./cmd/gateway
 - Seeded tenant `t_demo` with
 
   ```
-  X-Tenant-Key = tenant_demo_key;
+  Authorization: Bearer tenant_demo_key;
   admin key = `admin_demo_key`;
   ```
 
@@ -85,6 +85,7 @@ go run ./cmd/gateway
   - jira (`http://localhost:8081`) in `migrations/00001_init.sql`.
 
 - Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
+- Tenant auth accepts `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback and may be disabled.
 - Admin auth accepts `Authorization: Bearer <admin_key>` (preferred) or `X-Admin-Key` (legacy).
 
 ## Structured Logging
@@ -142,7 +143,7 @@ go run ./cmd/gateway
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "X-Tenant-Key: tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "GET",
@@ -161,7 +162,7 @@ tool doesn’t implement /status), but ADR is still recorded.
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "X-Tenant-Key: tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "POST",
@@ -188,7 +189,7 @@ curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "X-Tenant-Key: tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key" \
 -H "X-Agent-Id: agent_demo" \
 -H "X-Approval-Request-Id: <approval_request_id>" \
 -H "X-Approval-Token: <approval_token>" \
@@ -208,7 +209,7 @@ Expect: HTTP 200 with tool response and approval marked EXECUTED.
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "X-Tenant-Key: tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "POST",
@@ -225,7 +226,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 ```bash
 curl -sS "http://localhost:8080/v1/tenants/t_demo/evidence?limit=50" \
--H "X-Tenant-Key: tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key" \
 -H "X-Agent-Id: agent_demo"
 ```
 
