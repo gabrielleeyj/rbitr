@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,29 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
+
+var (
+	mcpStreamMaxDuration             = 5 * time.Minute
+	mcpStreamHeartbeatInterval       = 15 * time.Second
+	mcpStreamMaxBytes          int64 = 1 << 20 // 1 MiB
+)
+
+var errMCPStreamLimitExceeded = errors.New("mcp stream byte limit exceeded")
+
+type sseWriteLimiter struct {
+	writer  io.Writer
+	limit   int64
+	written int64
+}
+
+func (l *sseWriteLimiter) Write(payload []byte) error {
+	if l.limit > 0 && l.written+int64(len(payload)) > l.limit {
+		return errMCPStreamLimitExceeded
+	}
+	n, err := l.writer.Write(payload)
+	l.written += int64(n)
+	return err
+}
 
 // handleMCP handles MCP Streamable HTTP requests (JSON-RPC 2.0).
 func (d *Dependencies) handleMCP(c *echo.Context) error {
@@ -157,18 +181,60 @@ func (d *Dependencies) handleMCPStream(c *echo.Context) error {
 	}
 	c.Set(telemetry.CtxAgentID, agentID)
 
-	// Minimal SSE response to satisfy Streamable HTTP GET support.
+	streamCtx, cancel := context.WithTimeout(c.Request().Context(), mcpStreamMaxDuration)
+	defer cancel()
+
+	// Streamable SSE response with bounded duration/bytes and heartbeats.
 	c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
 	c.Response().Header().Set("Connection", "keep-alive")
+	c.Response().Header().Set("X-Accel-Buffering", "no")
 	c.Response().WriteHeader(http.StatusOK)
-	if _, err := c.Response().Write([]byte(": connected\n\n")); err != nil {
+
+	limiter := &sseWriteLimiter{
+		writer: c.Response(),
+		limit:  mcpStreamMaxBytes,
+	}
+	if err := limiter.Write([]byte(": connected\n\n")); err != nil {
 		return err
 	}
-	if flusher, ok := c.Response().(http.Flusher); ok {
+	flusher, ok := c.Response().(http.Flusher)
+	if ok {
 		flusher.Flush()
 	}
-	return nil
+
+	ticker := time.NewTicker(mcpStreamHeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-streamCtx.Done():
+			if errors.Is(streamCtx.Err(), context.DeadlineExceeded) {
+				if err := limiter.Write([]byte("event: close\ndata: {\"reason\":\"max_duration_reached\"}\n\n")); err != nil &&
+					!errors.Is(err, errMCPStreamLimitExceeded) {
+					return err
+				}
+				if ok {
+					flusher.Flush()
+				}
+			}
+			return nil
+		case <-ticker.C:
+			if err := limiter.Write([]byte(": heartbeat\n\n")); err != nil {
+				if errors.Is(err, errMCPStreamLimitExceeded) {
+					_ = limiter.Write([]byte("event: close\ndata: {\"reason\":\"max_bytes_reached\"}\n\n"))
+					if ok {
+						flusher.Flush()
+					}
+					return nil
+				}
+				return err
+			}
+			if ok {
+				flusher.Flush()
+			}
+		}
+	}
 }
 
 // routeMCPMethod routes JSON-RPC method calls to appropriate handlers.

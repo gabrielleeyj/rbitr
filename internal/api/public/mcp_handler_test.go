@@ -922,6 +922,18 @@ func TestHandleMCP_InitializeAndInitializedFlow(t *testing.T) {
 }
 
 func TestHandleMCPStream_GetEndpoint(t *testing.T) {
+	originalDuration := mcpStreamMaxDuration
+	originalHeartbeat := mcpStreamHeartbeatInterval
+	originalMaxBytes := mcpStreamMaxBytes
+	mcpStreamMaxDuration = 35 * time.Millisecond
+	mcpStreamHeartbeatInterval = 10 * time.Millisecond
+	mcpStreamMaxBytes = 4 * 1024
+	t.Cleanup(func() {
+		mcpStreamMaxDuration = originalDuration
+		mcpStreamHeartbeatInterval = originalHeartbeat
+		mcpStreamMaxBytes = originalMaxBytes
+	})
+
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
@@ -944,6 +956,47 @@ func TestHandleMCPStream_GetEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "text/event-stream")
 	assert.Contains(t, rec.Body.String(), ": connected")
+	assert.Contains(t, rec.Body.String(), ": heartbeat")
+	assert.Contains(t, rec.Body.String(), `"max_duration_reached"`)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCPStream_ByteLimit(t *testing.T) {
+	originalDuration := mcpStreamMaxDuration
+	originalHeartbeat := mcpStreamHeartbeatInterval
+	originalMaxBytes := mcpStreamMaxBytes
+	mcpStreamMaxDuration = 2 * time.Second
+	mcpStreamHeartbeatInterval = 10 * time.Millisecond
+	mcpStreamMaxBytes = int64(len(": connected\n\n"))
+	t.Cleanup(func() {
+		mcpStreamMaxDuration = originalDuration
+		mcpStreamHeartbeatInterval = originalHeartbeat
+		mcpStreamMaxBytes = originalMaxBytes
+	})
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodGet,
+		bytes.NewReader(nil),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCPStream(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), ": connected")
+	assert.NotContains(t, rec.Body.String(), ": heartbeat")
+	assert.NotContains(t, rec.Body.String(), `"max_duration_reached"`)
 	mockStore.AssertExpectations(t)
 }
 
