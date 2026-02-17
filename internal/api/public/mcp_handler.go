@@ -197,22 +197,63 @@ func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, age
 func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
-	// Find an MCP upstream to forward to
+	tenantConfig, err := d.Store.GetTenantConfig(ctx, tenant.TenantID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to load tenant config")), nil
+	}
+	configuredToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
+
+	// List tenant tools for explicit upstream selection or fallback.
 	tools, err := d.Store.ListTools(ctx, tenant.TenantID)
 	if err != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
 
 	var upstreamURL string
-	for _, tool := range tools {
-		if tool.Transport == "mcp_streamable_http" && tool.MCPUpstreamURL != "" {
+	selectedToolID := ""
+	usedFallback := false
+	if configuredToolID != "" {
+		for _, tool := range tools {
+			if tool.ToolID != configuredToolID {
+				continue
+			}
+			if tool.Transport != "mcp_streamable_http" || strings.TrimSpace(tool.MCPUpstreamURL) == "" {
+				return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("configured pass-through upstream unavailable")), nil
+			}
+			selectedToolID = tool.ToolID
 			upstreamURL = tool.MCPUpstreamURL
 			break
+		}
+		if upstreamURL == "" {
+			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("configured pass-through upstream unavailable")), nil
+		}
+	} else {
+		for _, tool := range tools {
+			if tool.Transport == "mcp_streamable_http" && strings.TrimSpace(tool.MCPUpstreamURL) != "" {
+				selectedToolID = tool.ToolID
+				upstreamURL = tool.MCPUpstreamURL
+				usedFallback = true
+				break
+			}
 		}
 	}
 
 	if upstreamURL == "" {
 		return mcp.NewErrorResponse(req.ID, mcp.NewMethodNotFoundError(req.Method)), nil
+	}
+	if selectedToolID != "" {
+		c.Set(telemetry.CtxToolID, selectedToolID)
+	}
+	if usedFallback {
+		if d.Metrics != nil && d.Metrics.MCPPassthroughFallbackTotal != nil {
+			d.Metrics.MCPPassthroughFallbackTotal.Inc()
+		}
+		c.Logger().Warn("mcp pass-through upstream fallback used",
+			"tenant_id", tenant.TenantID,
+			"tool_id", selectedToolID,
+			"method", req.Method,
+			"request_id", c.Request().Header.Get("X-Request-Id"),
+		)
 	}
 
 	// Forward request as-is to upstream

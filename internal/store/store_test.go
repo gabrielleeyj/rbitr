@@ -496,12 +496,12 @@ func TestStoreGetTenantConfig(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "version"}).
-				AddRow("t1", "p_v1", time.Now(), time.Now(), "shadow", int64(3)),
+			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version"}).
+				AddRow("t1", "p_v1", time.Now(), time.Now(), "shadow", "mcp_tool", int64(3)),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "version"}),
+			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -512,7 +512,7 @@ func TestStoreGetTenantConfig(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, version FROM rbitr.tenant_config WHERE tenant_id = $1`)
+			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version FROM rbitr.tenant_config WHERE tenant_id = $1`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -523,6 +523,7 @@ func TestStoreGetTenantConfig(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, config.EnforcementMode)
 				require.GreaterOrEqual(t, config.Version, int64(1))
+				require.Equal(t, "mcp_tool", config.MCPPassthroughUpstreamToolID)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
@@ -1789,6 +1790,61 @@ func TestStoreSetTenantEnforcementModeNotFound(t *testing.T) {
 	st := New(db)
 	err = st.SetTenantEnforcementMode(context.Background(), "missing", "shadow")
 	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetTenantMCPPassthroughUpstreamToolID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_config
+		SET mcp_passthrough_upstream_tool_id = NULLIF($1, ''), updated_at = $2
+		WHERE tenant_id = $3`)).
+		WithArgs("mcp_tool", sqlmock.AnyArg(), "t1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.SetTenantMCPPassthroughUpstreamToolID(context.Background(), "t1", "mcp_tool")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetTenantMCPPassthroughUpstreamToolIDNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_config
+		SET mcp_passthrough_upstream_tool_id = NULLIF($1, ''), updated_at = $2
+		WHERE tenant_id = $3`)).
+		WithArgs("mcp_tool", sqlmock.AnyArg(), "missing").
+		WillReturnResult(sqlmock.NewResult(1, 0))
+
+	st := New(db)
+	err = st.SetTenantMCPPassthroughUpstreamToolID(context.Background(), "missing", "mcp_tool")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetTenantMCPPassthroughUpstreamToolIDLocked(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow(settingTrue))
+
+	st := New(db)
+	err = st.SetTenantMCPPassthroughUpstreamToolID(context.Background(), "t1", "mcp_tool")
+	require.ErrorIs(t, err, ErrAdminWriteLocked)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

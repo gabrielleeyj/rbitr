@@ -6,11 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getSettings, setAdminWriteLock, setAuditRetentionDays, setDefaultApprovalTTL, setEnforcementMode } from "@/lib/api";
+import {
+  getSettings,
+  listTools,
+  setAdminWriteLock,
+  setAuditRetentionDays,
+  setDefaultApprovalTTL,
+  setEnforcementMode,
+  setMCPPassthroughUpstreamTool,
+  type ToolConfig,
+} from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
-import { scopeAuditRead, scopeSettingsRead, scopeSettingsWrite } from "@/lib/scopes";
+import { scopeAuditRead, scopeSettingsRead, scopeSettingsWrite, scopeToolsRead } from "@/lib/scopes";
 
 export function SettingsPage() {
   const { adminKey, hasScope } = useAdminKey();
@@ -19,12 +28,15 @@ export function SettingsPage() {
   const [defaultTTLMinutes, setDefaultTTLMinutes] = useState(15);
   const [auditRetentionDays, setAuditRetentionDaysState] = useState(365);
   const [enforcementMode, setEnforcementModeState] = useState<"enforce" | "shadow">("enforce");
+  const [mcpPassthroughUpstreamToolID, setMCPPassthroughUpstreamToolID] = useState("");
+  const [mcpUpstreamTools, setMCPUpstreamTools] = useState<ToolConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const canReadSettings = hasScope(scopeSettingsRead);
   const canWriteSettings = hasScope(scopeSettingsWrite);
   const canReadAudit = hasScope(scopeAuditRead);
+  const canReadTools = hasScope(scopeToolsRead);
 
   useEffect(() => {
     let mounted = true;
@@ -34,7 +46,12 @@ export function SettingsPage() {
         return;
       }
       try {
-        const data = await getSettings({ adminKey }, selectedTenant?.tenant_id);
+        const settingsPromise = getSettings({ adminKey }, selectedTenant?.tenant_id);
+        const toolsPromise =
+          selectedTenant?.tenant_id && canReadTools
+            ? listTools({ adminKey }, selectedTenant.tenant_id)
+            : Promise.resolve([]);
+        const [data, tools] = await Promise.all([settingsPromise, toolsPromise]);
         if (!mounted) return;
         setLocked(Boolean(data.admin_write_lock));
         if (data.default_approval_ttl_seconds) {
@@ -48,6 +65,13 @@ export function SettingsPage() {
         } else {
           setEnforcementModeState("enforce");
         }
+        setMCPPassthroughUpstreamToolID(data.mcp_passthrough_upstream_tool_id ?? "");
+        setMCPUpstreamTools(
+          tools.filter((tool) => {
+            const upstream = tool.mcp?.upstream_url?.trim();
+            return Boolean(upstream);
+          })
+        );
         setLoading(false);
       } catch (err) {
         if (!mounted) return;
@@ -59,7 +83,7 @@ export function SettingsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey, selectedTenant?.tenant_id, canReadSettings]);
+  }, [adminKey, selectedTenant?.tenant_id, canReadSettings, canReadTools]);
 
   const handleToggle = async (value: boolean) => {
     if (!adminKey || !canWriteSettings) return;
@@ -110,6 +134,29 @@ export function SettingsPage() {
     }
   };
 
+  const handleMCPPassthroughUpstreamSave = async () => {
+    if (!adminKey || !selectedTenant?.tenant_id || !canWriteSettings) return;
+    setActionError("");
+    try {
+      await setMCPPassthroughUpstreamTool(
+        { adminKey },
+        selectedTenant.tenant_id,
+        mcpPassthroughUpstreamToolID
+      );
+      if (mcpPassthroughUpstreamToolID) {
+        toast.success("MCP pass-through upstream updated", {
+          description: `Using ${mcpPassthroughUpstreamToolID}`,
+        });
+      } else {
+        toast.success("MCP pass-through upstream cleared", {
+          description: "Automatic fallback routing is enabled.",
+        });
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update MCP pass-through upstream.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -143,6 +190,41 @@ export function SettingsPage() {
           </div>
           <div className="text-xs text-muted-foreground">
             In shadow mode, DENY decisions are logged with explainability metadata but calls still execute. Approval flows remain enforced.
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="mcp-passthrough-upstream" className="text-sm">
+              MCP pass-through upstream tool
+            </Label>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <select
+                id="mcp-passthrough-upstream"
+                value={mcpPassthroughUpstreamToolID}
+                onChange={(event) => setMCPPassthroughUpstreamToolID(event.target.value)}
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm md:max-w-md"
+                disabled={loading || !selectedTenant || !canWriteSettings || !canReadTools}
+              >
+                <option value="">Automatic fallback (first MCP tool)</option>
+                {mcpUpstreamTools.map((tool) => (
+                  <option key={tool.tool_id} value={tool.tool_id}>
+                    {tool.tool_id}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                onClick={handleMCPPassthroughUpstreamSave}
+                disabled={loading || !selectedTenant || !canWriteSettings || !canReadTools}
+              >
+                Save
+              </Button>
+            </div>
+            {!canReadTools ? (
+              <div className="text-xs text-muted-foreground">Missing scope: {scopeToolsRead}</div>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                Only MCP tools with a configured upstream URL are listed.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -536,6 +536,9 @@ func newTestMetrics() *telemetry.Metrics {
 		TenantKeyLegacyUpgradeTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "test_tenant_key_legacy_upgrade_total_admin",
 		}),
+		MCPPassthroughFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "test_mcp_passthrough_fallback_total_admin",
+		}),
 		RateLimitChecksTotal:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_checks_total_admin"}, []string{"result", "window"}),
 		RateLimitExceededTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_exceeded_total_admin"}, []string{"window", "scope"}),
 		RateLimitLatencyMs:     prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_rate_limit_latency_ms_admin"}),

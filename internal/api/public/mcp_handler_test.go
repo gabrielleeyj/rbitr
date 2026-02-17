@@ -276,6 +276,8 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 			method: "unknown/method",
 			params: `{}`,
 			setupMock: func(m *store.MockStoreAPI) {
+				m.On("GetTenantConfig", mock.Anything, "t_demo").
+					Return(models.TenantConfig{}, store.ErrNotFound)
 				// Pass-through needs ListTools to find upstream - return no MCP tools
 				m.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
 			},
@@ -968,6 +970,8 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{}, store.ErrNotFound)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1009,6 +1013,89 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHandleMCP_PassThrough_UsesConfiguredUpstreamTool(t *testing.T) {
+	selectedUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req mcp.Request
+		json.NewDecoder(r.Body).Decode(&req)
+		resultData, _ := json.Marshal(map[string]any{"source": "selected"})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result:  resultData,
+		})
+	}))
+	defer selectedUpstream.Close()
+
+	fallbackUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req mcp.Request
+		json.NewDecoder(r.Body).Decode(&req)
+		resultData, _ := json.Marshal(map[string]any{"source": "fallback"})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result:  resultData,
+		})
+	}))
+	defer fallbackUpstream.Close()
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{
+			TenantID:                     "t_demo",
+			MCPPassthroughUpstreamToolID: "z_selected",
+		}, nil)
+	// Order should not matter when explicit selection is configured.
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:         "a_fallback",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: fallbackUpstream.URL,
+		},
+		{
+			ToolID:         "z_selected",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: selectedUpstream.URL,
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"pt-configured","method":"resources/list","params":{}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal(resp.Result, &result))
+	require.Equal(t, "selected", result["source"])
+
+	mockStore.AssertExpectations(t)
+}
+
 func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 	// Create mock upstream that always fails
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1020,6 +1107,8 @@ func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{}, store.ErrNotFound)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1072,6 +1161,8 @@ func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{}, store.ErrNotFound)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
 			ToolID:         "mcp_tool",
@@ -1114,6 +1205,8 @@ func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
 	mockStore := &store.MockStoreAPI{}
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{}, store.ErrNotFound)
 	// Only non-MCP tools available - should fall back to method not found
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
 		{
@@ -1149,6 +1242,50 @@ func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
 
 	assert.NotNil(t, resp.Error)
 	assert.Equal(t, mcp.ErrorMethodNotFound, resp.Error.Code)
+
+	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_PassThrough_InvalidConfiguredToolReturnsInternalError(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
+		Return(models.TenantConfig{
+			TenantID:                     "t_demo",
+			MCPPassthroughUpstreamToolID: "missing_tool",
+		}, nil)
+	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
+		{
+			ToolID:         "mcp_tool",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: "http://example.com",
+		},
+	}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"pt-invalid","method":"resources/list","params":{}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Error)
+	require.Equal(t, mcp.ErrorInternalError, resp.Error.Code)
 
 	mockStore.AssertExpectations(t)
 }

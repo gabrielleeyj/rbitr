@@ -58,6 +58,11 @@ type EnforcementModeRequest struct {
 	EnforcementMode string `json:"enforcement_mode"`
 }
 
+type MCPPassthroughUpstreamRequest struct {
+	TenantID string `json:"tenant_id"`
+	ToolID   string `json:"tool_id"`
+}
+
 type NotificationConfigRequest struct {
 	SlackWebhookEnabled        bool   `json:"slack_webhook_enabled"`
 	SlackWebhookDefaultChannel string `json:"slack_webhook_default_channel"`
@@ -118,11 +123,12 @@ type PolicyVersionsResponse struct {
 }
 
 type SettingsResponse struct {
-	AdminWriteLock            bool   `json:"admin_write_lock"`
-	DefaultApprovalTTLSeconds int    `json:"default_approval_ttl_seconds"`
-	AuditRetentionDays        int    `json:"audit_retention_days"`
-	TenantID                  string `json:"tenant_id,omitempty"`
-	EnforcementMode           string `json:"enforcement_mode,omitempty"`
+	AdminWriteLock               bool   `json:"admin_write_lock"`
+	DefaultApprovalTTLSeconds    int    `json:"default_approval_ttl_seconds"`
+	AuditRetentionDays           int    `json:"audit_retention_days"`
+	TenantID                     string `json:"tenant_id,omitempty"`
+	EnforcementMode              string `json:"enforcement_mode,omitempty"`
+	MCPPassthroughUpstreamToolID string `json:"mcp_passthrough_upstream_tool_id,omitempty"`
 }
 
 type HTTPConfig struct {
@@ -678,6 +684,7 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 		retentionDays = value
 	}
 	enforcementMode := "enforce"
+	mcpPassthroughUpstreamToolID := ""
 	if tenantID != "" {
 		tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 		if err != nil {
@@ -689,13 +696,15 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 		if mode := strings.TrimSpace(tenantConfig.EnforcementMode); mode == "shadow" {
 			enforcementMode = mode
 		}
+		mcpPassthroughUpstreamToolID = strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
 	}
 	return c.JSON(http.StatusOK, SettingsResponse{
-		AdminWriteLock:            locked,
-		DefaultApprovalTTLSeconds: defaultTTL,
-		AuditRetentionDays:        retentionDays,
-		TenantID:                  tenantID,
-		EnforcementMode:           enforcementMode,
+		AdminWriteLock:               locked,
+		DefaultApprovalTTLSeconds:    defaultTTL,
+		AuditRetentionDays:           retentionDays,
+		TenantID:                     tenantID,
+		EnforcementMode:              enforcementMode,
+		MCPPassthroughUpstreamToolID: mcpPassthroughUpstreamToolID,
 	})
 }
 
@@ -1414,6 +1423,65 @@ func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to audit enforcement mode update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
+	if err != nil {
+		return err
+	}
+
+	var payload MCPPassthroughUpstreamRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	payload.TenantID = strings.TrimSpace(payload.TenantID)
+	payload.ToolID = strings.TrimSpace(payload.ToolID)
+	if payload.TenantID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
+	}
+
+	tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), payload.TenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
+	}
+	beforeToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
+
+	if payload.ToolID != "" {
+		tool, err := d.Store.GetTool(c.Request().Context(), payload.TenantID, payload.ToolID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tool"})
+		}
+		if tool.Transport != "mcp_streamable_http" || strings.TrimSpace(tool.MCPUpstreamURL) == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "tool_id must reference an MCP tool with mcp_upstream_url"})
+		}
+	}
+
+	if err := d.Store.SetTenantMCPPassthroughUpstreamToolID(c.Request().Context(), payload.TenantID, payload.ToolID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update mcp pass-through upstream"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, payload.TenantID, "SETTINGS.MCP_PASSTHROUGH_UPSTREAM.SET", "SETTINGS", "mcp_passthrough_upstream_tool_id", map[string]any{
+		"tenant_id": payload.TenantID,
+		"value":     beforeToolID,
+	}, map[string]any{
+		"tenant_id": payload.TenantID,
+		"value":     payload.ToolID,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit mcp pass-through upstream update",
 			"detail": err.Error(),
 		})
 	}

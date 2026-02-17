@@ -131,6 +131,7 @@ export interface AdminSettings {
   audit_retention_days: number;
   tenant_id?: string;
   enforcement_mode?: "enforce" | "shadow";
+  mcp_passthrough_upstream_tool_id?: string;
 }
 
 export interface NotificationConfig {
@@ -569,6 +570,17 @@ export function setEnforcementMode(
   return request<void>(`/admin/settings/enforcement-mode`, config, {
     method: "PUT",
     body: JSON.stringify({ tenant_id: tenantId, enforcement_mode: enforcementMode }),
+  });
+}
+
+export function setMCPPassthroughUpstreamTool(
+  config: ApiConfig,
+  tenantId: string,
+  toolId?: string
+): Promise<void> {
+  return request<void>(`/admin/settings/mcp-passthrough-upstream`, config, {
+    method: "PUT",
+    body: JSON.stringify({ tenant_id: tenantId, tool_id: toolId ?? "" }),
   });
 }
 

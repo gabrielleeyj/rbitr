@@ -26,6 +26,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.NotificationsLatencyMs)
 		prometheus.Unregister(metrics.TenantAuthFallbackTotal)
 		prometheus.Unregister(metrics.TenantKeyLegacyUpgradeTotal)
+		prometheus.Unregister(metrics.MCPPassthroughFallbackTotal)
 		prometheus.Unregister(metrics.RateLimitChecksTotal)
 		prometheus.Unregister(metrics.RateLimitExceededTotal)
 		prometheus.Unregister(metrics.RateLimitLatencyMs)
@@ -50,6 +51,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.NotificationsLatencyMs.WithLabelValues("slack").Observe(5)
 	metrics.TenantAuthFallbackTotal.Inc()
 	metrics.TenantKeyLegacyUpgradeTotal.Inc()
+	metrics.MCPPassthroughFallbackTotal.Inc()
 	metrics.RateLimitChecksTotal.WithLabelValues("allowed", "minute").Inc()
 	metrics.RateLimitExceededTotal.WithLabelValues("minute", "tenant_agent_tool").Inc()
 	metrics.RateLimitLatencyMs.Observe(2)
@@ -75,6 +77,7 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		"notifications_latency_ms":        false,
 		"tenant_auth_fallback_total":      false,
 		"tenant_key_legacy_upgrade_total": false,
+		"mcp_passthrough_fallback_total":  false,
 		"rate_limit_checks_total":         false,
 		"rate_limit_exceeded_total":       false,
 		"rate_limit_latency_ms":           false,

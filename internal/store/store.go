@@ -82,6 +82,7 @@ type StoreAPI interface {
 	SetAuditRetentionDays(ctx context.Context, days int) error
 	GetAuditRetentionDays(ctx context.Context) (int, error)
 	SetTenantEnforcementMode(ctx context.Context, tenantID, enforcementMode string) error
+	SetTenantMCPPassthroughUpstreamToolID(ctx context.Context, tenantID, toolID string) error
 	IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error)
 	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
 	ListAuditEventsExport(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
@@ -292,9 +293,10 @@ func (s *Store) GetPolicy(ctx context.Context, tenantID string) (models.Policy, 
 }
 
 func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, version FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
+	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
 	var config models.TenantConfig
-	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode, &config.Version); err != nil {
+	var mcpUpstreamToolID sql.NullString
+	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode, &mcpUpstreamToolID, &config.Version); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.TenantConfig{}, ErrNotFound
 		}
@@ -302,6 +304,9 @@ func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.Te
 	}
 	if strings.TrimSpace(config.EnforcementMode) == "" {
 		config.EnforcementMode = "enforce"
+	}
+	if mcpUpstreamToolID.Valid {
+		config.MCPPassthroughUpstreamToolID = mcpUpstreamToolID.String
 	}
 	return config, nil
 }
@@ -1093,6 +1098,27 @@ func (s *Store) SetTenantEnforcementMode(ctx context.Context, tenantID, enforcem
 	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.tenant_config
 		SET enforcement_mode = $1, updated_at = $2
 		WHERE tenant_id = $3`, enforcementMode, time.Now().UTC(), tenantID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) SetTenantMCPPassthroughUpstreamToolID(ctx context.Context, tenantID, toolID string) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.tenant_config
+		SET mcp_passthrough_upstream_tool_id = NULLIF($1, ''), updated_at = $2
+		WHERE tenant_id = $3`, toolID, time.Now().UTC(), tenantID)
 	if err != nil {
 		return err
 	}

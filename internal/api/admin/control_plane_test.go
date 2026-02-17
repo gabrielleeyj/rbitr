@@ -815,14 +815,15 @@ func TestHandleToolsList(t *testing.T) {
 
 func TestHandleSettingsGet(t *testing.T) {
 	cases := []struct {
-		name         string
-		adminKey     string
-		scopes       []string
-		tenantID     string
-		storeSetup   func(*store.MockStoreAPI)
-		expectedCode int
-		expectedErr  bool
-		expectMode   string
+		name                    string
+		adminKey                string
+		scopes                  []string
+		tenantID                string
+		storeSetup              func(*store.MockStoreAPI)
+		expectedCode            int
+		expectedErr             bool
+		expectMode              string
+		expectPassThroughToolID string
 	}{
 		{
 			name:         "unauthorized",
@@ -851,13 +852,15 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
 				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
 				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
-					TenantID:            "t1",
-					ActivePolicyVersion: "p1",
-					EnforcementMode:     "shadow",
+					TenantID:                     "t1",
+					ActivePolicyVersion:          "p1",
+					EnforcementMode:              "shadow",
+					MCPPassthroughUpstreamToolID: "mcp_upstream",
 				}, nil)
 			},
-			expectedCode: http.StatusOK,
-			expectMode:   "shadow",
+			expectedCode:            http.StatusOK,
+			expectMode:              "shadow",
+			expectPassThroughToolID: "mcp_upstream",
 		},
 	}
 
@@ -892,6 +895,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				var response SettingsResponse
 				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 				require.Equal(t, tc.expectMode, response.EnforcementMode)
+				require.Equal(t, tc.expectPassThroughToolID, response.MCPPassthroughUpstreamToolID)
 			}
 		})
 	}
@@ -958,6 +962,135 @@ func TestHandleEnforcementModeUpdate(t *testing.T) {
 
 			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
 			err := deps.handleEnforcementModeUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleMCPPassthroughUpstreamUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      MCPPassthroughUpstreamRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload missing tenant",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      MCPPassthroughUpstreamRequest{ToolID: "mcp_a"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "tool not found",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload: MCPPassthroughUpstreamRequest{
+				TenantID: "t1",
+				ToolID:   "missing",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID: "t1",
+				}, nil)
+				storeMock.On("GetTool", context.Background(), "t1", "missing").Return(models.Tool{}, store.ErrNotFound)
+			},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			name:     "invalid tool transport",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload: MCPPassthroughUpstreamRequest{
+				TenantID: "t1",
+				ToolID:   "rest_tool",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID: "t1",
+				}, nil)
+				storeMock.On("GetTool", context.Background(), "t1", "rest_tool").Return(models.Tool{
+					ToolID:    "rest_tool",
+					TenantID:  "t1",
+					Transport: "http_api",
+				}, nil)
+			},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success set upstream",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload: MCPPassthroughUpstreamRequest{
+				TenantID: "t1",
+				ToolID:   "mcp_tool",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID: "t1",
+				}, nil)
+				storeMock.On("GetTool", context.Background(), "t1", "mcp_tool").Return(models.Tool{
+					ToolID:         "mcp_tool",
+					TenantID:       "t1",
+					Transport:      "mcp_streamable_http",
+					MCPUpstreamURL: "http://upstream.example",
+				}, nil)
+				storeMock.On("SetTenantMCPPassthroughUpstreamToolID", context.Background(), "t1", "mcp_tool").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:     "success clear upstream",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload: MCPPassthroughUpstreamRequest{
+				TenantID: "t1",
+				ToolID:   "",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID:                     "t1",
+					MCPPassthroughUpstreamToolID: "mcp_tool",
+				}, nil)
+				storeMock.On("SetTenantMCPPassthroughUpstreamToolID", context.Background(), "t1", "").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleMCPPassthroughUpstreamUpdate(ctx)
 			if tc.expectedErr {
 				require.Error(t, err)
 			} else {

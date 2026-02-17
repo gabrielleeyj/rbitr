@@ -20,6 +20,7 @@ type Metrics struct {
 	CacheMissesTotal             *prometheus.CounterVec
 	TenantAuthFallbackTotal      prometheus.Counter
 	TenantKeyLegacyUpgradeTotal  prometheus.Counter
+	MCPPassthroughFallbackTotal  prometheus.Counter
 	RateLimitChecksTotal         *prometheus.CounterVec
 	RateLimitExceededTotal       *prometheus.CounterVec
 	RateLimitLatencyMs           prometheus.Histogram
@@ -98,6 +99,10 @@ func NewMetrics() *Metrics {
 			Name: "tenant_key_legacy_upgrade_total",
 			Help: "Total tenant key hashes lazily upgraded from legacy SHA-256 to HMAC-SHA256.",
 		}),
+		MCPPassthroughFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "mcp_passthrough_fallback_total",
+			Help: "Total MCP pass-through requests routed via fallback (no explicit tenant upstream selection).",
+		}),
 		RateLimitChecksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "rate_limit_checks_total",
 			Help: "Total rate limit checks by result and window.",
@@ -130,6 +135,7 @@ func NewMetrics() *Metrics {
 		m.CacheMissesTotal,
 		m.TenantAuthFallbackTotal,
 		m.TenantKeyLegacyUpgradeTotal,
+		m.MCPPassthroughFallbackTotal,
 		m.RateLimitChecksTotal,
 		m.RateLimitExceededTotal,
 		m.RateLimitLatencyMs,

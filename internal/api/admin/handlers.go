@@ -118,6 +118,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/default-approval-ttl", deps.handleDefaultApprovalTTLUpdate)
 	adminGroup.PUT("/settings/audit-retention", deps.handleAuditRetentionUpdate)
 	adminGroup.PUT("/settings/enforcement-mode", deps.handleEnforcementModeUpdate)
+	adminGroup.PUT("/settings/mcp-passthrough-upstream", deps.handleMCPPassthroughUpstreamUpdate)
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
 }
 
