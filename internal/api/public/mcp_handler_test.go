@@ -624,7 +624,7 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 		var params mcp.ToolsCallParams
 		err := json.Unmarshal(req.Params, &params)
 		require.NoError(t, err)
-		var args map[string]interface{}
+		var args map[string]any
 		err = json.Unmarshal(params.Arguments, &args)
 		require.NoError(t, err)
 		_, hasToken := args["_rbitr_approval_token"]
@@ -647,7 +647,7 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 	}))
 	defer upstreamServer.Close()
 
-	argumentsForHash := map[string]interface{}{"action": "issue_create"}
+	argumentsForHash := map[string]any{"action": "issue_create"}
 	argumentsJSON, err := json.Marshal(argumentsForHash)
 	require.NoError(t, err)
 
@@ -750,7 +750,7 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 	}))
 	defer upstreamServer.Close()
 
-	argumentsForHash := map[string]interface{}{"action": "issue_create"}
+	argumentsForHash := map[string]any{"action": "issue_create"}
 	argumentsJSON, err := json.Marshal(argumentsForHash)
 	require.NoError(t, err)
 
@@ -952,8 +952,8 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&req)
 		assert.Equal(t, "resources/list", req.Method)
 
-		resultData, _ := json.Marshal(map[string]interface{}{
-			"resources": []interface{}{},
+		resultData, _ := json.Marshal(map[string]any{
+			"resources": []any{},
 		})
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -1327,7 +1327,7 @@ func TestHandleMCP_ToolsCallPolicyInputStripsInternalArgs(t *testing.T) {
 		Run(func(args mock.Arguments) {
 			input, ok := args.Get(2).(map[string]any)
 			require.True(t, ok)
-			arguments, ok := input["arguments"].(map[string]interface{})
+			arguments, ok := input["arguments"].(map[string]any)
 			require.True(t, ok)
 			_, hasControlField := arguments["_rbitr_approval_request_id"]
 			require.False(t, hasControlField)

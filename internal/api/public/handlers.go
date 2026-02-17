@@ -629,19 +629,22 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 				if stateErr != nil {
 					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "approval lookup failed"})
 				}
-				if latest.Status == "EXECUTING" {
+
+				switch latest.Status {
+				case "EXECUTING":
 					if !approvalRetryAllowed(latest, now) {
 						if d.Metrics != nil {
 							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
 						}
 						return approvalError(c, http.StatusConflict, "approval_retry_window_exceeded")
 					}
-				} else if latest.Status == "EXECUTED" {
+				case "EXECUTED":
 					if d.Metrics != nil {
 						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
 					}
 					return approvalError(c, http.StatusConflict, "approval_already_executed")
-				} else {
+
+				default:
 					if d.Metrics != nil {
 						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_claimed").Inc()
 					}

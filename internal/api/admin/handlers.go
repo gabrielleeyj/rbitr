@@ -226,7 +226,7 @@ func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	// Validate input schema JSON if provided
 	// Note: JSON Schema allows boolean schemas (true/false) in addition to objects
 	if len(payload.InputSchemaJSON) > 0 {
-		var schemaTest interface{}
+		var schemaTest any
 		if err := json.Unmarshal(payload.InputSchemaJSON, &schemaTest); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "input_schema_json must be valid JSON"})
 		}

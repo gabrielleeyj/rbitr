@@ -5,11 +5,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"time"
+
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/store"
-	"time"
 )
 
 func TestStatelessDesign(t *testing.T) {

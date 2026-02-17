@@ -1,14 +1,14 @@
 package public
 
 import (
+	"maps"
+
 	"github.com/gabrielleeyj/rbitr/internal/models"
 )
 
 func withMatchedRulesConstraint(constraints map[string]any, matchedRules []models.DecisionMatchedRule) map[string]any {
 	cloned := make(map[string]any, len(constraints)+1)
-	for key, value := range constraints {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, constraints)
 	if len(matchedRules) > 0 {
 		cloned["matched_rules"] = decisionMatchedRulesAsMaps(matchedRules)
 	}
