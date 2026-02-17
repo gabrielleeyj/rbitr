@@ -2261,8 +2261,30 @@ func (s *Store) RevokeTenantKey(ctx context.Context, tenantID, keyID string, rev
 	return nil
 }
 
+func (s *Store) UpgradeTenantKeyHash(ctx context.Context, oldKeyHash, newKeyHash string) error {
+	if strings.TrimSpace(oldKeyHash) == "" || strings.TrimSpace(newKeyHash) == "" || oldKeyHash == newKeyHash {
+		return nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rbitr.tenant_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2 AND revoked_at IS NULL`,
+		newKeyHash, oldKeyHash)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func hashKey(key string) string {
-	return utils.HashString(key)
+	return utils.HashTenantKey(key)
 }
 
 func parseOptionalPositiveInt64(value sql.NullString) (int64, bool) {

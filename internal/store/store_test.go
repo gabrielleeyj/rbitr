@@ -1709,6 +1709,40 @@ func TestStoreUpdateTenantConfigNoKey(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreUpgradeTenantKeyHash(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2 AND revoked_at IS NULL`)).
+		WithArgs("new_hash", "old_hash").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.(*Store).UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreUpgradeTenantKeyHashNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2 AND revoked_at IS NULL`)).
+		WithArgs("new_hash", "old_hash").
+		WillReturnResult(sqlmock.NewResult(1, 0))
+
+	st := New(db)
+	err = st.(*Store).UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreSetTenantEnforcementMode(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

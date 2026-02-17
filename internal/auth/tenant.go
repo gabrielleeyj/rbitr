@@ -27,6 +27,16 @@ const (
 
 var agentIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_.\-]+$`)
 
+type TenantAuthResult struct {
+	Tenant             models.Tenant
+	LegacyHashMatched  bool
+	LegacyHashUpgraded bool
+}
+
+type tenantKeyHashUpgrader interface {
+	UpgradeTenantKeyHash(ctx context.Context, oldKeyHash, newKeyHash string) error
+}
+
 // ValidateAgentID checks agent_id length and allowed charset.
 func ValidateAgentID(agentID string) error {
 	agentID = strings.TrimSpace(agentID)
@@ -63,19 +73,84 @@ func TenantKeyFromRequest(r *http.Request, disableXTenantKey bool) (tenantKey st
 }
 
 func AuthenticateTenant(ctx context.Context, st store.StoreAPI, tenantKey, agentID string) (models.Tenant, error) {
+	result, err := AuthenticateTenantDetailed(ctx, st, tenantKey, agentID)
+	if err != nil {
+		return models.Tenant{}, err
+	}
+	return result.Tenant, nil
+}
+
+func AuthenticateTenantDetailed(ctx context.Context, st store.StoreAPI, tenantKey, agentID string) (TenantAuthResult, error) {
 	if tenantKey == "" {
-		return models.Tenant{}, ErrUnauthorized
+		return TenantAuthResult{}, ErrUnauthorized
 	}
 	if err := ValidateAgentID(agentID); err != nil {
-		return models.Tenant{}, err
+		return TenantAuthResult{}, err
 	}
-	keyHash := utils.HashString(tenantKey)
-	tenant, err := st.GetTenantByKeyHash(ctx, keyHash)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return models.Tenant{}, ErrUnauthorized
+	candidates := utils.TenantKeyHashCandidatesFromEnv(tenantKey)
+	return authenticateTenantWithHashCandidates(ctx, st, candidates)
+}
+
+func authenticateTenantWithHashCandidates(
+	ctx context.Context,
+	st store.StoreAPI,
+	candidates utils.TenantKeyHashCandidates,
+) (TenantAuthResult, error) {
+	lookup := func(hash string) (models.Tenant, error) {
+		if strings.TrimSpace(hash) == "" {
+			return models.Tenant{}, store.ErrNotFound
 		}
-		return models.Tenant{}, err
+		return st.GetTenantByKeyHash(ctx, hash)
 	}
-	return tenant, nil
+
+	tryLookup := func(hash string) (models.Tenant, bool, error) {
+		tenant, err := lookup(hash)
+		if err == nil {
+			return tenant, true, nil
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			return models.Tenant{}, false, nil
+		}
+		return models.Tenant{}, false, err
+	}
+
+	if tenant, matched, err := tryLookup(candidates.Current); err != nil {
+		return TenantAuthResult{}, err
+	} else if matched {
+		return TenantAuthResult{Tenant: tenant}, nil
+	}
+
+	for _, previousHash := range candidates.Previous {
+		tenant, matched, err := tryLookup(previousHash)
+		if err != nil {
+			return TenantAuthResult{}, err
+		}
+		if matched {
+			return TenantAuthResult{Tenant: tenant}, nil
+		}
+	}
+
+	tenant, matched, err := tryLookup(candidates.Legacy)
+	if err != nil {
+		return TenantAuthResult{}, err
+	}
+	if !matched {
+		return TenantAuthResult{}, ErrUnauthorized
+	}
+
+	result := TenantAuthResult{
+		Tenant:            tenant,
+		LegacyHashMatched: true,
+	}
+	if strings.TrimSpace(candidates.Current) == "" || candidates.Current == candidates.Legacy {
+		return result, nil
+	}
+	upgrader, ok := st.(tenantKeyHashUpgrader)
+	if !ok {
+		return result, nil
+	}
+	if err := upgrader.UpgradeTenantKeyHash(ctx, candidates.Legacy, candidates.Current); err == nil {
+		result.LegacyHashUpgraded = true
+	}
+	return result, nil
 }

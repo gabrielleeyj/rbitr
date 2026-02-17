@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -11,7 +12,23 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/store"
+	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
+
+type tenantStoreWithUpgrade struct {
+	store.StoreAPI
+	upgradeCalled bool
+	upgradeOld    string
+	upgradeNew    string
+	upgradeErr    error
+}
+
+func (s *tenantStoreWithUpgrade) UpgradeTenantKeyHash(_ context.Context, oldKeyHash, newKeyHash string) error {
+	s.upgradeCalled = true
+	s.upgradeOld = oldKeyHash
+	s.upgradeNew = newKeyHash
+	return s.upgradeErr
+}
 
 func TestAuthenticateTenant(t *testing.T) {
 	errStoreBoom := errors.New("boom")
@@ -105,6 +122,52 @@ func TestAuthenticateTenant(t *testing.T) {
 			require.Equal(t, tc.expected, got)
 		})
 	}
+}
+
+func TestAuthenticateTenantWithHashCandidates_LegacyUpgrade(t *testing.T) {
+	rawKey := "tenant_demo_key"
+	candidates := utils.BuildTenantKeyHashCandidates(rawKey, []string{"secret_current", "secret_previous"})
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+
+	mockStore := store.NewMockStoreAPI(t)
+	mockStore.On("GetTenantByKeyHash", t.Context(), candidates.Current).
+		Return(models.Tenant{}, store.ErrNotFound).Once()
+	mockStore.On("GetTenantByKeyHash", t.Context(), candidates.Previous[0]).
+		Return(models.Tenant{}, store.ErrNotFound).Once()
+	mockStore.On("GetTenantByKeyHash", t.Context(), candidates.Legacy).
+		Return(tenant, nil).Once()
+
+	upgradeStore := &tenantStoreWithUpgrade{StoreAPI: mockStore}
+
+	result, err := authenticateTenantWithHashCandidates(t.Context(), upgradeStore, candidates)
+	require.NoError(t, err)
+	require.Equal(t, tenant, result.Tenant)
+	require.True(t, result.LegacyHashMatched)
+	require.True(t, result.LegacyHashUpgraded)
+	require.True(t, upgradeStore.upgradeCalled)
+	require.Equal(t, candidates.Legacy, upgradeStore.upgradeOld)
+	require.Equal(t, candidates.Current, upgradeStore.upgradeNew)
+}
+
+func TestAuthenticateTenantWithHashCandidates_PreviousHMACMatchNoUpgrade(t *testing.T) {
+	rawKey := "tenant_demo_key"
+	candidates := utils.BuildTenantKeyHashCandidates(rawKey, []string{"secret_current", "secret_previous"})
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+
+	mockStore := store.NewMockStoreAPI(t)
+	mockStore.On("GetTenantByKeyHash", t.Context(), candidates.Current).
+		Return(models.Tenant{}, store.ErrNotFound).Once()
+	mockStore.On("GetTenantByKeyHash", t.Context(), candidates.Previous[0]).
+		Return(tenant, nil).Once()
+
+	upgradeStore := &tenantStoreWithUpgrade{StoreAPI: mockStore}
+
+	result, err := authenticateTenantWithHashCandidates(t.Context(), upgradeStore, candidates)
+	require.NoError(t, err)
+	require.Equal(t, tenant, result.Tenant)
+	require.False(t, result.LegacyHashMatched)
+	require.False(t, result.LegacyHashUpgraded)
+	require.False(t, upgradeStore.upgradeCalled)
 }
 
 func TestAuthenticateAdmin(t *testing.T) {

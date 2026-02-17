@@ -77,8 +77,8 @@ func TestGenerateAPIKey(t *testing.T) {
 			if len(keyHash) != 64 {
 				t.Errorf("key hash len = %d, want 64", len(keyHash))
 			}
-			if HashString(rawKey) != keyHash {
-				t.Error("key hash doesn't match HashString(rawKey)")
+			if HashTenantKey(rawKey) != keyHash {
+				t.Error("key hash doesn't match HashTenantKey(rawKey)")
 			}
 			if !strings.HasPrefix(prefix, KeyPrefix) {
 				t.Errorf("prefix missing KeyPrefix, got %q", prefix)
@@ -94,5 +94,46 @@ func TestGenerateAPIKey(t *testing.T) {
 	raw2, _, _, _ := GenerateAPIKey()
 	if raw1 == raw2 {
 		t.Error("GenerateAPIKey produced duplicate keys")
+	}
+}
+
+func TestHashStringHMAC(t *testing.T) {
+	a := HashStringHMAC("tenant_demo_key", "secret_a")
+	b := HashStringHMAC("tenant_demo_key", "secret_a")
+	c := HashStringHMAC("tenant_demo_key", "secret_b")
+	if a != b {
+		t.Fatal("expected deterministic HMAC hash")
+	}
+	if a == c {
+		t.Fatal("expected different secrets to produce different hashes")
+	}
+	if len(a) != 64 {
+		t.Fatalf("expected 64 hex chars, got %d", len(a))
+	}
+}
+
+func TestBuildTenantKeyHashCandidates(t *testing.T) {
+	candidates := BuildTenantKeyHashCandidates("tenant_demo_key", []string{"s1", "s2", "s2", "", " s3 "})
+	if candidates.Legacy != HashString("tenant_demo_key") {
+		t.Fatal("legacy hash mismatch")
+	}
+	if candidates.Current == "" {
+		t.Fatal("expected current HMAC hash")
+	}
+	if len(candidates.Previous) != 2 {
+		t.Fatalf("expected 2 previous hashes, got %d", len(candidates.Previous))
+	}
+	if candidates.Previous[0] == candidates.Current {
+		t.Fatal("previous hash should differ from current")
+	}
+}
+
+func TestHashTenantKeyUsesFirstHMACSecret(t *testing.T) {
+	t.Setenv(TenantKeyHMACSecretsEnv, "current_secret,previous_secret")
+	raw := "tenant_demo_key"
+	got := HashTenantKey(raw)
+	want := HashStringHMAC(raw, "current_secret")
+	if got != want {
+		t.Fatalf("HashTenantKey() = %q, want %q", got, want)
 	}
 }

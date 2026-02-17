@@ -642,9 +642,12 @@ func newTestMetrics() *telemetry.Metrics {
 		CacheHitsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_hits_total"}, []string{"cache"}),
 		CacheMissesTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_misses_total"}, []string{"cache"}),
 		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tenant_auth_fallback_total"}),
-		RateLimitChecksTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_checks_total"}, []string{"result", "window"}),
-		RateLimitExceededTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_exceeded_total"}, []string{"window", "scope"}),
-		RateLimitLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_rate_limit_latency_ms"}),
+		TenantKeyLegacyUpgradeTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "test_tenant_key_legacy_upgrade_total",
+		}),
+		RateLimitChecksTotal:   prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_checks_total"}, []string{"result", "window"}),
+		RateLimitExceededTotal: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_exceeded_total"}, []string{"window", "scope"}),
+		RateLimitLatencyMs:     prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_rate_limit_latency_ms"}),
 	}
 }
 

@@ -1035,10 +1035,11 @@ func (d *Dependencies) emitNotification(c *echo.Context, tenantID, eventType, se
 func (d *Dependencies) authenticateTenantRequest(c *echo.Context) (models.Tenant, string, error) {
 	agentID := c.Request().Header.Get(auth.AgentIDHeader)
 	tenantKey, usedFallback := auth.TenantKeyFromRequest(c.Request(), d.Config.DisableXTenantKey)
-	tenant, err := auth.AuthenticateTenant(c.Request().Context(), d.Store, tenantKey, agentID)
+	authResult, err := auth.AuthenticateTenantDetailed(c.Request().Context(), d.Store, tenantKey, agentID)
 	if err != nil {
 		return models.Tenant{}, "", err
 	}
+	tenant := authResult.Tenant
 	if usedFallback {
 		c.Response().Header().Set("Deprecation", "true")
 		c.Response().Header().Set("Sunset", xTenantKeySunset)
@@ -1046,6 +1047,16 @@ func (d *Dependencies) authenticateTenantRequest(c *echo.Context) (models.Tenant
 			d.Metrics.TenantAuthFallbackTotal.Inc()
 		}
 		c.Logger().Warn("deprecated tenant auth header used",
+			"tenant_id", tenant.TenantID,
+			"agent_id", agentID,
+			"request_id", c.Request().Header.Get("X-Request-Id"),
+		)
+	}
+	if authResult.LegacyHashUpgraded {
+		if d.Metrics != nil && d.Metrics.TenantKeyLegacyUpgradeTotal != nil {
+			d.Metrics.TenantKeyLegacyUpgradeTotal.Inc()
+		}
+		c.Logger().Info("tenant key hash upgraded from legacy sha256",
 			"tenant_id", tenant.TenantID,
 			"agent_id", agentID,
 			"request_id", c.Request().Header.Get("X-Request-Id"),

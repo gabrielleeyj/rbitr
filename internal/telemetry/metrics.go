@@ -19,6 +19,7 @@ type Metrics struct {
 	CacheHitsTotal               *prometheus.CounterVec
 	CacheMissesTotal             *prometheus.CounterVec
 	TenantAuthFallbackTotal      prometheus.Counter
+	TenantKeyLegacyUpgradeTotal  prometheus.Counter
 	RateLimitChecksTotal         *prometheus.CounterVec
 	RateLimitExceededTotal       *prometheus.CounterVec
 	RateLimitLatencyMs           prometheus.Histogram
@@ -93,6 +94,10 @@ func NewMetrics() *Metrics {
 			Name: "tenant_auth_fallback_total",
 			Help: "Total requests authenticated via deprecated X-Tenant-Key fallback.",
 		}),
+		TenantKeyLegacyUpgradeTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "tenant_key_legacy_upgrade_total",
+			Help: "Total tenant key hashes lazily upgraded from legacy SHA-256 to HMAC-SHA256.",
+		}),
 		RateLimitChecksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "rate_limit_checks_total",
 			Help: "Total rate limit checks by result and window.",
@@ -124,6 +129,7 @@ func NewMetrics() *Metrics {
 		m.CacheHitsTotal,
 		m.CacheMissesTotal,
 		m.TenantAuthFallbackTotal,
+		m.TenantKeyLegacyUpgradeTotal,
 		m.RateLimitChecksTotal,
 		m.RateLimitExceededTotal,
 		m.RateLimitLatencyMs,

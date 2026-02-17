@@ -149,7 +149,7 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	}
 	afterKeyHash := beforeKeyHash
 	if payload.TenantKey != "" {
-		afterKeyHash = utils.HashString(payload.TenantKey)
+		afterKeyHash = utils.HashTenantKey(payload.TenantKey)
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.CONFIG.UPDATE", "TENANT.CONFIG", tenantID, map[string]any{
 		"name":     beforeName,
