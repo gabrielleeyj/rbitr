@@ -1230,3 +1230,140 @@ func TestHandleMCP_ToolsCallRateLimitExceeded(t *testing.T) {
 	require.NotNil(t, resp.Error)
 	require.Equal(t, mcp.ErrorRateLimitExceeded, resp.Error.Code)
 }
+
+func TestHandleMCP_ToolsCallArgConstraintDenied(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
+		Return(models.Tool{
+			ToolID:         "mock_internal",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: "http://example.test",
+		}, nil)
+	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
+		Return("", store.ErrNotFound)
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		failures, ok := record.Constraints["arg_constraint_failures"].([]map[string]any)
+		return record.Decision == decisionDeny &&
+			record.RuleID == "deny_prod_branch" &&
+			len(record.Reasons) == 1 &&
+			record.Reasons[0].Code == argConstraintReasonDeny &&
+			ok &&
+			len(failures) == 1
+	})).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.On("Evaluate", mock.Anything, "t_demo", mock.Anything).
+		Return(policy.Result{
+			Version:  "2026-01-20",
+			Decision: "ALLOW",
+			Risk:     "MEDIUM",
+			Rule:     models.DecisionRule{ID: "rule_allow", Priority: 10},
+			Reasons:  []models.DecisionReason{{Code: "ALLOW", Message: "ok"}},
+			Constraints: map[string]any{
+				"args": map[string]any{
+					"deny": []any{
+						map[string]any{
+							"id":      "deny_prod_branch",
+							"path":    "/branch",
+							"op":      "prefix",
+							"value":   "prod/",
+							"message": "branch blocked",
+						},
+					},
+				},
+			},
+			PolicyVersion: "p_v1",
+		}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Policy:  policyMock,
+		Metrics: newTestMetrics(),
+		Config: config.Config{
+			FeatureArgConstraints: true,
+		},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"ac-1","method":"tools/call","params":{"name":"mock_internal","arguments":{"branch":"prod/release"}}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Error)
+	require.Equal(t, mcp.ErrorDeniedByPolicy, resp.Error.Code)
+}
+
+func TestHandleMCP_ToolsCallPolicyInputStripsInternalArgs(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
+		Return(models.Tool{
+			ToolID:         "mock_internal",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: "http://example.test",
+		}, nil)
+	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
+		Return("", store.ErrNotFound)
+	mockStore.On("InsertADR", mock.Anything, mock.Anything).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.
+		On("Evaluate", mock.Anything, "t_demo", mock.Anything).
+		Run(func(args mock.Arguments) {
+			input, ok := args.Get(2).(map[string]any)
+			require.True(t, ok)
+			arguments, ok := input["arguments"].(map[string]interface{})
+			require.True(t, ok)
+			_, hasControlField := arguments["_rbitr_approval_request_id"]
+			require.False(t, hasControlField)
+			require.Equal(t, "main", arguments["branch"])
+		}).
+		Return(policy.Result{
+			Version:       "2026-01-20",
+			Decision:      "DENY",
+			Risk:          "MEDIUM",
+			Rule:          models.DecisionRule{ID: "rule_deny", Priority: 100},
+			Reasons:       []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
+			Constraints:   map[string]any{},
+			PolicyVersion: "p_v1",
+		}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Policy:  policyMock,
+		Metrics: newTestMetrics(),
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"ac-2","method":"tools/call","params":{"name":"mock_internal","arguments":{"branch":"main","_rbitr_approval_request_id":"ar_old"}}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Error)
+	require.Equal(t, mcp.ErrorDeniedByPolicy, resp.Error.Code)
+}

@@ -6,24 +6,26 @@ import (
 )
 
 type Config struct {
-	DatabaseURL         string
-	ListenAddr          string
-	BodyLimitSize       int64
-	ResponseLimit       int64
-	DisableXTenantKey   bool
-	FeatureRateLimiting bool
+	DatabaseURL           string
+	ListenAddr            string
+	BodyLimitSize         int64
+	ResponseLimit         int64
+	DisableXTenantKey     bool
+	FeatureRateLimiting   bool
+	FeatureArgConstraints bool
 }
 
 func Load() Config {
 	const defaultLimitBytes = 256 * 1024
 
 	return Config{
-		DatabaseURL:         getEnv("DATABASE_URL", "postgres://postgres@localhost:2345/rbitr?sslmode=disable"),
-		ListenAddr:          getEnv("LISTEN_ADDR", ":8080"),
-		BodyLimitSize:       getEnvInt64("BODY_LIMIT_BYTES", defaultLimitBytes),
-		ResponseLimit:       getEnvInt64("RESPONSE_LIMIT_BYTES", defaultLimitBytes),
-		DisableXTenantKey:   getEnvBool("RBTR_DISABLE_X_TENANT_KEY", false),
-		FeatureRateLimiting: getEnvBool("RBTR_FEATURE_RATE_LIMITING", false),
+		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres@localhost:2345/rbitr?sslmode=disable"),
+		ListenAddr:            getEnv("LISTEN_ADDR", ":8080"),
+		BodyLimitSize:         getEnvInt64("BODY_LIMIT_BYTES", defaultLimitBytes),
+		ResponseLimit:         getEnvInt64("RESPONSE_LIMIT_BYTES", defaultLimitBytes),
+		DisableXTenantKey:     getEnvBool("RBTR_DISABLE_X_TENANT_KEY", false),
+		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING", false),
+		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS", false),
 	}
 }
 

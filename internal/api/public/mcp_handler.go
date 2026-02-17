@@ -481,7 +481,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		"action_risk":    classificationResult.ActionRisk,
 		"policy_version": "",
 		"mcp":            true,
-		"arguments":      params.Arguments,
+		"arguments":      argumentsMap,
 	}
 
 	decisionResult, err := d.Policy.Evaluate(ctx, tenant.TenantID, policyInput)
@@ -570,6 +570,57 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 				"remaining":           rateLimitViolation.Remaining,
 				"retry_after_seconds": rateLimitViolation.RetryAfterSeconds,
 				"scope":               rateLimitViolation.Scope,
+			}),
+		}), nil
+	}
+
+	argConstraintViolation := d.enforceArgumentConstraints(decisionResult.Constraints, argumentsMap)
+	if argConstraintViolation != nil {
+		c.Set(telemetry.CtxDecision, decisionDeny)
+
+		decisionID := "d_" + uuid.NewString()
+		reasons := []models.DecisionReason{{
+			Code:    argConstraintViolation.ReasonCode,
+			Message: argConstraintViolation.Message,
+		}}
+		adr := models.ActionDecisionRecord{
+			DecisionID:      decisionID,
+			RequestID:       requestID,
+			TenantID:        tenant.TenantID,
+			AgentID:         agentID,
+			ToolID:          toolID,
+			ActionType:      classificationResult.ActionType,
+			ActionRisk:      classificationResult.ActionRisk,
+			ActionSummary:   classificationResult.ActionSummary,
+			Decision:        decisionDeny,
+			DecisionVersion: decisionResult.Version,
+			DecisionRisk:    decisionResult.Risk,
+			RuleID:          argConstraintRuleID(argConstraintViolation),
+			RulePriority:    1000,
+			Reasons:         reasons,
+			Constraints:     withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
+			Tags:            decisionResult.Tags,
+			PolicyVersion:   decisionResult.PolicyVersion,
+			Reason:          firstReasonMessage(reasons),
+			RequestHash:     requestHash,
+			CreatedAt:       time.Now().UTC(),
+		}
+		if err := d.Store.InsertADR(ctx, adr); err != nil {
+			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
+		}
+		if d.Metrics != nil {
+			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorDeniedByPolicy,
+			Message: "denied by policy",
+			Data: mustMarshalJSON(map[string]interface{}{
+				"denied":              true,
+				"policy_version":      decisionResult.PolicyVersion,
+				"rule_id":             argConstraintRuleID(argConstraintViolation),
+				"risk":                decisionResult.Risk,
+				"reasons":             formatReasons(reasons),
+				"constraint_failures": argConstraintFailuresAsMaps(argConstraintViolation.Failures),
 			}),
 		}), nil
 	}

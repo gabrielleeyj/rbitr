@@ -319,6 +319,53 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			"scope":               rateLimitViolation.Scope,
 		})
 	}
+
+	argConstraintViolation := d.enforceArgumentConstraints(decisionResult.Constraints, parseRESTArguments(bodyBytes))
+	if argConstraintViolation != nil {
+		c.Set(telemetry.CtxDecision, decisionDeny)
+
+		decisionID := "d_" + uuid.NewString()
+		reasons := []models.DecisionReason{{
+			Code:    argConstraintViolation.ReasonCode,
+			Message: argConstraintViolation.Message,
+		}}
+		adr := models.ActionDecisionRecord{
+			DecisionID:      decisionID,
+			RequestID:       requestID,
+			TenantID:        tenant.TenantID,
+			AgentID:         agentID,
+			ToolID:          toolID,
+			ActionType:      classificationResult.ActionType,
+			ActionRisk:      classificationResult.ActionRisk,
+			ActionSummary:   classificationResult.ActionSummary,
+			Decision:        decisionDeny,
+			DecisionVersion: decisionResult.Version,
+			DecisionRisk:    decisionResult.Risk,
+			RuleID:          argConstraintRuleID(argConstraintViolation),
+			RulePriority:    1000,
+			Reasons:         reasons,
+			Constraints:     withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
+			Tags:            decisionResult.Tags,
+			PolicyVersion:   decisionResult.PolicyVersion,
+			Reason:          firstReasonMessage(reasons),
+			RequestHash:     requestHash,
+			CreatedAt:       time.Now().UTC(),
+		}
+		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+			if d.Metrics != nil {
+				d.Metrics.ErrorsTotal.Inc()
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
+		}
+		if d.Metrics != nil {
+			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		return c.JSON(http.StatusForbidden, ToolCallResponse{
+			RequestID: requestID,
+			Decision:  decisionDeny,
+			Reason:    firstReasonMessage(reasons),
+		})
+	}
 	c.Set(telemetry.CtxDecision, decisionResult.Decision)
 
 	decisionID := "d_" + uuid.NewString()
