@@ -240,6 +240,140 @@ func TestHandleToolCall(t *testing.T) {
 	}
 }
 
+func TestHandleToolCall_DenyShadowModeExecutes(t *testing.T) {
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+	tool := models.Tool{ToolID: "mock_internal", TenantID: "t1", BaseURL: "http://example", AuthType: "api_key", AuthValue: "key"}
+
+	storeMock := store.NewMockStoreAPI(t)
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	connectorMock := connector.NewMockConnector(t)
+
+	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+	storeMock.On("GetRiskOverride", context.Background(), "t1", mock.Anything).Return("", store.ErrNotFound)
+	storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+		TenantID:            "t1",
+		ActivePolicyVersion: "p_v1",
+		EnforcementMode:     enforcementModeShadow,
+	}, nil)
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		return record.Decision == decisionDeny && record.RuleID == "rule_deny"
+	})).Return(nil)
+	storeMock.On("GetTool", context.Background(), "t1", "mock_internal").Return(tool, nil)
+
+	policyMock.On("Evaluate", context.Background(), "t1", mock.Anything).Return(policy.Result{
+		Version:       "2026-01-20",
+		Decision:      decisionDeny,
+		Risk:          "HIGH",
+		Rule:          models.DecisionRule{ID: "rule_deny", Priority: 100},
+		Reasons:       []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
+		Constraints:   map[string]any{},
+		PolicyVersion: "p_v1",
+	}, nil)
+	connectorMock.On("Execute", mock.Anything, mock.Anything).
+		Return(connector.Response{Status: http.StatusOK, Headers: map[string]string{"X-Test": "ok"}, Body: []byte("ok"), BodyHash: "sha256:abc"}, nil)
+
+	deps := Dependencies{
+		Store:     storeMock,
+		Policy:    policyMock,
+		Connector: connectorMock,
+		Metrics:   newTestMetrics(),
+		Config: config.Config{
+			BodyLimitSize:     256 * 1024,
+			ResponseLimit:     256 * 1024,
+			FeatureShadowMode: true,
+		},
+	}
+
+	payload := ToolCallRequest{
+		HTTPMethod: "POST",
+		Path:       "/refund",
+		Query:      "",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       "{}",
+	}
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		testhelpers.MakeBody(payload),
+		testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleToolCall(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "true", rec.Header().Get(restShadowDenyHeader))
+
+	var response ToolCallResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Equal(t, decisionDeny, response.Decision)
+	require.Equal(t, "ok", response.ToolBody)
+	require.True(t, response.ShadowDenied)
+	require.NotNil(t, response.RbitrShadow)
+	require.Equal(t, decisionDeny, response.RbitrShadow["original_decision"])
+}
+
+func TestHandleToolCall_RequireApprovalStillEnforcedInShadowMode(t *testing.T) {
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+
+	storeMock := store.NewMockStoreAPI(t)
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	connectorMock := connector.NewMockConnector(t)
+
+	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+	storeMock.On("GetRiskOverride", context.Background(), "t1", mock.Anything).Return("", store.ErrNotFound)
+	storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+		TenantID:            "t1",
+		ActivePolicyVersion: "p_v1",
+		EnforcementMode:     enforcementModeShadow,
+	}, nil)
+	storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
+	storeMock.On("InsertApprovalRequest", context.Background(), mock.Anything).Return(nil)
+	storeMock.On("InsertADR", context.Background(), mock.Anything).Return(nil)
+
+	policyMock.On("Evaluate", context.Background(), "t1", mock.Anything).Return(policy.Result{
+		Version:       "2026-01-20",
+		Decision:      "REQUIRE_APPROVAL",
+		Risk:          "HIGH",
+		Rule:          models.DecisionRule{ID: "rule_approval", Priority: 50},
+		Reasons:       []models.DecisionReason{{Code: "APPROVAL", Message: "approval required"}},
+		Constraints:   map[string]any{},
+		PolicyVersion: "p_v1",
+	}, nil)
+
+	deps := Dependencies{
+		Store:     storeMock,
+		Policy:    policyMock,
+		Connector: connectorMock,
+		Metrics:   newTestMetrics(),
+		Config: config.Config{
+			BodyLimitSize:     256 * 1024,
+			ResponseLimit:     256 * 1024,
+			FeatureShadowMode: true,
+		},
+	}
+
+	payload := ToolCallRequest{
+		HTTPMethod: "POST",
+		Path:       "/refund",
+		Query:      "",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       "{}",
+	}
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		testhelpers.MakeBody(payload),
+		testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleToolCall(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Empty(t, rec.Header().Get(restShadowDenyHeader))
+}
+
 func TestHandleEvidence(t *testing.T) {
 	cases := []struct {
 		name         string

@@ -1429,3 +1429,90 @@ func TestHandleMCP_ToolsCallDeniedIncludesMatchedRules(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, matchedRules, 2)
 }
+
+func TestHandleMCP_ToolsCallDenyShadowModeExecutes(t *testing.T) {
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request mcp.Request
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		result, _ := json.Marshal(map[string]any{
+			"status": "ok",
+		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(mcp.Response{
+			JSONRPC: "2.0",
+			ID:      request.ID,
+			Result:  result,
+		})
+	}))
+	defer upstreamServer.Close()
+
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
+		Return(models.Tool{
+			ToolID:         "mock_internal",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: upstreamServer.URL,
+		}, nil)
+	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").Return(models.TenantConfig{
+		TenantID:            "t_demo",
+		ActivePolicyVersion: "p_v1",
+		EnforcementMode:     enforcementModeShadow,
+	}, nil)
+	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
+		Return("", store.ErrNotFound)
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		return record.Decision == decisionDeny && record.RuleID == "rule_deny"
+	})).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.
+		On("Evaluate", mock.Anything, "t_demo", mock.Anything).
+		Return(policy.Result{
+			Version:       "2026-01-20",
+			Decision:      decisionDeny,
+			Risk:          "MEDIUM",
+			Rule:          models.DecisionRule{ID: "rule_deny", Priority: 100},
+			Reasons:       []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
+			Constraints:   map[string]any{},
+			PolicyVersion: "p_v1",
+		}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Policy:  policyMock,
+		Metrics: newTestMetrics(),
+		Config: config.Config{
+			FeatureShadowMode: true,
+		},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"shadow-1","method":"tools/call","params":{"name":"mock_internal","arguments":{"branch":"main"}}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var response mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	require.Nil(t, response.Error)
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal(response.Result, &result))
+	require.Equal(t, "ok", result["status"])
+
+	shadowRaw, ok := result["_rbitr_shadow"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, decisionDeny, shadowRaw["original_decision"])
+	require.Equal(t, "rule_deny", shadowRaw["rule_id"])
+}

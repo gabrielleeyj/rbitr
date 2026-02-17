@@ -13,6 +13,7 @@ type Config struct {
 	DisableXTenantKey     bool
 	FeatureRateLimiting   bool
 	FeatureArgConstraints bool
+	FeatureShadowMode     bool
 }
 
 func Load() Config {
@@ -26,6 +27,7 @@ func Load() Config {
 		DisableXTenantKey:     getEnvBool("RBTR_DISABLE_X_TENANT_KEY", false),
 		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING", false),
 		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS", false),
+		FeatureShadowMode:     getEnvBool("RBTR_FEATURE_SHADOW_MODE", false),
 	}
 }
 

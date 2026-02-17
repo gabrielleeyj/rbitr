@@ -53,6 +53,11 @@ type AuditRetentionRequest struct {
 	Days int `json:"days"`
 }
 
+type EnforcementModeRequest struct {
+	TenantID        string `json:"tenant_id"`
+	EnforcementMode string `json:"enforcement_mode"`
+}
+
 type NotificationConfigRequest struct {
 	SlackWebhookEnabled        bool   `json:"slack_webhook_enabled"`
 	SlackWebhookDefaultChannel string `json:"slack_webhook_default_channel"`
@@ -113,9 +118,11 @@ type PolicyVersionsResponse struct {
 }
 
 type SettingsResponse struct {
-	AdminWriteLock            bool `json:"admin_write_lock"`
-	DefaultApprovalTTLSeconds int  `json:"default_approval_ttl_seconds"`
-	AuditRetentionDays        int  `json:"audit_retention_days"`
+	AdminWriteLock            bool   `json:"admin_write_lock"`
+	DefaultApprovalTTLSeconds int    `json:"default_approval_ttl_seconds"`
+	AuditRetentionDays        int    `json:"audit_retention_days"`
+	TenantID                  string `json:"tenant_id,omitempty"`
+	EnforcementMode           string `json:"enforcement_mode,omitempty"`
 }
 
 type HTTPConfig struct {
@@ -192,33 +199,32 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 	}
 	exported := make([]models.ActionDecisionExport, 0, len(records))
 	for i := range records {
-		record := &records[i]
 		export := models.ActionDecisionExport{
-			DecisionID:        record.DecisionID,
-			RequestID:         record.RequestID,
-			TenantID:          record.TenantID,
-			AgentID:           record.AgentID,
-			ToolID:            record.ToolID,
-			ActionType:        record.ActionType,
-			ActionRisk:        record.ActionRisk,
-			ActionSummary:     record.ActionSummary,
-			Decision:          record.Decision,
-			DecisionVersion:   record.DecisionVersion,
-			DecisionRisk:      record.DecisionRisk,
-			RuleID:            record.RuleID,
-			RulePriority:      record.RulePriority,
-			Reasons:           record.Reasons,
-			Constraints:       record.Constraints,
-			Tags:              record.Tags,
-			PolicyVersion:     record.PolicyVersion,
-			Reason:            record.Reason,
-			RequestHash:       record.RequestHash,
-			ResponseHash:      record.ResponseHash,
-			ApprovalRequestID: record.ApprovalRequestID,
-			Timestamp:         record.CreatedAt,
+			DecisionID:        records[i].DecisionID,
+			RequestID:         records[i].RequestID,
+			TenantID:          records[i].TenantID,
+			AgentID:           records[i].AgentID,
+			ToolID:            records[i].ToolID,
+			ActionType:        records[i].ActionType,
+			ActionRisk:        records[i].ActionRisk,
+			ActionSummary:     records[i].ActionSummary,
+			Decision:          records[i].Decision,
+			DecisionVersion:   records[i].DecisionVersion,
+			DecisionRisk:      records[i].DecisionRisk,
+			RuleID:            records[i].RuleID,
+			RulePriority:      records[i].RulePriority,
+			Reasons:           records[i].Reasons,
+			Constraints:       records[i].Constraints,
+			Tags:              records[i].Tags,
+			PolicyVersion:     records[i].PolicyVersion,
+			Reason:            records[i].Reason,
+			RequestHash:       records[i].RequestHash,
+			ResponseHash:      records[i].ResponseHash,
+			ApprovalRequestID: records[i].ApprovalRequestID,
+			Timestamp:         records[i].CreatedAt,
 		}
-		if record.ApprovalRequestID != "" {
-			if approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, record.ApprovalRequestID); err == nil {
+		if records[i].ApprovalRequestID != "" {
+			if approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, records[i].ApprovalRequestID); err == nil {
 				export.ApprovalStatus = approval.Status
 				export.ApprovalDecidedAt = approval.DecidedAt
 				export.ApprovalDecidedBy = approval.DecidedBy
@@ -655,6 +661,7 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, "admin:read"); err != nil {
 		return err
 	}
+	tenantID := strings.TrimSpace(c.QueryParam("tenant_id"))
 	locked, err := d.Store.GetAdminWriteLock(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load settings"})
@@ -667,10 +674,25 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetAuditRetentionDays(c.Request().Context()); err == nil && value > 0 {
 		retentionDays = value
 	}
+	enforcementMode := "enforce"
+	if tenantID != "" {
+		tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
+		}
+		if mode := strings.TrimSpace(tenantConfig.EnforcementMode); mode == "shadow" {
+			enforcementMode = mode
+		}
+	}
 	return c.JSON(http.StatusOK, SettingsResponse{
 		AdminWriteLock:            locked,
 		DefaultApprovalTTLSeconds: defaultTTL,
 		AuditRetentionDays:        retentionDays,
+		TenantID:                  tenantID,
+		EnforcementMode:           enforcementMode,
 	})
 }
 
@@ -1342,6 +1364,53 @@ func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to audit retention update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, "admin:write")
+	if err != nil {
+		return err
+	}
+
+	var payload EnforcementModeRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	payload.TenantID = strings.TrimSpace(payload.TenantID)
+	payload.EnforcementMode = strings.TrimSpace(strings.ToLower(payload.EnforcementMode))
+	if payload.TenantID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
+	}
+	if payload.EnforcementMode != "enforce" && payload.EnforcementMode != "shadow" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "enforcement_mode must be enforce or shadow"})
+	}
+
+	beforeMode := "enforce"
+	if existingConfig, err := d.Store.GetTenantConfig(c.Request().Context(), payload.TenantID); err == nil {
+		if mode := strings.TrimSpace(existingConfig.EnforcementMode); mode == "shadow" {
+			beforeMode = mode
+		}
+	}
+
+	if err := d.Store.SetTenantEnforcementMode(c.Request().Context(), payload.TenantID, payload.EnforcementMode); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update enforcement mode"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, payload.TenantID, "SETTINGS.ENFORCEMENT_MODE.SET", "SETTINGS", "enforcement_mode", map[string]any{
+		"tenant_id": payload.TenantID,
+		"value":     beforeMode,
+	}, map[string]any{
+		"tenant_id": payload.TenantID,
+		"value":     payload.EnforcementMode,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit enforcement mode update",
 			"detail": err.Error(),
 		})
 	}

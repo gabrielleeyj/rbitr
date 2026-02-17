@@ -62,6 +62,8 @@ type ToolCallResponse struct {
 	ToolStatus        int               `json:"tool_status,omitempty"`
 	ToolHeaders       map[string]string `json:"tool_headers,omitempty"`
 	ToolBody          string            `json:"tool_body,omitempty"`
+	ShadowDenied      bool              `json:"shadow_denied,omitempty"`
+	RbitrShadow       map[string]any    `json:"_rbitr_shadow,omitempty"`
 }
 
 type EvidenceResponse struct {
@@ -258,6 +260,13 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
 	decisionResult.Constraints = withMatchedRulesConstraint(decisionResult.Constraints, decisionResult.MatchedRules)
+	enforcementMode, enforcementErr := d.tenantEnforcementMode(c.Request().Context(), tenant.TenantID)
+	if enforcementErr != nil {
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant enforcement mode"})
+	}
 
 	rateLimitViolation, err := d.enforceRateLimit(
 		c.Request().Context(),
@@ -281,6 +290,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			Code:    "RATE_LIMIT_EXCEEDED",
 			Message: "Rate limit exceeded",
 		}}
+		rateLimitConstraints := withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation)
 		adr := models.ActionDecisionRecord{
 			DecisionID:      decisionID,
 			RequestID:       requestID,
@@ -296,7 +306,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			RuleID:          "rate_limit_" + rateLimitViolation.Window,
 			RulePriority:    1000,
 			Reasons:         reasons,
-			Constraints:     withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
+			Constraints:     rateLimitConstraints,
 			Tags:            decisionResult.Tags,
 			PolicyVersion:   decisionResult.PolicyVersion,
 			Reason:          firstReasonMessage(reasons),
@@ -311,6 +321,19 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		if d.Metrics != nil {
 			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		if isShadowMode(enforcementMode) {
+			return d.executeRESTShadowDeny(
+				c,
+				tenant.TenantID,
+				toolID,
+				requestID,
+				payload,
+				bodyBytes,
+				filteredHeaders,
+				reasons,
+				buildShadowDecisionMetadata("rate_limit_"+rateLimitViolation.Window, decisionResult.Risk, decisionResult.PolicyVersion, reasons, rateLimitConstraints),
+			)
 		}
 		return c.JSON(http.StatusTooManyRequests, map[string]any{
 			"code":                "RATE_LIMIT_EXCEEDED",
@@ -330,6 +353,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			Code:    argConstraintViolation.ReasonCode,
 			Message: argConstraintViolation.Message,
 		}}
+		argConstraints := withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation)
 		adr := models.ActionDecisionRecord{
 			DecisionID:      decisionID,
 			RequestID:       requestID,
@@ -345,7 +369,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			RuleID:          argConstraintRuleID(argConstraintViolation),
 			RulePriority:    1000,
 			Reasons:         reasons,
-			Constraints:     withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
+			Constraints:     argConstraints,
 			Tags:            decisionResult.Tags,
 			PolicyVersion:   decisionResult.PolicyVersion,
 			Reason:          firstReasonMessage(reasons),
@@ -360,6 +384,19 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		if d.Metrics != nil {
 			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		if isShadowMode(enforcementMode) {
+			return d.executeRESTShadowDeny(
+				c,
+				tenant.TenantID,
+				toolID,
+				requestID,
+				payload,
+				bodyBytes,
+				filteredHeaders,
+				reasons,
+				buildShadowDecisionMetadata(argConstraintRuleID(argConstraintViolation), decisionResult.Risk, decisionResult.PolicyVersion, reasons, argConstraints),
+			)
 		}
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,
@@ -403,6 +440,19 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 				d.Metrics.ErrorsTotal.Inc()
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
+		}
+		if isShadowMode(enforcementMode) {
+			return d.executeRESTShadowDeny(
+				c,
+				tenant.TenantID,
+				toolID,
+				requestID,
+				payload,
+				bodyBytes,
+				filteredHeaders,
+				decisionResult.Reasons,
+				buildShadowDecisionMetadata(decisionResult.Rule.ID, decisionResult.Risk, decisionResult.PolicyVersion, decisionResult.Reasons, decisionResult.Constraints),
+			)
 		}
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,

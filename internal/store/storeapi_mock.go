@@ -4460,6 +4460,69 @@ func (_c *MockStoreAPI_SetTenantEnabled_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// SetTenantEnforcementMode provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetTenantEnforcementMode(ctx context.Context, tenantID string, enforcementMode string) error {
+	ret := _mock.Called(ctx, tenantID, enforcementMode)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetTenantEnforcementMode")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, enforcementMode)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetTenantEnforcementMode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetTenantEnforcementMode'
+type MockStoreAPI_SetTenantEnforcementMode_Call struct {
+	*mock.Call
+}
+
+// SetTenantEnforcementMode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - enforcementMode string
+func (_e *MockStoreAPI_Expecter) SetTenantEnforcementMode(ctx interface{}, tenantID interface{}, enforcementMode interface{}) *MockStoreAPI_SetTenantEnforcementMode_Call {
+	return &MockStoreAPI_SetTenantEnforcementMode_Call{Call: _e.mock.On("SetTenantEnforcementMode", ctx, tenantID, enforcementMode)}
+}
+
+func (_c *MockStoreAPI_SetTenantEnforcementMode_Call) Run(run func(ctx context.Context, tenantID string, enforcementMode string)) *MockStoreAPI_SetTenantEnforcementMode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetTenantEnforcementMode_Call) Return(err error) *MockStoreAPI_SetTenantEnforcementMode_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetTenantEnforcementMode_Call) RunAndReturn(run func(ctx context.Context, tenantID string, enforcementMode string) error) *MockStoreAPI_SetTenantEnforcementMode_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // TryAdvisoryLock provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) TryAdvisoryLock(ctx context.Context, key int64) (bool, error) {
 	ret := _mock.Called(ctx, key)

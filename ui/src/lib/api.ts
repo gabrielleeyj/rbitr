@@ -109,6 +109,8 @@ export interface AdminSettings {
   admin_write_lock: boolean;
   default_approval_ttl_seconds: number;
   audit_retention_days: number;
+  tenant_id?: string;
+  enforcement_mode?: "enforce" | "shadow";
 }
 
 export interface NotificationConfig {
@@ -492,8 +494,9 @@ export function revokeApproval(
   );
 }
 
-export function getSettings(config: ApiConfig): Promise<AdminSettings> {
-  return request<AdminSettings>(`/admin/settings`, config);
+export function getSettings(config: ApiConfig, tenantId?: string): Promise<AdminSettings> {
+  const query = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : "";
+  return request<AdminSettings>(`/admin/settings${query}`, config);
 }
 
 export function setAuditRetentionDays(config: ApiConfig, days: number): Promise<void> {
@@ -514,6 +517,17 @@ export function setDefaultApprovalTTL(config: ApiConfig, seconds: number): Promi
   return request<void>(`/admin/settings/default-approval-ttl`, config, {
     method: "PUT",
     body: JSON.stringify({ seconds }),
+  });
+}
+
+export function setEnforcementMode(
+  config: ApiConfig,
+  tenantId: string,
+  enforcementMode: "enforce" | "shadow"
+): Promise<void> {
+  return request<void>(`/admin/settings/enforcement-mode`, config, {
+    method: "PUT",
+    body: JSON.stringify({ tenant_id: tenantId, enforcement_mode: enforcementMode }),
   });
 }
 

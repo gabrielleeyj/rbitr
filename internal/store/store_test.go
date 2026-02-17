@@ -496,12 +496,12 @@ func TestStoreGetTenantConfig(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at"}).
-				AddRow("t1", "p_v1", time.Now(), time.Now()),
+			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode"}).
+				AddRow("t1", "p_v1", time.Now(), time.Now(), "shadow"),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at"}),
+			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -512,15 +512,16 @@ func TestStoreGetTenantConfig(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at FROM rbitr.tenant_config WHERE tenant_id = $1`)
+			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode FROM rbitr.tenant_config WHERE tenant_id = $1`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
-			_, err = st.GetTenantConfig(context.Background(), "t1")
+			config, err := st.GetTenantConfig(context.Background(), "t1")
 			if tc.expectErr != nil {
 				require.ErrorIs(t, err, tc.expectErr)
 			} else {
 				require.NoError(t, err)
+				require.NotEmpty(t, config.EnforcementMode)
 			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
@@ -1705,6 +1706,46 @@ func TestStoreUpdateTenantConfigNoKey(t *testing.T) {
 	st := New(db)
 	err = st.UpdateTenantConfig(context.Background(), "t1", "New Name", "")
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetTenantEnforcementMode(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_config
+		SET enforcement_mode = $1, updated_at = $2
+		WHERE tenant_id = $3`)).
+		WithArgs("shadow", sqlmock.AnyArg(), "t1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	err = st.SetTenantEnforcementMode(context.Background(), "t1", "shadow")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetTenantEnforcementModeNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs(adminWriteLockKey).
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.tenant_config
+		SET enforcement_mode = $1, updated_at = $2
+		WHERE tenant_id = $3`)).
+		WithArgs("shadow", sqlmock.AnyArg(), "missing").
+		WillReturnResult(sqlmock.NewResult(1, 0))
+
+	st := New(db)
+	err = st.SetTenantEnforcementMode(context.Background(), "missing", "shadow")
+	require.ErrorIs(t, err, ErrNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

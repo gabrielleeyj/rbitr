@@ -460,6 +460,10 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	if approvalToken != "" {
 		return d.handleMCPApprovedCall(c, tenant, agentID, toolID, requestID, requestHash, classificationResult, approvalToken, approvalRequestID, forwardReq)
 	}
+	enforcementMode, enforcementErr := d.tenantEnforcementMode(ctx, tenant.TenantID)
+	if enforcementErr != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to load tenant enforcement mode")), nil
+	}
 
 	// Check for risk overrides
 	if overrideRisk, lookupErr := d.getRiskOverrideCached(ctx, tenant.TenantID, classificationResult.ActionType); lookupErr == nil {
@@ -562,6 +566,14 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		if d.Metrics != nil {
 			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
 		}
+		if isShadowMode(enforcementMode) {
+			return d.executeMCPShadowDeny(
+				ctx,
+				tool,
+				forwardReq,
+				buildShadowDecisionMetadata("rate_limit_"+rateLimitViolation.Window, decisionResult.Risk, decisionResult.PolicyVersion, reasons, adr.Constraints),
+			)
+		}
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorRateLimitExceeded,
 			Message: "rate limit exceeded",
@@ -612,6 +624,14 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		if d.Metrics != nil {
 			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
 		}
+		if isShadowMode(enforcementMode) {
+			return d.executeMCPShadowDeny(
+				ctx,
+				tool,
+				forwardReq,
+				buildShadowDecisionMetadata(argConstraintRuleID(argConstraintViolation), decisionResult.Risk, decisionResult.PolicyVersion, reasons, adr.Constraints),
+			)
+		}
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "denied by policy",
@@ -661,6 +681,14 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		}
 		if err := d.Store.InsertADR(ctx, adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
+		}
+		if isShadowMode(enforcementMode) {
+			return d.executeMCPShadowDeny(
+				ctx,
+				tool,
+				forwardReq,
+				buildShadowDecisionMetadata(decisionResult.Rule.ID, decisionResult.Risk, decisionResult.PolicyVersion, decisionResult.Reasons, decisionResult.Constraints),
+			)
 		}
 
 		// Return JSON-RPC error for DENY

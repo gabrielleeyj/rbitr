@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -817,9 +818,11 @@ func TestHandleSettingsGet(t *testing.T) {
 		name         string
 		adminKey     string
 		scopes       []string
+		tenantID     string
 		storeSetup   func(*store.MockStoreAPI)
 		expectedCode int
 		expectedErr  bool
+		expectMode   string
 	}{
 		{
 			name:         "unauthorized",
@@ -836,6 +839,25 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
 			},
 			expectedCode: http.StatusOK,
+			expectMode:   "enforce",
+		},
+		{
+			name:     "success with tenant settings",
+			adminKey: "key",
+			scopes:   []string{"admin:read"},
+			tenantID: "t1",
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
+				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
+				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID:            "t1",
+					ActivePolicyVersion: "p1",
+					EnforcementMode:     "shadow",
+				}, nil)
+			},
+			expectedCode: http.StatusOK,
+			expectMode:   "shadow",
 		},
 	}
 
@@ -851,12 +873,91 @@ func TestHandleSettingsGet(t *testing.T) {
 			}
 
 			ctx, req, rec := testhelpers.MakeRequest(http.MethodGet, nil, nil)
+			if tc.tenantID != "" {
+				req.URL.RawQuery = "tenant_id=" + tc.tenantID
+			}
 			if tc.adminKey != "" {
 				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
 			}
 
 			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
 			err := deps.handleSettingsGet(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+			if tc.expectedCode == http.StatusOK && tc.expectMode != "" {
+				var response SettingsResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+				require.Equal(t, tc.expectMode, response.EnforcementMode)
+			}
+		})
+	}
+}
+
+func TestHandleEnforcementModeUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      EnforcementModeRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      EnforcementModeRequest{TenantID: "t1", EnforcementMode: "invalid"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload: EnforcementModeRequest{
+				TenantID:        "t1",
+				EnforcementMode: "shadow",
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
+					TenantID:            "t1",
+					ActivePolicyVersion: "p1",
+					EnforcementMode:     "enforce",
+				}, nil)
+				storeMock.On("SetTenantEnforcementMode", context.Background(), "t1", "shadow").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleEnforcementModeUpdate(ctx)
 			if tc.expectedErr {
 				require.Error(t, err)
 			} else {

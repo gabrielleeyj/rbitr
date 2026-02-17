@@ -6,15 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getSettings, setAdminWriteLock, setAuditRetentionDays, setDefaultApprovalTTL } from "@/lib/api";
+import { getSettings, setAdminWriteLock, setAuditRetentionDays, setDefaultApprovalTTL, setEnforcementMode } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
+import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
 
 export function SettingsPage() {
   const { adminKey } = useAdminKey();
+  const { selectedTenant } = useTenant();
   const [locked, setLocked] = useState(false);
   const [defaultTTLMinutes, setDefaultTTLMinutes] = useState(15);
   const [auditRetentionDays, setAuditRetentionDaysState] = useState(365);
+  const [enforcementMode, setEnforcementModeState] = useState<"enforce" | "shadow">("enforce");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -27,7 +30,7 @@ export function SettingsPage() {
         return;
       }
       try {
-        const data = await getSettings({ adminKey });
+        const data = await getSettings({ adminKey }, selectedTenant?.tenant_id);
         if (!mounted) return;
         setLocked(Boolean(data.admin_write_lock));
         if (data.default_approval_ttl_seconds) {
@@ -35,6 +38,11 @@ export function SettingsPage() {
         }
         if (data.audit_retention_days) {
           setAuditRetentionDaysState(data.audit_retention_days);
+        }
+        if (data.enforcement_mode === "shadow") {
+          setEnforcementModeState("shadow");
+        } else {
+          setEnforcementModeState("enforce");
         }
         setLoading(false);
       } catch (err) {
@@ -47,7 +55,7 @@ export function SettingsPage() {
     return () => {
       mounted = false;
     };
-  }, [adminKey]);
+  }, [adminKey, selectedTenant?.tenant_id]);
 
   const handleToggle = async (value: boolean) => {
     if (!adminKey) return;
@@ -84,8 +92,51 @@ export function SettingsPage() {
     }
   };
 
+  const handleEnforcementModeToggle = async (value: boolean) => {
+    if (!adminKey || !selectedTenant?.tenant_id) return;
+    const nextMode = value ? "shadow" : "enforce";
+    setActionError("");
+    setEnforcementModeState(nextMode);
+    try {
+      await setEnforcementMode({ adminKey }, selectedTenant.tenant_id, nextMode);
+      toast.success("Tenant enforcement mode updated", { description: nextMode === "shadow" ? "Shadow" : "Enforce" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update enforcement mode.");
+      setEnforcementModeState(nextMode === "shadow" ? "enforce" : "shadow");
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Tenant settings</CardTitle>
+          <CardDescription>
+            {selectedTenant ? `Selected tenant: ${selectedTenant.tenant_id}` : "Select a tenant to configure tenant-level controls."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {actionError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="enforcement-mode" className="text-sm">
+              Shadow mode (evaluate deny, execute anyway)
+            </Label>
+            <Switch
+              id="enforcement-mode"
+              checked={enforcementMode === "shadow"}
+              onCheckedChange={handleEnforcementModeToggle}
+              disabled={loading || !selectedTenant}
+            />
+          </div>
+          <div className="text-xs text-muted-foreground">
+            In shadow mode, DENY decisions are logged with explainability metadata but calls still execute. Approval flows remain enforced.
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Admin write lock</CardTitle>
