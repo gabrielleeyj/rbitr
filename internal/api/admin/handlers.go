@@ -101,6 +101,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.POST("/tenants", deps.handleTenantCreate)
 	adminGroup.PUT("/tenants/:tenant_id/enabled", deps.handleTenantSetEnabled)
 	adminGroup.GET("/tenants/:tenant_id/keys", deps.handleTenantKeysList)
+	adminGroup.POST("/tenants/:tenant_id/keys", deps.handleTenantKeyCreate)
 	adminGroup.POST("/tenants/:tenant_id/keys/rotate", deps.handleTenantKeyRotate)
 	adminGroup.POST("/tenants/:tenant_id/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
 

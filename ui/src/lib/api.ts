@@ -103,6 +103,21 @@ export interface ToolConfig {
   mcp?: MCPConfig;
 }
 
+export interface TenantKey {
+  key_id: string;
+  tenant_id: string;
+  key_prefix: string;
+  created_at: string;
+  revoked_at?: string;
+  rotated_at?: string;
+}
+
+export interface TenantKeyIssueResponse {
+  api_key: string;
+  key_id: string;
+  key_prefix: string;
+}
+
 export interface RiskOverride {
   tenant_id: string;
   action_type: string;
@@ -286,6 +301,23 @@ export function listTenants(config: ApiConfig): Promise<TenantSummary[]> {
 
 export function getAdminMe(config: ApiConfig): Promise<AdminMeResponse> {
   return request<AdminMeResponse>("/admin/me", config);
+}
+
+export async function listTenantKeys(config: ApiConfig, tenantId: string): Promise<TenantKey[]> {
+  const data = await request<TenantKey[] | null>(`/admin/tenants/${tenantId}/keys`, config);
+  return data ?? [];
+}
+
+export function createTenantKey(config: ApiConfig, tenantId: string): Promise<TenantKeyIssueResponse> {
+  return request<TenantKeyIssueResponse>(`/admin/tenants/${tenantId}/keys`, config, { method: "POST" });
+}
+
+export function rotateTenantKey(config: ApiConfig, tenantId: string): Promise<TenantKeyIssueResponse> {
+  return request<TenantKeyIssueResponse>(`/admin/tenants/${tenantId}/keys/rotate`, config, { method: "POST" });
+}
+
+export function revokeTenantKey(config: ApiConfig, tenantId: string, keyId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/keys/${keyId}/revoke`, config, { method: "POST" });
 }
 
 export function listEvidence(

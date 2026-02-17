@@ -28,6 +28,12 @@ type SetTenantEnabledRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
+type TenantKeyIssueResponse struct {
+	APIKey    string `json:"api_key"`
+	KeyID     string `json:"key_id"`
+	KeyPrefix string `json:"key_prefix"`
+}
+
 func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
@@ -101,6 +107,45 @@ func (d Dependencies) handleTenantKeysList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, keys)
 }
 
+func (d Dependencies) handleTenantKeyCreate(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
+	adminKey, err := requireAdminScope(c, d.Store, scopeKeysRotate)
+	if err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
+	ctx := c.Request().Context()
+	now := time.Now().UTC()
+
+	rawKey, keyHash, keyPrefix, err := utils.GenerateAPIKey()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+	}
+	keyID := uuid.NewString()
+	if err := d.Store.CreateTenantKey(ctx, models.TenantKey{
+		KeyID:     keyID,
+		TenantID:  tenantID,
+		KeyHash:   keyHash,
+		KeyPrefix: keyPrefix,
+		CreatedAt: now,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create key"})
+	}
+
+	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.KEY.CREATED", "TENANT.KEY", keyID, nil, map[string]any{
+		"key_prefix": keyPrefix,
+	})
+
+	return c.JSON(http.StatusCreated, TenantKeyIssueResponse{
+		APIKey:    rawKey,
+		KeyID:     keyID,
+		KeyPrefix: keyPrefix,
+	})
+}
+
 func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
@@ -145,10 +190,10 @@ func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 		"key_prefix": keyPrefix,
 	})
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"api_key":    rawKey,
-		"key_id":     keyID,
-		"key_prefix": keyPrefix,
+	return c.JSON(http.StatusOK, TenantKeyIssueResponse{
+		APIKey:    rawKey,
+		KeyID:     keyID,
+		KeyPrefix: keyPrefix,
 	})
 }
 

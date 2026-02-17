@@ -374,3 +374,72 @@ func TestHandleTenantKeyRotate(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleTenantKeyCreate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		checkBody    bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			storeSetup: func(m *store.MockStoreAPI) {
+				m.On("CreateTenantKey", mock.Anything, mock.Anything).Return(nil)
+				m.On("InsertAuditEvent", mock.Anything, mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusCreated,
+			checkBody:    true,
+		},
+		{
+			name:     "create error",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			storeSetup: func(m *store.MockStoreAPI) {
+				m.On("CreateTenantKey", mock.Anything, mock.Anything).Return(store.ErrNotFound)
+			},
+			expectedCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodPost, nil,
+				testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+			)
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AdminKeyHeader, tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			_ = deps.handleTenantKeyCreate(ctx)
+			require.Equal(t, tc.expectedCode, rec.Code)
+
+			if tc.checkBody {
+				var resp TenantKeyIssueResponse
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+				require.NotEmpty(t, resp.APIKey)
+				require.NotEmpty(t, resp.KeyID)
+				require.NotEmpty(t, resp.KeyPrefix)
+			}
+		})
+	}
+}
