@@ -514,6 +514,66 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
 
+	rateLimitViolation, err := d.enforceRateLimit(
+		ctx,
+		tenant.TenantID,
+		agentID,
+		toolID,
+		classificationResult.ActionType,
+		decisionResult.Constraints,
+	)
+	if err != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("rate limit check failed")), nil
+	}
+	if rateLimitViolation != nil {
+		c.Set(telemetry.CtxDecision, decisionDeny)
+
+		decisionID := "d_" + uuid.NewString()
+		reasons := []models.DecisionReason{{
+			Code:    "RATE_LIMIT_EXCEEDED",
+			Message: "Rate limit exceeded",
+		}}
+		adr := models.ActionDecisionRecord{
+			DecisionID:      decisionID,
+			RequestID:       requestID,
+			TenantID:        tenant.TenantID,
+			AgentID:         agentID,
+			ToolID:          toolID,
+			ActionType:      classificationResult.ActionType,
+			ActionRisk:      classificationResult.ActionRisk,
+			ActionSummary:   classificationResult.ActionSummary,
+			Decision:        decisionDeny,
+			DecisionVersion: decisionResult.Version,
+			DecisionRisk:    decisionResult.Risk,
+			RuleID:          "rate_limit_" + rateLimitViolation.Window,
+			RulePriority:    1000,
+			Reasons:         reasons,
+			Constraints:     withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
+			Tags:            decisionResult.Tags,
+			PolicyVersion:   decisionResult.PolicyVersion,
+			Reason:          firstReasonMessage(reasons),
+			RequestHash:     requestHash,
+			CreatedAt:       time.Now().UTC(),
+		}
+		if err := d.Store.InsertADR(ctx, adr); err != nil {
+			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
+		}
+		if d.Metrics != nil {
+			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorRateLimitExceeded,
+			Message: "rate limit exceeded",
+			Data: mustMarshalJSON(map[string]interface{}{
+				"window":              rateLimitViolation.Window,
+				"limit":               rateLimitViolation.Limit,
+				"remaining":           rateLimitViolation.Remaining,
+				"retry_after_seconds": rateLimitViolation.RetryAfterSeconds,
+				"scope":               rateLimitViolation.Scope,
+			}),
+		}), nil
+	}
+
 	c.Set(telemetry.CtxDecision, decisionResult.Decision)
 
 	// Create Action Decision Record

@@ -508,6 +508,9 @@ func newTestMetrics() *telemetry.Metrics {
 		CacheHitsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_hits_total"}, []string{"cache"}),
 		CacheMissesTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_misses_total"}, []string{"cache"}),
 		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tenant_auth_fallback_total"}),
+		RateLimitChecksTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_checks_total"}, []string{"result", "window"}),
+		RateLimitExceededTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_exceeded_total"}, []string{"window", "scope"}),
+		RateLimitLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_rate_limit_latency_ms"}),
 	}
 }
 
@@ -521,6 +524,90 @@ func TestHandleToolCallClassification(t *testing.T) {
 	classificationResult := classification.Classify("mock_internal", payload.HTTPMethod, payload.Path, payload.Query, payload.Headers)
 	require.Equal(t, "PAYMENT.REFUND", classificationResult.ActionType)
 	require.Equal(t, classification.RiskHigh, classificationResult.ActionRisk)
+}
+
+func TestHandleToolCallRateLimitExceeded(t *testing.T) {
+	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
+
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
+	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
+		Return("", store.ErrNotFound)
+	storeMock.On("GetEffectiveRateLimitConfig", context.Background(), tenant.TenantID).
+		Return(models.RateLimitConfig{
+			PerMinute: 1,
+			PerDay:    10000,
+			Scope:     "tenant_agent_tool",
+		}, nil)
+	storeMock.On(
+		"IncrementRateLimitCounter",
+		context.Background(),
+		tenant.TenantID,
+		"agent",
+		"mock_internal",
+		"",
+		"minute",
+		mock.Anything,
+		mock.Anything,
+		int64(1),
+	).Return(false, int64(0), nil)
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		return record.Decision == decisionDeny &&
+			record.RuleID == "rate_limit_minute" &&
+			len(record.Reasons) == 1 &&
+			record.Reasons[0].Code == "RATE_LIMIT_EXCEEDED"
+	})).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.On("Evaluate", context.Background(), tenant.TenantID, mock.Anything).Return(policy.Result{
+		Version:       "2026-01-20",
+		Decision:      "ALLOW",
+		Risk:          "HIGH",
+		Rule:          models.DecisionRule{ID: "rule_allow", Priority: 10},
+		Reasons:       []models.DecisionReason{{Code: "ALLOW", Message: "ok"}},
+		Constraints:   map[string]any{},
+		PolicyVersion: "p_v1",
+	}, nil)
+
+	connectorMock := connector.NewMockConnector(t)
+	var storeAPI store.StoreAPI = storeMock
+	deps := Dependencies{
+		Store:     storeAPI,
+		Policy:    policyMock,
+		Connector: connectorMock,
+		Metrics:   newTestMetrics(),
+		Config: config.Config{
+			BodyLimitSize:       256 * 1024,
+			ResponseLimit:       256 * 1024,
+			FeatureRateLimiting: true,
+		},
+	}
+
+	payload := ToolCallRequest{
+		HTTPMethod: "POST",
+		Path:       "/refund",
+		Query:      "",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       "{}",
+	}
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		testhelpers.MakeBody(payload),
+		testhelpers.Params{Names: []string{"tool_id"}, Values: []string{"mock_internal"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "key")
+	req.Header.Set(auth.AgentIDHeader, "agent")
+
+	err := deps.handleToolCall(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+
+	var response map[string]any
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
+	require.Equal(t, "RATE_LIMIT_EXCEEDED", response["code"])
+	require.Equal(t, "minute", response["window"])
+
+	connectorMock.AssertNotCalled(t, "Execute", mock.Anything, mock.Anything)
 }
 
 func assertEvidenceWhitelist(t *testing.T, body []byte) {

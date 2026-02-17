@@ -151,10 +151,11 @@ const (
 
 // Application-specific error codes (as defined in EPIC_6.md)
 const (
-	ErrorApprovalRequired = -32001 // Approval required
-	ErrorUnauthorized     = -32002 // Authentication failed
-	ErrorDeniedByPolicy   = -32003 // Denied by policy
-	ErrorPolicyInvalid    = -32004 // Policy evaluation error
+	ErrorApprovalRequired  = -32001 // Approval required
+	ErrorUnauthorized      = -32002 // Authentication failed
+	ErrorDeniedByPolicy    = -32003 // Denied by policy
+	ErrorPolicyInvalid     = -32004 // Policy evaluation error
+	ErrorRateLimitExceeded = -32005 // Rate limit exceeded
 )
 
 // MCP method names

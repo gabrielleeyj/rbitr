@@ -25,6 +25,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.NotificationsSuppressedTotal)
 		prometheus.Unregister(metrics.NotificationsLatencyMs)
 		prometheus.Unregister(metrics.TenantAuthFallbackTotal)
+		prometheus.Unregister(metrics.RateLimitChecksTotal)
+		prometheus.Unregister(metrics.RateLimitExceededTotal)
+		prometheus.Unregister(metrics.RateLimitLatencyMs)
 	})
 
 	if metrics.DecisionsTotal == nil || metrics.GatewayRequests == nil {
@@ -45,6 +48,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.NotificationsSuppressedTotal.WithLabelValues("slack", "APPROVAL.EXPIRING").Inc()
 	metrics.NotificationsLatencyMs.WithLabelValues("slack").Observe(5)
 	metrics.TenantAuthFallbackTotal.Inc()
+	metrics.RateLimitChecksTotal.WithLabelValues("allowed", "minute").Inc()
+	metrics.RateLimitExceededTotal.WithLabelValues("minute", "tenant_agent_tool").Inc()
+	metrics.RateLimitLatencyMs.Observe(2)
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -66,6 +72,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		"notifications_suppressed_total": false,
 		"notifications_latency_ms":       false,
 		"tenant_auth_fallback_total":     false,
+		"rate_limit_checks_total":        false,
+		"rate_limit_exceeded_total":      false,
+		"rate_limit_latency_ms":          false,
 	}
 	for _, family := range families {
 		if _, ok := expected[family.GetName()]; ok {

@@ -19,6 +19,9 @@ type Metrics struct {
 	CacheHitsTotal               *prometheus.CounterVec
 	CacheMissesTotal             *prometheus.CounterVec
 	TenantAuthFallbackTotal      prometheus.Counter
+	RateLimitChecksTotal         *prometheus.CounterVec
+	RateLimitExceededTotal       *prometheus.CounterVec
+	RateLimitLatencyMs           prometheus.Histogram
 }
 
 func NewMetrics() *Metrics {
@@ -90,6 +93,19 @@ func NewMetrics() *Metrics {
 			Name: "tenant_auth_fallback_total",
 			Help: "Total requests authenticated via deprecated X-Tenant-Key fallback.",
 		}),
+		RateLimitChecksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "rate_limit_checks_total",
+			Help: "Total rate limit checks by result and window.",
+		}, []string{"result", "window"}),
+		RateLimitExceededTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "rate_limit_exceeded_total",
+			Help: "Total rate limit exceeds by window and scope.",
+		}, []string{"window", "scope"}),
+		RateLimitLatencyMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "rate_limit_latency_ms",
+			Help:    "Rate limit evaluation latency in ms.",
+			Buckets: prometheus.DefBuckets,
+		}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -108,6 +124,9 @@ func NewMetrics() *Metrics {
 		m.CacheHitsTotal,
 		m.CacheMissesTotal,
 		m.TenantAuthFallbackTotal,
+		m.RateLimitChecksTotal,
+		m.RateLimitExceededTotal,
+		m.RateLimitLatencyMs,
 	)
 	return m
 }

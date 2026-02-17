@@ -1260,6 +1260,72 @@ func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(
 	return _c
 }
 
+// GetEffectiveRateLimitConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetEffectiveRateLimitConfig")
+	}
+
+	var r0 models.RateLimitConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.RateLimitConfig, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.RateLimitConfig); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(models.RateLimitConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetEffectiveRateLimitConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetEffectiveRateLimitConfig'
+type MockStoreAPI_GetEffectiveRateLimitConfig_Call struct {
+	*mock.Call
+}
+
+// GetEffectiveRateLimitConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetEffectiveRateLimitConfig(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetEffectiveRateLimitConfig_Call {
+	return &MockStoreAPI_GetEffectiveRateLimitConfig_Call{Call: _e.mock.On("GetEffectiveRateLimitConfig", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetEffectiveRateLimitConfig_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetEffectiveRateLimitConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetEffectiveRateLimitConfig_Call) Return(rateLimitConfig models.RateLimitConfig, err error) *MockStoreAPI_GetEffectiveRateLimitConfig_Call {
+	_c.Call.Return(rateLimitConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetEffectiveRateLimitConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.RateLimitConfig, error)) *MockStoreAPI_GetEffectiveRateLimitConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetMailingList provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetMailingList(ctx context.Context, tenantID string, mailingListID string) (models.MailingList, error) {
 	ret := _mock.Called(ctx, tenantID, mailingListID)
@@ -2006,6 +2072,120 @@ func (_c *MockStoreAPI_GetTool_Call) Return(tool models.Tool, err error) *MockSt
 }
 
 func (_c *MockStoreAPI_GetTool_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string) (models.Tool, error)) *MockStoreAPI_GetTool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IncrementRateLimitCounter provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) IncrementRateLimitCounter(ctx context.Context, tenantID string, agentID string, toolID string, actionType string, window string, bucketStart time.Time, now time.Time, limit int64) (bool, int64, error) {
+	ret := _mock.Called(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IncrementRateLimitCounter")
+	}
+
+	var r0 bool
+	var r1 int64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, time.Time, time.Time, int64) (bool, int64, error)); ok {
+		return returnFunc(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, time.Time, time.Time, int64) bool); ok {
+		r0 = returnFunc(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, string, string, time.Time, time.Time, int64) int64); ok {
+		r1 = returnFunc(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
+	} else {
+		r1 = ret.Get(1).(int64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string, string, string, string, time.Time, time.Time, int64) error); ok {
+		r2 = returnFunc(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStoreAPI_IncrementRateLimitCounter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IncrementRateLimitCounter'
+type MockStoreAPI_IncrementRateLimitCounter_Call struct {
+	*mock.Call
+}
+
+// IncrementRateLimitCounter is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - agentID string
+//   - toolID string
+//   - actionType string
+//   - window string
+//   - bucketStart time.Time
+//   - now time.Time
+//   - limit int64
+func (_e *MockStoreAPI_Expecter) IncrementRateLimitCounter(ctx interface{}, tenantID interface{}, agentID interface{}, toolID interface{}, actionType interface{}, window interface{}, bucketStart interface{}, now interface{}, limit interface{}) *MockStoreAPI_IncrementRateLimitCounter_Call {
+	return &MockStoreAPI_IncrementRateLimitCounter_Call{Call: _e.mock.On("IncrementRateLimitCounter", ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)}
+}
+
+func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Run(run func(ctx context.Context, tenantID string, agentID string, toolID string, actionType string, window string, bucketStart time.Time, now time.Time, limit int64)) *MockStoreAPI_IncrementRateLimitCounter_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 time.Time
+		if args[6] != nil {
+			arg6 = args[6].(time.Time)
+		}
+		var arg7 time.Time
+		if args[7] != nil {
+			arg7 = args[7].(time.Time)
+		}
+		var arg8 int64
+		if args[8] != nil {
+			arg8 = args[8].(int64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+			arg7,
+			arg8,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Return(b bool, n int64, err error) *MockStoreAPI_IncrementRateLimitCounter_Call {
+	_c.Call.Return(b, n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) RunAndReturn(run func(ctx context.Context, tenantID string, agentID string, toolID string, actionType string, window string, bucketStart time.Time, now time.Time, limit int64) (bool, int64, error)) *MockStoreAPI_IncrementRateLimitCounter_Call {
 	_c.Call.Return(run)
 	return _c
 }

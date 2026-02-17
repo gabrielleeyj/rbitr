@@ -27,6 +27,9 @@ const (
 	adminWriteLockKey            = "admin_write_lock"
 	defaultApprovalTTLSecondsKey = "default_approval_ttl_seconds"
 	auditRetentionDaysKey        = "audit_retention_days"
+	defaultRateLimitPerMinuteKey = "default_rate_limit_per_minute"
+	defaultRateLimitPerDayKey    = "default_rate_limit_per_day"
+	defaultRateLimitScopeKey     = "default_rate_limit_scope"
 	settingTrue                  = "true"
 	settingFalse                 = "false"
 )
@@ -41,6 +44,7 @@ type StoreAPI interface {
 	ListTools(ctx context.Context, tenantID string) ([]models.Tool, error)
 	GetPolicy(ctx context.Context, tenantID string) (models.Policy, error)
 	GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error)
+	GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error)
 	ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error)
 	GetPolicyVersion(ctx context.Context, tenantID, policyVersion string) (models.PolicyVersion, error)
 	CreatePolicyVersion(ctx context.Context, tenantID, policyVersion, regoModule, createdBy, notes string) error
@@ -77,6 +81,7 @@ type StoreAPI interface {
 	GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error)
 	SetAuditRetentionDays(ctx context.Context, days int) error
 	GetAuditRetentionDays(ctx context.Context) (int, error)
+	IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error)
 	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
 	ListAuditEventsExport(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
 	ListAuditResourceTypes(ctx context.Context, tenantID string) ([]string, error)
@@ -294,6 +299,83 @@ func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.Te
 		}
 		return models.TenantConfig{}, err
 	}
+	return config, nil
+}
+
+func (s *Store) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT
+			tc.default_rate_limit_per_minute,
+			tc.default_rate_limit_per_day,
+			tc.default_rate_limit_scope,
+			s_min.value,
+			s_day.value,
+			s_scope.value
+		FROM rbitr.tenants t
+		LEFT JOIN rbitr.tenant_config tc ON tc.tenant_id = t.tenant_id
+		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $2
+		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $3
+		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $4
+		WHERE t.tenant_id = $1`,
+		tenantID,
+		defaultRateLimitPerMinuteKey,
+		defaultRateLimitPerDayKey,
+		defaultRateLimitScopeKey,
+	)
+
+	var (
+		tenantMinute sql.NullInt64
+		tenantDay    sql.NullInt64
+		tenantScope  sql.NullString
+		systemMinute sql.NullString
+		systemDay    sql.NullString
+		systemScope  sql.NullString
+	)
+	if err := row.Scan(
+		&tenantMinute,
+		&tenantDay,
+		&tenantScope,
+		&systemMinute,
+		&systemDay,
+		&systemScope,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.RateLimitConfig{}, ErrNotFound
+		}
+		return models.RateLimitConfig{}, err
+	}
+
+	const (
+		defaultPerMinute int64  = 60
+		defaultPerDay    int64  = 10000
+		defaultScope     string = "tenant_agent_tool"
+	)
+
+	config := models.RateLimitConfig{
+		PerMinute: defaultPerMinute,
+		PerDay:    defaultPerDay,
+		Scope:     defaultScope,
+	}
+
+	if parsed, ok := parseOptionalPositiveInt64(systemMinute); ok {
+		config.PerMinute = parsed
+	}
+	if parsed, ok := parseOptionalPositiveInt64(systemDay); ok {
+		config.PerDay = parsed
+	}
+	if parsed, ok := parseOptionalScope(systemScope); ok {
+		config.Scope = parsed
+	}
+
+	if tenantMinute.Valid && tenantMinute.Int64 > 0 {
+		config.PerMinute = tenantMinute.Int64
+	}
+	if tenantDay.Valid && tenantDay.Int64 > 0 {
+		config.PerDay = tenantDay.Int64
+	}
+	if parsed, ok := parseOptionalScope(tenantScope); ok {
+		config.Scope = parsed
+	}
+
 	return config, nil
 }
 
@@ -1151,6 +1233,40 @@ func (s *Store) GetAuditRetentionDays(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return parsed, nil
+}
+
+func (s *Store) IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error) {
+	if limit <= 0 {
+		return true, 0, nil
+	}
+
+	row := s.db.QueryRowContext(ctx, `INSERT INTO rbitr.rate_limit_counters (
+			tenant_id, agent_id, tool_id, action_type, window, bucket_start, count, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)
+		ON CONFLICT (tenant_id, agent_id, tool_id, action_type, window, bucket_start)
+		DO UPDATE SET
+			count = rbitr.rate_limit_counters.count + 1,
+			updated_at = EXCLUDED.updated_at
+		WHERE rbitr.rate_limit_counters.count < $8
+		RETURNING count`,
+		tenantID,
+		agentID,
+		toolID,
+		actionType,
+		window,
+		bucketStart,
+		now,
+		limit,
+	)
+
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, 0, nil
+		}
+		return false, 0, err
+	}
+	return true, count, nil
 }
 
 func (s *Store) ensureAdminWritesAllowed(ctx context.Context) error {
@@ -2122,6 +2238,34 @@ func (s *Store) RevokeTenantKey(ctx context.Context, tenantID, keyID string, rev
 
 func hashKey(key string) string {
 	return utils.HashString(key)
+}
+
+func parseOptionalPositiveInt64(value sql.NullString) (int64, bool) {
+	if !value.Valid {
+		return 0, false
+	}
+	trimmed := strings.TrimSpace(value.String)
+	if trimmed == "" {
+		return 0, false
+	}
+	parsed, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
+}
+
+func parseOptionalScope(value sql.NullString) (string, bool) {
+	if !value.Valid {
+		return "", false
+	}
+	scope := strings.TrimSpace(value.String)
+	switch scope {
+	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+		return scope, true
+	default:
+		return "", false
+	}
 }
 
 func nullableString(value string) sql.NullString {

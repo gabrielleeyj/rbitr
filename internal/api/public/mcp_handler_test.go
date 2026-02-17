@@ -14,8 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
+	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/mcp"
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/policy"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
@@ -1149,4 +1151,82 @@ func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
 	assert.Equal(t, mcp.ErrorMethodNotFound, resp.Error.Code)
 
 	mockStore.AssertExpectations(t)
+}
+
+func TestHandleMCP_ToolsCallRateLimitExceeded(t *testing.T) {
+	mockStore := &store.MockStoreAPI{}
+	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
+		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
+	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
+		Return(models.Tool{
+			ToolID:         "mock_internal",
+			TenantID:       "t_demo",
+			Transport:      "mcp_streamable_http",
+			MCPUpstreamURL: "http://example.test",
+		}, nil)
+	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
+		Return("", store.ErrNotFound)
+	mockStore.On("GetEffectiveRateLimitConfig", mock.Anything, "t_demo").
+		Return(models.RateLimitConfig{
+			PerMinute: 1,
+			PerDay:    10000,
+			Scope:     "tenant_agent_tool",
+		}, nil)
+	mockStore.On(
+		"IncrementRateLimitCounter",
+		mock.Anything,
+		"t_demo",
+		"agent1",
+		"mock_internal",
+		"",
+		"minute",
+		mock.Anything,
+		mock.Anything,
+		int64(1),
+	).Return(false, int64(0), nil)
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+		return record.Decision == decisionDeny &&
+			record.RuleID == "rate_limit_minute" &&
+			len(record.Reasons) == 1 &&
+			record.Reasons[0].Code == "RATE_LIMIT_EXCEEDED"
+	})).Return(nil)
+
+	policyMock := policy.NewMockEvaluatorAPI(t)
+	policyMock.On("Evaluate", mock.Anything, "t_demo", mock.Anything).
+		Return(policy.Result{
+			Version:       "2026-01-20",
+			Decision:      "ALLOW",
+			Risk:          "MEDIUM",
+			Rule:          models.DecisionRule{ID: "rule_allow", Priority: 10},
+			Reasons:       []models.DecisionReason{{Code: "ALLOW", Message: "ok"}},
+			Constraints:   map[string]any{},
+			PolicyVersion: "p_v1",
+		}, nil)
+
+	deps := &Dependencies{
+		Store:   mockStore,
+		Policy:  policyMock,
+		Metrics: newTestMetrics(),
+		Config: config.Config{
+			FeatureRateLimiting: true,
+		},
+	}
+
+	reqBody := `{"jsonrpc":"2.0","id":"rl-1","method":"tools/call","params":{"name":"mock_internal","arguments":{"foo":"bar"}}}`
+	ctx, req, rec := testhelpers.MakeRequestWithParams(
+		http.MethodPost,
+		bytes.NewReader([]byte(reqBody)),
+		testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t_demo"}},
+	)
+	req.Header.Set(auth.TenantKeyHeader, "valid_key")
+	req.Header.Set(auth.AgentIDHeader, "agent1")
+
+	err := deps.handleMCP(ctx)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var resp mcp.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Error)
+	require.Equal(t, mcp.ErrorRateLimitExceeded, resp.Error.Code)
 }

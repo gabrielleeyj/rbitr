@@ -478,6 +478,9 @@ func newTestMetrics() *telemetry.Metrics {
 		CacheHitsTotal:          prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_hits_total_admin"}, []string{"cache"}),
 		CacheMissesTotal:        prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_cache_misses_total_admin"}, []string{"cache"}),
 		TenantAuthFallbackTotal: prometheus.NewCounter(prometheus.CounterOpts{Name: "test_tenant_auth_fallback_total_admin"}),
+		RateLimitChecksTotal:    prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_checks_total_admin"}, []string{"result", "window"}),
+		RateLimitExceededTotal:  prometheus.NewCounterVec(prometheus.CounterOpts{Name: "test_rate_limit_exceeded_total_admin"}, []string{"window", "scope"}),
+		RateLimitLatencyMs:      prometheus.NewHistogram(prometheus.HistogramOpts{Name: "test_rate_limit_latency_ms_admin"}),
 	}
 }
 

@@ -2563,3 +2563,139 @@ func TestStoreReleaseAdvisoryLock(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestStoreGetEffectiveRateLimitConfig(t *testing.T) {
+	cases := []struct {
+		name     string
+		row      []any
+		expected models.RateLimitConfig
+	}{
+		{
+			name: "tenant override",
+			row:  []any{int64(30), int64(9000), "tenant_tool", "60", "10000", "tenant_agent_tool"},
+			expected: models.RateLimitConfig{
+				PerMinute: 30,
+				PerDay:    9000,
+				Scope:     "tenant_tool",
+			},
+		},
+		{
+			name: "system fallback",
+			row:  []any{nil, nil, nil, "75", "12000", "tenant_agent"},
+			expected: models.RateLimitConfig{
+				PerMinute: 75,
+				PerDay:    12000,
+				Scope:     "tenant_agent",
+			},
+		},
+		{
+			name: "hard default fallback",
+			row:  []any{nil, nil, nil, nil, nil, nil},
+			expected: models.RateLimitConfig{
+				PerMinute: 60,
+				PerDay:    10000,
+				Scope:     "tenant_agent_tool",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			query := regexp.QuoteMeta(`SELECT
+			tc.default_rate_limit_per_minute,
+			tc.default_rate_limit_per_day,
+			tc.default_rate_limit_scope,
+			s_min.value,
+			s_day.value,
+			s_scope.value
+		FROM rbitr.tenants t
+		LEFT JOIN rbitr.tenant_config tc ON tc.tenant_id = t.tenant_id
+		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $2
+		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $3
+		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $4
+		WHERE t.tenant_id = $1`)
+			mock.ExpectQuery(query).
+				WithArgs("t1", "default_rate_limit_per_minute", "default_rate_limit_per_day", "default_rate_limit_scope").
+				WillReturnRows(sqlmock.NewRows([]string{
+					"default_rate_limit_per_minute",
+					"default_rate_limit_per_day",
+					"default_rate_limit_scope",
+					"system_per_minute",
+					"system_per_day",
+					"system_scope",
+				}).AddRow(toDriverValues(tc.row)...))
+
+			st := New(db)
+			config, err := st.GetEffectiveRateLimitConfig(context.Background(), "t1")
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, config)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestStoreIncrementRateLimitCounter(t *testing.T) {
+	t.Run("allowed", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		query := regexp.QuoteMeta(`INSERT INTO rbitr.rate_limit_counters (
+			tenant_id, agent_id, tool_id, action_type, window, bucket_start, count, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)
+		ON CONFLICT (tenant_id, agent_id, tool_id, action_type, window, bucket_start)
+		DO UPDATE SET
+			count = rbitr.rate_limit_counters.count + 1,
+			updated_at = EXCLUDED.updated_at
+		WHERE rbitr.rate_limit_counters.count < $8
+		RETURNING count`)
+
+		now := time.Now().UTC()
+		bucket := now.Truncate(time.Minute)
+
+		mock.ExpectQuery(query).
+			WithArgs("t1", "agent", "tool", "", "minute", bucket, now, int64(60)).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
+
+		st := New(db)
+		allowed, count, err := st.IncrementRateLimitCounter(context.Background(), "t1", "agent", "tool", "", "minute", bucket, now, 60)
+		require.NoError(t, err)
+		require.True(t, allowed)
+		require.Equal(t, int64(1), count)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("exceeded", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		query := regexp.QuoteMeta(`INSERT INTO rbitr.rate_limit_counters (
+			tenant_id, agent_id, tool_id, action_type, window, bucket_start, count, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)
+		ON CONFLICT (tenant_id, agent_id, tool_id, action_type, window, bucket_start)
+		DO UPDATE SET
+			count = rbitr.rate_limit_counters.count + 1,
+			updated_at = EXCLUDED.updated_at
+		WHERE rbitr.rate_limit_counters.count < $8
+		RETURNING count`)
+
+		now := time.Now().UTC()
+		bucket := now.Truncate(time.Minute)
+
+		mock.ExpectQuery(query).
+			WithArgs("t1", "agent", "tool", "", "minute", bucket, now, int64(1)).
+			WillReturnError(sql.ErrNoRows)
+
+		st := New(db)
+		allowed, count, err := st.IncrementRateLimitCounter(context.Background(), "t1", "agent", "tool", "", "minute", bucket, now, 1)
+		require.NoError(t, err)
+		require.False(t, allowed)
+		require.Equal(t, int64(0), count)
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
+}

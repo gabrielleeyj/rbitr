@@ -257,6 +257,68 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		decisionResult.Rule.ID = "rule_default_deny"
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
+
+	rateLimitViolation, err := d.enforceRateLimit(
+		c.Request().Context(),
+		tenant.TenantID,
+		agentID,
+		toolID,
+		classificationResult.ActionType,
+		decisionResult.Constraints,
+	)
+	if err != nil {
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "rate limit check failed"})
+	}
+	if rateLimitViolation != nil {
+		c.Set(telemetry.CtxDecision, decisionDeny)
+
+		decisionID := "d_" + uuid.NewString()
+		reasons := []models.DecisionReason{{
+			Code:    "RATE_LIMIT_EXCEEDED",
+			Message: "Rate limit exceeded",
+		}}
+		adr := models.ActionDecisionRecord{
+			DecisionID:      decisionID,
+			RequestID:       requestID,
+			TenantID:        tenant.TenantID,
+			AgentID:         agentID,
+			ToolID:          toolID,
+			ActionType:      classificationResult.ActionType,
+			ActionRisk:      classificationResult.ActionRisk,
+			ActionSummary:   classificationResult.ActionSummary,
+			Decision:        decisionDeny,
+			DecisionVersion: decisionResult.Version,
+			DecisionRisk:    decisionResult.Risk,
+			RuleID:          "rate_limit_" + rateLimitViolation.Window,
+			RulePriority:    1000,
+			Reasons:         reasons,
+			Constraints:     withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
+			Tags:            decisionResult.Tags,
+			PolicyVersion:   decisionResult.PolicyVersion,
+			Reason:          firstReasonMessage(reasons),
+			RequestHash:     requestHash,
+			CreatedAt:       time.Now().UTC(),
+		}
+		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+			if d.Metrics != nil {
+				d.Metrics.ErrorsTotal.Inc()
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
+		}
+		if d.Metrics != nil {
+			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+		}
+		return c.JSON(http.StatusTooManyRequests, map[string]any{
+			"code":                "RATE_LIMIT_EXCEEDED",
+			"window":              rateLimitViolation.Window,
+			"limit":               rateLimitViolation.Limit,
+			"retry_after_seconds": rateLimitViolation.RetryAfterSeconds,
+			"scope":               rateLimitViolation.Scope,
+		})
+	}
 	c.Set(telemetry.CtxDecision, decisionResult.Decision)
 
 	decisionID := "d_" + uuid.NewString()

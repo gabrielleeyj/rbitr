@@ -61,6 +61,12 @@ type TenantConfig struct {
 	UpdatedAt           time.Time `json:"updated_at"`
 }
 
+type RateLimitConfig struct {
+	PerMinute int64  `json:"per_minute"`
+	PerDay    int64  `json:"per_day"`
+	Scope     string `json:"scope"`
+}
+
 type AdminAuditEvent struct {
 	AuditEventID string          `json:"audit_event_id"`
 	TenantID     string          `json:"tenant_id"`
