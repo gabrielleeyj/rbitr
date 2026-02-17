@@ -174,6 +174,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 ```
 
 Expect: HTTP 409 with approval_request_id + approval_token.
+This is an expected execution gate (not a terminal failure): clients should treat it as pending approval and replay the same request after approval with `X-Approval-Request-Id` and `X-Approval-Token`.
 
 3b. Admin approves the request
 
