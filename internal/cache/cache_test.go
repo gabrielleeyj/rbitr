@@ -72,10 +72,29 @@ func TestTTLCacheInvalidate(t *testing.T) {
 	}
 }
 
+func TestTTLCacheInvalidatePrefix(t *testing.T) {
+	c := New[string](1 * time.Minute)
+	c.Set("t1:tool:a", "a")
+	c.Set("t1:risk:b", "b")
+	c.Set("t2:tool:c", "c")
+
+	c.InvalidatePrefix("t1:")
+
+	if _, ok := c.Get("t1:tool:a"); ok {
+		t.Fatal("expected t1:tool:a to be invalidated")
+	}
+	if _, ok := c.Get("t1:risk:b"); ok {
+		t.Fatal("expected t1:risk:b to be invalidated")
+	}
+	if value, ok := c.Get("t2:tool:c"); !ok || value != "c" {
+		t.Fatal("expected non-matching key to remain in cache")
+	}
+}
+
 func TestTTLCacheStats(t *testing.T) {
 	c := New[string](1 * time.Minute)
 	c.Set("k", "v")
-	c.Get("k")      // hit
+	c.Get("k")       // hit
 	c.Get("missing") // miss
 
 	hits, misses := c.Stats()

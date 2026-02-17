@@ -435,6 +435,7 @@ func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
 			"detail": err.Error(),
 		})
 	}
+	d.invalidateTenantCaches(tenantID)
 	after, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.PUBLISH", "POLICY.ACTIVE", version, map[string]any{
@@ -475,6 +476,7 @@ func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
 			"detail": err.Error(),
 		})
 	}
+	d.invalidateTenantCaches(tenantID)
 	after, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
 	target := payload.PolicyVersion
@@ -605,6 +607,7 @@ func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 	if err := d.Store.DeleteRiskOverride(c.Request().Context(), tenantID, actionType); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to delete override"})
 	}
+	d.invalidateTenantCaches(tenantID)
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "RISK_OVERRIDE.DELETE", "RISK_OVERRIDE", actionType, map[string]any{
 		"action_type": actionType,
 		"action_risk": beforeRisk,

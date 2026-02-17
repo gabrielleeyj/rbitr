@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,6 +59,17 @@ func (c *TTLCache[V]) Set(key string, value V) {
 func (c *TTLCache[V]) Invalidate(key string) {
 	c.mu.Lock()
 	delete(c.entries, key)
+	c.mu.Unlock()
+}
+
+// InvalidatePrefix removes all entries whose keys start with the provided prefix.
+func (c *TTLCache[V]) InvalidatePrefix(prefix string) {
+	c.mu.Lock()
+	for key := range c.entries {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.entries, key)
+		}
+	}
 	c.mu.Unlock()
 }
 

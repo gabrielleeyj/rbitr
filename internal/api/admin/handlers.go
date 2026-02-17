@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
+	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
@@ -21,6 +22,8 @@ type Dependencies struct {
 	Notifications *notifications.Service
 	Metrics       *telemetry.Metrics
 	Config        config.Config
+	ToolCache     *cache.TTLCache[models.Tool]
+	RiskCache     *cache.TTLCache[string]
 }
 
 type TenantConfigRequest struct {
@@ -192,6 +195,7 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	if err := d.Store.UpdateToolConfig(c.Request().Context(), tenantID, toolID, payload.BaseURL, payload.AuthType, payload.AuthValue); err != nil {
 		return handleBootstrapError(c, err)
 	}
+	d.invalidateTenantCaches(tenantID)
 	beforeAudit := map[string]any{
 		"base_url":  beforeTool.BaseURL,
 		"auth_type": beforeTool.AuthType,
@@ -253,6 +257,7 @@ func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	); err != nil {
 		return handleBootstrapError(c, err)
 	}
+	d.invalidateTenantCaches(tenantID)
 
 	// Emit audit event
 	beforeAudit := map[string]any{
@@ -297,6 +302,7 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	if err := d.Store.UpdatePolicy(c.Request().Context(), tenantID, payload.RegoModule, payload.PolicyVersion); err != nil {
 		return handleBootstrapError(c, err)
 	}
+	d.invalidateTenantCaches(tenantID)
 	afterConfig, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.PUBLISH", "POLICY.ACTIVE", payload.PolicyVersion, map[string]any{
 		"active_policy_version": beforeConfig.ActivePolicyVersion,
@@ -337,6 +343,7 @@ func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	if err := d.Store.UpdateRiskOverride(c.Request().Context(), tenantID, actionType, payload.ActionRisk); err != nil {
 		return handleBootstrapError(c, err)
 	}
+	d.invalidateTenantCaches(tenantID)
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "RISK_OVERRIDE.UPSERT", "RISK_OVERRIDE", actionType, map[string]any{
 		"action_type": actionType,
 		"action_risk": beforeRisk,

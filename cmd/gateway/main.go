@@ -92,6 +92,8 @@ func main() {
 		Notifications: notificationService,
 		Metrics:       metrics,
 		Config:        cfg,
+		ToolCache:     toolCache,
+		RiskCache:     riskOverrideCache,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

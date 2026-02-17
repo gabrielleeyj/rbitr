@@ -58,6 +58,7 @@ type TenantConfig struct {
 	TenantID            string    `json:"tenant_id"`
 	ActivePolicyVersion string    `json:"active_policy_version"`
 	EnforcementMode     string    `json:"enforcement_mode"`
+	Version             int64     `json:"version"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }

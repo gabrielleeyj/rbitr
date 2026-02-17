@@ -292,9 +292,9 @@ func (s *Store) GetPolicy(ctx context.Context, tenantID string) (models.Policy, 
 }
 
 func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
+	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, version FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
 	var config models.TenantConfig
-	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode); err != nil {
+	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode, &config.Version); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.TenantConfig{}, ErrNotFound
 		}
@@ -460,9 +460,10 @@ func (s *Store) PublishPolicyVersion(ctx context.Context, tenantID, policyVersio
 		return ErrNotFound
 	}
 
-	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (tenant_id) DO UPDATE SET active_policy_version = $2, updated_at = $4`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
+		VALUES ($1, $2, $3, $4, 1)
+		ON CONFLICT (tenant_id) DO UPDATE
+		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`,
 		tenantID, policyVersion, time.Now().UTC(), time.Now().UTC())
 	return err
 }
@@ -539,8 +540,10 @@ func (s *Store) DeleteRiskOverride(ctx context.Context, tenantID, actionType str
 	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`, tenantID, actionType)
-	return err
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM rbitr.action_risk_overrides WHERE tenant_id = $1 AND action_type = $2`, tenantID, actionType); err != nil {
+		return err
+	}
+	return s.bumpTenantConfigVersion(ctx, tenantID)
 }
 
 //nolint:gocritic // API favors value records for test setup convenience.
@@ -1108,13 +1111,12 @@ func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL,
 		return err
 	}
 
-	_, err := s.db.ExecContext(ctx, `UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`,
-		baseURL, authType, authValue, tenantID, toolID)
-	if err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`,
+		baseURL, authType, authValue, tenantID, toolID); err != nil {
 		return err
 	}
 
-	return nil
+	return s.bumpTenantConfigVersion(ctx, tenantID)
 }
 
 func (s *Store) UpdateToolMetadata(ctx context.Context, tenantID, toolID, description, mcpUpstreamURL string, inputSchemaJSON []byte) error {
@@ -1122,16 +1124,15 @@ func (s *Store) UpdateToolMetadata(ctx context.Context, tenantID, toolID, descri
 		return err
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	if _, err := s.db.ExecContext(ctx, `
 		UPDATE rbitr.tools
 		SET description = $1, mcp_upstream_url = $2, input_schema_json = $3
 		WHERE tenant_id = $4 AND tool_id = $5`,
-		description, mcpUpstreamURL, inputSchemaJSON, tenantID, toolID)
-	if err != nil {
+		description, mcpUpstreamURL, inputSchemaJSON, tenantID, toolID); err != nil {
 		return err
 	}
 
-	return nil
+	return s.bumpTenantConfigVersion(ctx, tenantID)
 }
 
 func (s *Store) UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error {
@@ -1153,11 +1154,24 @@ func (s *Store) UpdateRiskOverride(ctx context.Context, tenantID, actionType, ac
 		return err
 	}
 
-	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.action_risk_overrides (tenant_id, action_type, action_risk, updated_at)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (tenant_id, action_type) DO UPDATE SET action_risk = $3, updated_at = $4`,
-		tenantID, actionType, actionRisk, time.Now().UTC())
-	return err
+		tenantID, actionType, actionRisk, time.Now().UTC()); err != nil {
+		return err
+	}
+	return s.bumpTenantConfigVersion(ctx, tenantID)
+}
+
+func (s *Store) bumpTenantConfigVersion(ctx context.Context, tenantID string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.tenant_config
+		SET version = version + 1, updated_at = $2
+		WHERE tenant_id = $1`, tenantID, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	_, _ = result.RowsAffected()
+	return nil
 }
 
 func (s *Store) MarkBootstrapComplete(ctx context.Context) error {

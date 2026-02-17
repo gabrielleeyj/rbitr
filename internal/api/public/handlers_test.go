@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
+	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
@@ -900,6 +901,70 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 	err := deps.handleToolCall(ctx)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestGetToolCachedUsesTenantConfigVersion(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
+	storeMock.On("GetTool", context.Background(), "t1", "tool1").
+		Return(models.Tool{TenantID: "t1", ToolID: "tool1", BaseURL: "http://v1"}, nil).Once()
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 2}, nil).Once()
+	storeMock.On("GetTool", context.Background(), "t1", "tool1").
+		Return(models.Tool{TenantID: "t1", ToolID: "tool1", BaseURL: "http://v2"}, nil).Once()
+
+	deps := Dependencies{
+		Store:     storeMock,
+		Metrics:   newTestMetrics(),
+		ToolCache: cache.New[models.Tool](time.Minute),
+	}
+
+	toolV1, err := deps.getToolCached(context.Background(), "t1", "tool1")
+	require.NoError(t, err)
+	require.Equal(t, "http://v1", toolV1.BaseURL)
+
+	toolV1Cached, err := deps.getToolCached(context.Background(), "t1", "tool1")
+	require.NoError(t, err)
+	require.Equal(t, "http://v1", toolV1Cached.BaseURL)
+
+	toolV2, err := deps.getToolCached(context.Background(), "t1", "tool1")
+	require.NoError(t, err)
+	require.Equal(t, "http://v2", toolV2.BaseURL)
+}
+
+func TestGetRiskOverrideCachedUsesTenantConfigVersion(t *testing.T) {
+	storeMock := store.NewMockStoreAPI(t)
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
+	storeMock.On("GetRiskOverride", context.Background(), "t1", "DATA.EXPORT").
+		Return("HIGH", nil).Once()
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
+	storeMock.On("GetTenantConfig", context.Background(), "t1").
+		Return(models.TenantConfig{TenantID: "t1", Version: 2}, nil).Once()
+	storeMock.On("GetRiskOverride", context.Background(), "t1", "DATA.EXPORT").
+		Return("CRITICAL", nil).Once()
+
+	deps := Dependencies{
+		Store:             storeMock,
+		Metrics:           newTestMetrics(),
+		RiskOverrideCache: cache.New[string](time.Minute),
+	}
+
+	riskV1, err := deps.getRiskOverrideCached(context.Background(), "t1", "DATA.EXPORT")
+	require.NoError(t, err)
+	require.Equal(t, "HIGH", riskV1)
+
+	riskV1Cached, err := deps.getRiskOverrideCached(context.Background(), "t1", "DATA.EXPORT")
+	require.NoError(t, err)
+	require.Equal(t, "HIGH", riskV1Cached)
+
+	riskV2, err := deps.getRiskOverrideCached(context.Background(), "t1", "DATA.EXPORT")
+	require.NoError(t, err)
+	require.Equal(t, "CRITICAL", riskV2)
 }
 
 func assertEvidenceWhitelist(t *testing.T, body []byte) {

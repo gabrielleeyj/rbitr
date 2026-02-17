@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"net"
 	"net/http"
@@ -797,6 +798,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 func (d *Dependencies) getToolCached(ctx context.Context, tenantID, toolID string) (models.Tool, error) {
 	cacheKey := tenantID + ":" + toolID
 	if d.ToolCache != nil {
+		cacheKey = fmt.Sprintf("%s:v%d:%s", tenantID, d.tenantCacheVersion(ctx, tenantID), toolID)
 		if tool, ok := d.ToolCache.Get(cacheKey); ok {
 			d.recordCacheMetric("tool", true)
 			return tool, nil
@@ -816,6 +818,7 @@ func (d *Dependencies) getToolCached(ctx context.Context, tenantID, toolID strin
 func (d *Dependencies) getRiskOverrideCached(ctx context.Context, tenantID, actionType string) (string, error) {
 	cacheKey := tenantID + ":" + actionType
 	if d.RiskOverrideCache != nil {
+		cacheKey = fmt.Sprintf("%s:v%d:%s", tenantID, d.tenantCacheVersion(ctx, tenantID), actionType)
 		if risk, ok := d.RiskOverrideCache.Get(cacheKey); ok {
 			d.recordCacheMetric("risk_override", true)
 			return risk, nil
@@ -830,6 +833,17 @@ func (d *Dependencies) getRiskOverrideCached(ctx context.Context, tenantID, acti
 		d.RiskOverrideCache.Set(cacheKey, risk)
 	}
 	return risk, nil
+}
+
+func (d *Dependencies) tenantCacheVersion(ctx context.Context, tenantID string) int64 {
+	if d.Store == nil {
+		return 1
+	}
+	config, err := d.Store.GetTenantConfig(ctx, tenantID)
+	if err != nil || config.Version < 1 {
+		return 1
+	}
+	return config.Version
 }
 
 func (d *Dependencies) recordCacheMetric(cacheName string, hit bool) {
