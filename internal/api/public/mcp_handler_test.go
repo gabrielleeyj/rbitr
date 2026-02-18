@@ -84,7 +84,7 @@ func TestHandleMCP_Authentication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			tt.setupMock(mockStore)
 
 			deps := &Dependencies{
@@ -127,7 +127,7 @@ func TestHandleMCP_Authentication(t *testing.T) {
 }
 
 func TestHandleMCP_ValidRequest(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{
@@ -208,7 +208,7 @@ func TestHandleMCP_InvalidJSONRPC(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
@@ -287,7 +287,7 @@ func TestHandleMCP_MethodRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			tt.setupMock(mockStore)
@@ -402,7 +402,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			tt.setupMock(mockStore)
 
 			deps := &Dependencies{
@@ -449,7 +449,7 @@ func TestHandleMCP_ToolsList(t *testing.T) {
 }
 
 func TestHandleMCP_ToolsList_StoreError(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").
@@ -522,7 +522,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			mockStore.On("ListTools", mock.Anything, "t_demo").Maybe().Return([]models.Tool{}, nil)
@@ -570,7 +570,7 @@ func TestHandleMCP_RequestIDPreservation(t *testing.T) {
 }
 
 func TestHandleMCP_ToolsCall_ApprovalResubmitRequiresApprovalRequestID(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
@@ -664,7 +664,7 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 	}
 	expectedHash := utils.HashCanonical(&canonical)
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
@@ -767,7 +767,7 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 	}
 	expectedHash := utils.HashCanonical(&canonical)
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "jira").
@@ -833,7 +833,7 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 }
 
 func TestHandleMCP_NotificationWithoutIDReturns202(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("ListTools", mock.Anything, "t_demo").Return([]models.Tool{}, nil)
@@ -861,7 +861,7 @@ func TestHandleMCP_NotificationWithoutIDReturns202(t *testing.T) {
 }
 
 func TestHandleMCP_InitializeAndInitializedFlow(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
@@ -934,7 +934,7 @@ func TestHandleMCPStream_GetEndpoint(t *testing.T) {
 		mcpStreamMaxBytes = originalMaxBytes
 	})
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
@@ -974,7 +974,7 @@ func TestHandleMCPStream_ByteLimit(t *testing.T) {
 		mcpStreamMaxBytes = originalMaxBytes
 	})
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 
@@ -1020,7 +1020,7 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1095,7 +1095,7 @@ func TestHandleMCP_PassThrough_UsesConfiguredUpstreamTool(t *testing.T) {
 	}))
 	defer fallbackUpstream.Close()
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1157,7 +1157,7 @@ func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1211,7 +1211,7 @@ func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1255,7 +1255,7 @@ func TestHandleMCP_PassThrough_NotificationNoResponse(t *testing.T) {
 }
 
 func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1300,7 +1300,7 @@ func TestHandleMCP_PassThrough_SkipsNonMCPTools(t *testing.T) {
 }
 
 func TestHandleMCP_PassThrough_InvalidConfiguredToolReturnsInternalError(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTenantConfig", mock.Anything, "t_demo").
@@ -1344,7 +1344,7 @@ func TestHandleMCP_PassThrough_InvalidConfiguredToolReturnsInternalError(t *test
 }
 
 func TestHandleMCP_ToolsCallRateLimitExceeded(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
@@ -1422,7 +1422,7 @@ func TestHandleMCP_ToolsCallRateLimitExceeded(t *testing.T) {
 }
 
 func TestHandleMCP_ToolsCallArgConstraintDenied(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
@@ -1497,7 +1497,7 @@ func TestHandleMCP_ToolsCallArgConstraintDenied(t *testing.T) {
 }
 
 func TestHandleMCP_ToolsCallPolicyInputStripsInternalArgs(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
@@ -1559,7 +1559,7 @@ func TestHandleMCP_ToolsCallPolicyInputStripsInternalArgs(t *testing.T) {
 }
 
 func TestHandleMCP_ToolsCallDeniedIncludesMatchedRules(t *testing.T) {
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").
@@ -1637,7 +1637,7 @@ func TestHandleMCP_ToolsCallDenyShadowModeExecutes(t *testing.T) {
 	}))
 	defer upstreamServer.Close()
 
-	mockStore := &store.MockStoreAPI{}
+	mockStore := newPublicStoreMock(t)
 	mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 		Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 	mockStore.On("GetTool", mock.Anything, "t_demo", "mock_internal").

@@ -46,7 +46,7 @@ type policyRateLimitOverride struct {
 }
 
 func (d *Dependencies) enforceRateLimit(ctx context.Context, tenantID, agentID, toolID, actionType string, constraints map[string]any) (*rateLimitViolation, error) {
-	if !d.Config.FeatureRateLimiting {
+	if !d.featureRateLimitingEnabled(ctx) {
 		return nil, nil
 	}
 	if d.Store == nil {

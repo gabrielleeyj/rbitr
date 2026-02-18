@@ -10,7 +10,6 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/models"
-	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
 func TestStatelessDesign(t *testing.T) {
@@ -33,7 +32,7 @@ func TestStatelessDesign(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			storeMock := store.NewMockStoreAPI(t)
+			storeMock := newPublicStoreMock(t)
 
 			// Create two independent Dependencies (simulating two replicas)
 			deps1 := &Dependencies{

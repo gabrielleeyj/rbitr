@@ -123,6 +123,214 @@ func TestStoreGetDefaultApprovalTTLSecondsInvalid(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreSetDisableXTenantKey(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs("disable_x_tenant_key", "true", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.SetDisableXTenantKey(context.Background(), true))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDisableXTenantKey(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("disable_x_tenant_key").
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
+
+	st := New(db)
+	value, err := st.GetDisableXTenantKey(context.Background())
+	require.NoError(t, err)
+	require.True(t, value)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDisableXTenantKeyNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("disable_x_tenant_key").
+		WillReturnError(sql.ErrNoRows)
+
+	st := New(db)
+	_, err = st.GetDisableXTenantKey(context.Background())
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetFeatureRateLimiting(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs("feature_rate_limiting", "true", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.SetFeatureRateLimiting(context.Background(), true))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetFeatureRateLimiting(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("feature_rate_limiting").
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
+
+	st := New(db)
+	value, err := st.GetFeatureRateLimiting(context.Background())
+	require.NoError(t, err)
+	require.False(t, value)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetDefaultRateLimitConfig(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	upsert := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+
+	mock.ExpectBegin()
+	mock.ExpectExec(upsert).
+		WithArgs("default_rate_limit_per_minute", "120", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(upsert).
+		WithArgs("default_rate_limit_per_day", "20000", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(upsert).
+		WithArgs("default_rate_limit_scope", "tenant", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	st := New(db)
+	require.NoError(t, st.SetDefaultRateLimitConfig(context.Background(), 120, 20000, "tenant"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetDefaultRateLimitConfigInvalid(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	st := New(db)
+	require.Error(t, st.SetDefaultRateLimitConfig(context.Background(), 0, 20000, "tenant"))
+	require.Error(t, st.SetDefaultRateLimitConfig(context.Background(), 120, 0, "tenant"))
+	require.Error(t, st.SetDefaultRateLimitConfig(context.Background(), 120, 20000, "invalid"))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDefaultRateLimitConfig(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT
+			s_min.value,
+			s_day.value,
+			s_scope.value
+		FROM (SELECT 1) seed
+		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $1
+		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $2
+		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $3`)
+	mock.ExpectQuery(query).
+		WithArgs("default_rate_limit_per_minute", "default_rate_limit_per_day", "default_rate_limit_scope").
+		WillReturnRows(sqlmock.NewRows([]string{"value", "value", "value"}).AddRow("90", "15000", "tenant_tool"))
+
+	st := New(db)
+	config, err := st.GetDefaultRateLimitConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(90), config.PerMinute)
+	require.Equal(t, int64(15000), config.PerDay)
+	require.Equal(t, "tenant_tool", config.Scope)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetDefaultRateLimitConfigFallback(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`SELECT
+			s_min.value,
+			s_day.value,
+			s_scope.value
+		FROM (SELECT 1) seed
+		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $1
+		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $2
+		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $3`)
+	mock.ExpectQuery(query).
+		WithArgs("default_rate_limit_per_minute", "default_rate_limit_per_day", "default_rate_limit_scope").
+		WillReturnRows(sqlmock.NewRows([]string{"value", "value", "value"}).AddRow(nil, nil, nil))
+
+	st := New(db)
+	config, err := st.GetDefaultRateLimitConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, int64(60), config.PerMinute)
+	require.Equal(t, int64(10000), config.PerDay)
+	require.Equal(t, "tenant_agent_tool", config.Scope)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreSetFeatureArgConstraints(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	query := regexp.QuoteMeta(`INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`)
+	mock.ExpectExec(query).
+		WithArgs("feature_arg_constraints", "true", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	require.NoError(t, st.SetFeatureArgConstraints(context.Background(), true))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreGetFeatureArgConstraints(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
+		WithArgs("feature_arg_constraints").
+		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("true"))
+
+	st := New(db)
+	value, err := st.GetFeatureArgConstraints(context.Background())
+	require.NoError(t, err)
+	require.True(t, value)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreGetAdminKeyByHash(t *testing.T) {
 	cases := []struct {
 		name      string

@@ -819,11 +819,18 @@ func TestHandleSettingsGet(t *testing.T) {
 		adminKey                string
 		scopes                  []string
 		tenantID                string
+		depsConfig              config.Config
 		storeSetup              func(*store.MockStoreAPI)
 		expectedCode            int
 		expectedErr             bool
 		expectMode              string
 		expectPassThroughToolID string
+		expectDisableXTenantKey bool
+		expectRateLimiting      bool
+		expectArgConstraints    bool
+		expectRateLimitPerMin   int64
+		expectRateLimitPerDay   int64
+		expectRateLimitScope    string
 	}{
 		{
 			name:         "unauthorized",
@@ -838,9 +845,52 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
 				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
+				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
+					PerMinute: 60,
+					PerDay:    10000,
+					Scope:     "tenant_agent_tool",
+				}, nil)
+				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
 			},
-			expectedCode: http.StatusOK,
-			expectMode:   "enforce",
+			expectedCode:          http.StatusOK,
+			expectMode:            "enforce",
+			expectRateLimitPerMin: 60,
+			expectRateLimitPerDay: 10000,
+			expectRateLimitScope:  "tenant_agent_tool",
+		},
+		{
+			name:     "success with runtime feature flags",
+			adminKey: "key",
+			scopes:   []string{"admin:read"},
+			depsConfig: config.Config{
+				DisableXTenantKey:     true,
+				FeatureRateLimiting:   true,
+				FeatureArgConstraints: true,
+				FeatureShadowMode:     true,
+			},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
+				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
+				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
+				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
+					PerMinute: 120,
+					PerDay:    15000,
+					Scope:     "tenant_tool",
+				}, nil)
+				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
+			},
+			expectedCode:            http.StatusOK,
+			expectMode:              "enforce",
+			expectDisableXTenantKey: true,
+			expectRateLimiting:      true,
+			expectArgConstraints:    true,
+			expectRateLimitPerMin:   120,
+			expectRateLimitPerDay:   15000,
+			expectRateLimitScope:    "tenant_tool",
 		},
 		{
 			name:     "success with tenant settings",
@@ -851,6 +901,14 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetAdminWriteLock", context.Background()).Return(false, nil)
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
 				storeMock.On("GetAuditRetentionDays", context.Background()).Return(365, nil)
+				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
+					PerMinute: 75,
+					PerDay:    12000,
+					Scope:     "tenant_agent",
+				}, nil)
+				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
 					TenantID:                     "t1",
 					ActivePolicyVersion:          "p1",
@@ -861,6 +919,9 @@ func TestHandleSettingsGet(t *testing.T) {
 			expectedCode:            http.StatusOK,
 			expectMode:              "shadow",
 			expectPassThroughToolID: "mcp_upstream",
+			expectRateLimitPerMin:   75,
+			expectRateLimitPerDay:   12000,
+			expectRateLimitScope:    "tenant_agent",
 		},
 	}
 
@@ -883,7 +944,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
 			}
 
-			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: tc.depsConfig}
 			err := deps.handleSettingsGet(ctx)
 			if tc.expectedErr {
 				require.Error(t, err)
@@ -896,6 +957,12 @@ func TestHandleSettingsGet(t *testing.T) {
 				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
 				require.Equal(t, tc.expectMode, response.EnforcementMode)
 				require.Equal(t, tc.expectPassThroughToolID, response.MCPPassthroughUpstreamToolID)
+				require.Equal(t, tc.expectDisableXTenantKey, response.DisableXTenantKey)
+				require.Equal(t, tc.expectRateLimiting, response.FeatureRateLimiting)
+				require.Equal(t, tc.expectArgConstraints, response.FeatureArgConstraints)
+				require.Equal(t, tc.expectRateLimitPerMin, response.DefaultRateLimitPerMinute)
+				require.Equal(t, tc.expectRateLimitPerDay, response.DefaultRateLimitPerDay)
+				require.Equal(t, tc.expectRateLimitScope, response.DefaultRateLimitScope)
 			}
 		})
 	}
@@ -1173,6 +1240,89 @@ func TestHandleDefaultApprovalTTLUpdate(t *testing.T) {
 	}
 }
 
+func TestHandleDefaultRateLimitUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      DefaultRateLimitRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      DefaultRateLimitRequest{PerMinute: 60, PerDay: 10000, Scope: "tenant_agent_tool"},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      DefaultRateLimitRequest{PerMinute: 0, PerDay: 10000, Scope: "tenant_agent_tool"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "invalid scope",
+			adminKey:     "key",
+			scopes:       []string{"admin:write"},
+			payload:      DefaultRateLimitRequest{PerMinute: 60, PerDay: 10000, Scope: "invalid"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  DefaultRateLimitRequest{PerMinute: 120, PerDay: 20000, Scope: "tenant"},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
+					PerMinute: 60,
+					PerDay:    10000,
+					Scope:     "tenant_agent_tool",
+				}, nil)
+				storeMock.On("SetDefaultRateLimitConfig", context.Background(), int64(120), int64(20000), "tenant").Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleDefaultRateLimitUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
 func TestHandleAuditRetentionUpdate(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -1235,6 +1385,201 @@ func TestHandleAuditRetentionUpdate(t *testing.T) {
 
 			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
 			err := deps.handleAuditRetentionUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleDisableXTenantKeyUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      BooleanSettingRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      BooleanSettingRequest{Enabled: true},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  BooleanSettingRequest{Enabled: true},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, nil)
+				storeMock.On("SetDisableXTenantKey", context.Background(), true).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleDisableXTenantKeyUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleFeatureRateLimitingUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      BooleanSettingRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      BooleanSettingRequest{Enabled: true},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  BooleanSettingRequest{Enabled: true},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, nil)
+				storeMock.On("SetFeatureRateLimiting", context.Background(), true).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleFeatureRateLimitingUpdate(ctx)
+			if tc.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleFeatureArgConstraintsUpdate(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		payload      BooleanSettingRequest
+		storeSetup   func(*store.MockStoreAPI)
+		expectedCode int
+		expectedErr  bool
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  true,
+		},
+		{
+			name:         "forbidden",
+			adminKey:     "key",
+			scopes:       []string{"admin:read"},
+			payload:      BooleanSettingRequest{Enabled: true},
+			expectedCode: http.StatusForbidden,
+			expectedErr:  true,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			payload:  BooleanSettingRequest{Enabled: true},
+			storeSetup: func(storeMock *store.MockStoreAPI) {
+				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, nil)
+				storeMock.On("SetFeatureArgConstraints", context.Background(), true).Return(nil)
+				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
+			},
+			expectedCode: http.StatusNoContent,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storeMock := store.NewMockStoreAPI(t)
+			if tc.adminKey != "" {
+				storeMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+			if tc.storeSetup != nil {
+				tc.storeSetup(storeMock)
+			}
+
+			ctx, req, rec := testhelpers.MakeRequest(http.MethodPut, nil, testhelpers.MakeBody(tc.payload))
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AuthorizationHeader, "Bearer "+tc.adminKey)
+			}
+
+			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
+			err := deps.handleFeatureArgConstraintsUpdate(ctx)
 			if tc.expectedErr {
 				require.Error(t, err)
 			} else {

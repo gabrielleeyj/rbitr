@@ -11,8 +11,12 @@ import {
   listTools,
   setAdminWriteLock,
   setAuditRetentionDays,
+  setDisableXTenantKey as updateDisableXTenantKey,
   setDefaultApprovalTTL,
+  setDefaultRateLimitConfig,
   setEnforcementMode,
+  setFeatureArgConstraints as updateFeatureArgConstraints,
+  setFeatureRateLimiting as updateFeatureRateLimiting,
   setMCPPassthroughUpstreamTool,
   type ToolConfig,
 } from "@/lib/api";
@@ -21,6 +25,8 @@ import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
 import { scopeAuditRead, scopeSettingsRead, scopeSettingsWrite, scopeToolsRead } from "@/lib/scopes";
 
+type RateLimitScope = "tenant" | "tenant_agent" | "tenant_tool" | "tenant_agent_tool";
+
 export function SettingsPage() {
   const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
@@ -28,6 +34,12 @@ export function SettingsPage() {
   const [defaultTTLMinutes, setDefaultTTLMinutes] = useState(15);
   const [auditRetentionDays, setAuditRetentionDaysState] = useState(365);
   const [enforcementMode, setEnforcementModeState] = useState<"enforce" | "shadow">("enforce");
+  const [disableXTenantKey, setDisableXTenantKey] = useState(false);
+  const [featureRateLimiting, setFeatureRateLimiting] = useState(false);
+  const [featureArgConstraints, setFeatureArgConstraints] = useState(false);
+  const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60);
+  const [rateLimitPerDay, setRateLimitPerDay] = useState(10000);
+  const [rateLimitScope, setRateLimitScope] = useState<RateLimitScope>("tenant_agent_tool");
   const [mcpPassthroughUpstreamToolID, setMCPPassthroughUpstreamToolID] = useState("");
   const [mcpUpstreamTools, setMCPUpstreamTools] = useState<ToolConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +71,22 @@ export function SettingsPage() {
         }
         if (data.audit_retention_days) {
           setAuditRetentionDaysState(data.audit_retention_days);
+        }
+        setDisableXTenantKey(Boolean(data.disable_x_tenant_key));
+        setFeatureRateLimiting(Boolean(data.feature_rate_limiting));
+        setFeatureArgConstraints(Boolean(data.feature_arg_constraints));
+        setRateLimitPerMinute(Number(data.default_rate_limit_per_minute) > 0 ? Number(data.default_rate_limit_per_minute) : 60);
+        setRateLimitPerDay(Number(data.default_rate_limit_per_day) > 0 ? Number(data.default_rate_limit_per_day) : 10000);
+        const nextScope = data.default_rate_limit_scope;
+        if (
+          nextScope === "tenant" ||
+          nextScope === "tenant_agent" ||
+          nextScope === "tenant_tool" ||
+          nextScope === "tenant_agent_tool"
+        ) {
+          setRateLimitScope(nextScope);
+        } else {
+          setRateLimitScope("tenant_agent_tool");
         }
         if (data.enforcement_mode === "shadow") {
           setEnforcementModeState("shadow");
@@ -157,6 +185,78 @@ export function SettingsPage() {
     }
   };
 
+  const handleDisableXTenantKeyToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setDisableXTenantKey(value);
+    try {
+      await updateDisableXTenantKey({ adminKey }, value);
+      toast.success("Disable X-Tenant-Key fallback updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update X-Tenant-Key fallback.");
+      setDisableXTenantKey(!value);
+    }
+  };
+
+  const handleFeatureRateLimitingToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setFeatureRateLimiting(value);
+    try {
+      await updateFeatureRateLimiting({ adminKey }, value);
+      toast.success("Rate limiting feature updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update rate limiting feature.");
+      setFeatureRateLimiting(!value);
+    }
+  };
+
+  const handleFeatureArgConstraintsToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setFeatureArgConstraints(value);
+    try {
+      await updateFeatureArgConstraints({ adminKey }, value);
+      toast.success("Argument constraints feature updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update argument constraints feature.");
+      setFeatureArgConstraints(!value);
+    }
+  };
+
+  const rateLimitValidationError = (() => {
+    if (!Number.isInteger(rateLimitPerMinute) || rateLimitPerMinute <= 0) {
+      return "Per-minute limit must be a positive integer.";
+    }
+    if (!Number.isInteger(rateLimitPerDay) || rateLimitPerDay <= 0) {
+      return "Per-day limit must be a positive integer.";
+    }
+    if (rateLimitPerDay < rateLimitPerMinute) {
+      return "Per-day limit must be greater than or equal to per-minute limit.";
+    }
+    return "";
+  })();
+
+  const handleRateLimitConfigSave = async () => {
+    if (!adminKey || !canWriteSettings || rateLimitValidationError) return;
+    setActionError("");
+    try {
+      await setDefaultRateLimitConfig(
+        { adminKey },
+        {
+          per_minute: rateLimitPerMinute,
+          per_day: rateLimitPerDay,
+          scope: rateLimitScope,
+        }
+      );
+      toast.success("Default rate limit config updated", {
+        description: `${rateLimitPerMinute}/min, ${rateLimitPerDay}/day, scope ${rateLimitScope}`,
+      });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update default rate limit config.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -226,6 +326,122 @@ export function SettingsPage() {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Gateway runtime controls</CardTitle>
+          <CardDescription>
+            System-wide controls for tenant auth and policy enforcement guards.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!canReadSettings ? (
+            <Alert>
+              <AlertDescription>Missing scope: {scopeSettingsRead}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="disable-x-tenant-key" className="text-sm">
+              Disable X-Tenant-Key fallback
+            </Label>
+            <Switch
+              id="disable-x-tenant-key"
+              checked={disableXTenantKey}
+              onCheckedChange={handleDisableXTenantKeyToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="feature-rate-limiting" className="text-sm">
+              Feature: Rate limiting
+            </Label>
+            <Switch
+              id="feature-rate-limiting"
+              checked={featureRateLimiting}
+              onCheckedChange={handleFeatureRateLimitingToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="feature-arg-constraints" className="text-sm">
+              Feature: Argument constraints
+            </Label>
+            <Switch
+              id="feature-arg-constraints"
+              checked={featureArgConstraints}
+              onCheckedChange={handleFeatureArgConstraintsToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          {featureRateLimiting ? (
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <div className="text-sm font-medium">Default rate limits</div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1">
+                  <Label htmlFor="rate-limit-per-minute" className="text-xs text-muted-foreground">
+                    Per minute
+                  </Label>
+                  <input
+                    id="rate-limit-per-minute"
+                    type="number"
+                    min={1}
+                    value={rateLimitPerMinute}
+                    onChange={(event) => setRateLimitPerMinute(Number(event.target.value) || 0)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    disabled={loading || !canWriteSettings}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rate-limit-per-day" className="text-xs text-muted-foreground">
+                    Per day
+                  </Label>
+                  <input
+                    id="rate-limit-per-day"
+                    type="number"
+                    min={1}
+                    value={rateLimitPerDay}
+                    onChange={(event) => setRateLimitPerDay(Number(event.target.value) || 0)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    disabled={loading || !canWriteSettings}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="rate-limit-scope" className="text-xs text-muted-foreground">
+                    Scope
+                  </Label>
+                  <select
+                    id="rate-limit-scope"
+                    value={rateLimitScope}
+                    onChange={(event) => setRateLimitScope(event.target.value as RateLimitScope)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    disabled={loading || !canWriteSettings}
+                  >
+                    <option value="tenant_agent_tool">Tenant + Agent + Tool</option>
+                    <option value="tenant">Tenant</option>
+                    <option value="tenant_agent">Tenant + Agent</option>
+                    <option value="tenant_tool">Tenant + Tool</option>
+                  </select>
+                </div>
+              </div>
+              {rateLimitValidationError ? (
+                <div className="text-xs text-destructive">{rateLimitValidationError}</div>
+              ) : (
+                <div className="text-xs text-muted-foreground">
+                  Applies to default enforcement when policy-level overrides are not provided.
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleRateLimitConfigSave}
+                  disabled={loading || !canWriteSettings || Boolean(rateLimitValidationError)}
+                >
+                  Save default rate limits
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       <Card>

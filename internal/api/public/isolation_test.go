@@ -11,7 +11,6 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/models"
-	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
 )
 
@@ -41,7 +40,7 @@ func TestCrossTenantIsolation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: tc.authTenant, Name: "Tenant A", Enabled: true}, nil)
 			if tc.authTenant == tc.pathTenant {
@@ -97,7 +96,7 @@ func TestCrossTenantMCPIsolation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockStore := &store.MockStoreAPI{}
+			mockStore := newPublicStoreMock(t)
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: tc.authTenant, Name: "Test", Enabled: true}, nil)
 			if tc.authTenant == tc.pathTenant {

@@ -27,11 +27,17 @@ const (
 	adminWriteLockKey            = "admin_write_lock"
 	defaultApprovalTTLSecondsKey = "default_approval_ttl_seconds"
 	auditRetentionDaysKey        = "audit_retention_days"
+	disableXTenantKeyKey         = "disable_x_tenant_key"
+	featureRateLimitingKey       = "feature_rate_limiting"
+	featureArgConstraintsKey     = "feature_arg_constraints"
 	defaultRateLimitPerMinuteKey = "default_rate_limit_per_minute"
 	defaultRateLimitPerDayKey    = "default_rate_limit_per_day"
 	defaultRateLimitScopeKey     = "default_rate_limit_scope"
 	settingTrue                  = "true"
 	settingFalse                 = "false"
+	defaultRateLimitPerMinuteVal = int64(60)
+	defaultRateLimitPerDayVal    = int64(10000)
+	defaultRateLimitScopeVal     = "tenant_agent_tool"
 )
 
 type StoreAPI interface {
@@ -81,6 +87,14 @@ type StoreAPI interface {
 	GetDefaultApprovalTTLSeconds(ctx context.Context) (int, error)
 	SetAuditRetentionDays(ctx context.Context, days int) error
 	GetAuditRetentionDays(ctx context.Context) (int, error)
+	SetDisableXTenantKey(ctx context.Context, disabled bool) error
+	GetDisableXTenantKey(ctx context.Context) (bool, error)
+	SetFeatureRateLimiting(ctx context.Context, enabled bool) error
+	GetFeatureRateLimiting(ctx context.Context) (bool, error)
+	SetFeatureArgConstraints(ctx context.Context, enabled bool) error
+	GetFeatureArgConstraints(ctx context.Context) (bool, error)
+	SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error
+	GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error)
 	SetTenantEnforcementMode(ctx context.Context, tenantID, enforcementMode string) error
 	SetTenantMCPPassthroughUpstreamToolID(ctx context.Context, tenantID, toolID string) error
 	IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error)
@@ -353,16 +367,10 @@ func (s *Store) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string
 		return models.RateLimitConfig{}, err
 	}
 
-	const (
-		defaultPerMinute int64  = 60
-		defaultPerDay    int64  = 10000
-		defaultScope     string = "tenant_agent_tool"
-	)
-
 	config := models.RateLimitConfig{
-		PerMinute: defaultPerMinute,
-		PerDay:    defaultPerDay,
-		Scope:     defaultScope,
+		PerMinute: defaultRateLimitPerMinuteVal,
+		PerDay:    defaultRateLimitPerDayVal,
+		Scope:     defaultRateLimitScopeVal,
 	}
 
 	if parsed, ok := parseOptionalPositiveInt64(systemMinute); ok {
@@ -1298,6 +1306,137 @@ func (s *Store) GetAuditRetentionDays(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return parsed, nil
+}
+
+func (s *Store) SetDisableXTenantKey(ctx context.Context, disabled bool) error {
+	return s.setSystemSettingBool(ctx, disableXTenantKeyKey, disabled)
+}
+
+func (s *Store) GetDisableXTenantKey(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, disableXTenantKeyKey)
+}
+
+func (s *Store) SetFeatureRateLimiting(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, featureRateLimitingKey, enabled)
+}
+
+func (s *Store) GetFeatureRateLimiting(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, featureRateLimitingKey)
+}
+
+func (s *Store) SetFeatureArgConstraints(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, featureArgConstraintsKey, enabled)
+}
+
+func (s *Store) GetFeatureArgConstraints(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, featureArgConstraintsKey)
+}
+
+func (s *Store) SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error {
+	if perMinute <= 0 || perDay <= 0 {
+		return fmt.Errorf("per_minute and per_day must be > 0")
+	}
+	if scope = strings.TrimSpace(scope); !isRateLimitScope(scope) {
+		return fmt.Errorf("invalid rate limit scope")
+	}
+
+	now := time.Now().UTC()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	upsert := `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`
+
+	if _, err = tx.ExecContext(ctx, upsert, defaultRateLimitPerMinuteKey, strconv.FormatInt(perMinute, 10), now); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, upsert, defaultRateLimitPerDayKey, strconv.FormatInt(perDay, 10), now); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, upsert, defaultRateLimitScopeKey, scope, now); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
+}
+
+func (s *Store) GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT
+			s_min.value,
+			s_day.value,
+			s_scope.value
+		FROM (SELECT 1) seed
+		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $1
+		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $2
+		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $3`,
+		defaultRateLimitPerMinuteKey,
+		defaultRateLimitPerDayKey,
+		defaultRateLimitScopeKey,
+	)
+
+	var (
+		minute sql.NullString
+		day    sql.NullString
+		scope  sql.NullString
+	)
+	if err := row.Scan(&minute, &day, &scope); err != nil {
+		return models.RateLimitConfig{}, err
+	}
+
+	config := models.RateLimitConfig{
+		PerMinute: defaultRateLimitPerMinuteVal,
+		PerDay:    defaultRateLimitPerDayVal,
+		Scope:     defaultRateLimitScopeVal,
+	}
+	if parsed, ok := parseOptionalPositiveInt64(minute); ok {
+		config.PerMinute = parsed
+	}
+	if parsed, ok := parseOptionalPositiveInt64(day); ok {
+		config.PerDay = parsed
+	}
+	if parsed, ok := parseOptionalScope(scope); ok {
+		config.Scope = parsed
+	}
+
+	return config, nil
+}
+
+func (s *Store) setSystemSettingBool(ctx context.Context, key string, enabled bool) error {
+	value := settingFalse
+	if enabled {
+		value = settingTrue
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+		key,
+		value,
+		time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *Store) getSystemSettingBool(ctx context.Context, key string) (bool, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, key)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, err
+	}
+	return value == settingTrue, nil
 }
 
 func (s *Store) IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error) {
@@ -2347,11 +2486,18 @@ func parseOptionalScope(value sql.NullString) (string, bool) {
 		return "", false
 	}
 	scope := strings.TrimSpace(value.String)
-	switch scope {
-	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+	if isRateLimitScope(scope) {
 		return scope, true
+	}
+	return "", false
+}
+
+func isRateLimitScope(scope string) bool {
+	switch strings.TrimSpace(scope) {
+	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+		return true
 	default:
-		return "", false
+		return false
 	}
 }
 

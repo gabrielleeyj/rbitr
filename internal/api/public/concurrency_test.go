@@ -87,7 +87,7 @@ func TestConcurrentApprovalExecution(t *testing.T) {
 			var executionCount atomic.Int32
 			var callCount atomic.Int32
 
-			storeMock := store.NewMockStoreAPI(t)
+			storeMock := newPublicStoreMock(t)
 			storeMock.On("GetTenantByKeyHash", mock.Anything, mock.Anything).Return(tenant, nil)
 			storeMock.On("GetApprovalForExecution", mock.Anything, "t1", "ar1").Return(approval, nil)
 			storeMock.On("GetTool", mock.Anything, "t1", "mock_internal").Return(tool, nil)
@@ -181,7 +181,7 @@ func TestApprovalDoubleExecutionReturnsConflict(t *testing.T) {
 	}
 	requestHash := utils.HashCanonical(&canonical)
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", mock.Anything, mock.Anything).Return(tenant, nil)
 	storeMock.On("GetApprovalForExecution", mock.Anything, "t1", "ar1").Return(models.ApprovalRequest{
 		ApprovalRequestID: "ar1",

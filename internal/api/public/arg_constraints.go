@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"reflect"
@@ -52,8 +53,8 @@ type argConstraintViolation struct {
 	Failures   []argConstraintFailure
 }
 
-func (d *Dependencies) enforceArgumentConstraints(constraints map[string]any, arguments any) *argConstraintViolation {
-	if !d.Config.FeatureArgConstraints {
+func (d *Dependencies) enforceArgumentConstraints(ctx context.Context, constraints map[string]any, arguments any) *argConstraintViolation {
+	if !d.featureArgConstraintsEnabled(ctx) {
 		return nil
 	}
 

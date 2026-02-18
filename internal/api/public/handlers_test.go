@@ -193,7 +193,7 @@ func TestHandleToolCall(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			storeMock := store.NewMockStoreAPI(t)
+			storeMock := newPublicStoreMock(t)
 			policyMock := policy.NewMockEvaluatorAPI(t)
 			connectorMock := connector.NewMockConnector(t)
 			var storeAPI store.StoreAPI = storeMock
@@ -245,7 +245,7 @@ func TestHandleToolCall_DenyShadowModeExecutes(t *testing.T) {
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 	tool := models.Tool{ToolID: "mock_internal", TenantID: "t1", BaseURL: "http://example", AuthType: "api_key", AuthValue: "key"}
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	policyMock := policy.NewMockEvaluatorAPI(t)
 	connectorMock := connector.NewMockConnector(t)
 
@@ -317,7 +317,7 @@ func TestHandleToolCall_DenyShadowModeExecutes(t *testing.T) {
 func TestHandleToolCall_RequireApprovalStillEnforcedInShadowMode(t *testing.T) {
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	policyMock := policy.NewMockEvaluatorAPI(t)
 	connectorMock := connector.NewMockConnector(t)
 
@@ -435,7 +435,7 @@ func TestHandleEvidence(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			storeMock := store.NewMockStoreAPI(t)
+			storeMock := newPublicStoreMock(t)
 			var storeAPI store.StoreAPI = storeMock
 			deps := Dependencies{
 				Store:   storeAPI,
@@ -466,7 +466,7 @@ func TestHandleEvidence(t *testing.T) {
 }
 
 func TestHandleEvidenceTenantAuthBearerPreferred(t *testing.T) {
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), utils.HashString("bearer_key")).
 		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 	storeMock.On("ListEvidence", context.Background(), "t1", 50).
@@ -494,7 +494,7 @@ func TestHandleEvidenceTenantAuthBearerPreferred(t *testing.T) {
 }
 
 func TestHandleEvidenceTenantAuthFallbackSetsDeprecationHeaders(t *testing.T) {
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), utils.HashString("legacy_key")).
 		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 	storeMock.On("ListEvidence", context.Background(), "t1", 50).
@@ -523,7 +523,7 @@ func TestHandleEvidenceTenantAuthFallbackSetsDeprecationHeaders(t *testing.T) {
 
 func TestHandleEvidenceTenantAuthFallbackDisabled(t *testing.T) {
 	deps := Dependencies{
-		Store:   store.NewMockStoreAPI(t),
+		Store:   newPublicStoreMock(t),
 		Metrics: newTestMetrics(),
 		Config:  config.Config{BodyLimitSize: 256 * 1024, DisableXTenantKey: true},
 	}
@@ -542,7 +542,7 @@ func TestHandleEvidenceTenantAuthFallbackDisabled(t *testing.T) {
 }
 
 func TestHandleEvidenceIncludesApprovalMetadata(t *testing.T) {
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).
 		Return(models.Tenant{TenantID: "t1", Enabled: true}, nil)
 	storeMock.On("ListEvidence", context.Background(), "t1", 50).
@@ -670,7 +670,7 @@ func TestHandleToolCallClassification(t *testing.T) {
 func TestHandleToolCallRateLimitExceeded(t *testing.T) {
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
 		Return("", store.ErrNotFound)
@@ -754,7 +754,7 @@ func TestHandleToolCallRateLimitExceeded(t *testing.T) {
 func TestHandleToolCallArgConstraintDenied(t *testing.T) {
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
 		Return("", store.ErrNotFound)
@@ -836,7 +836,7 @@ func TestHandleToolCallArgConstraintDenied(t *testing.T) {
 func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
 
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
 		Return("", store.ErrNotFound)
@@ -907,7 +907,7 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 }
 
 func TestGetToolCachedUsesTenantConfigVersion(t *testing.T) {
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantConfig", context.Background(), "t1").
 		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
 	storeMock.On("GetTool", context.Background(), "t1", "tool1").
@@ -939,7 +939,7 @@ func TestGetToolCachedUsesTenantConfigVersion(t *testing.T) {
 }
 
 func TestGetRiskOverrideCachedUsesTenantConfigVersion(t *testing.T) {
-	storeMock := store.NewMockStoreAPI(t)
+	storeMock := newPublicStoreMock(t)
 	storeMock.On("GetTenantConfig", context.Background(), "t1").
 		Return(models.TenantConfig{TenantID: "t1", Version: 1}, nil).Once()
 	storeMock.On("GetRiskOverride", context.Background(), "t1", "DATA.EXPORT").

@@ -30,7 +30,7 @@ func TestEnforceArgumentConstraints_DenyRule(t *testing.T) {
 		},
 	}
 
-	violation := deps.enforceArgumentConstraints(constraints, arguments)
+	violation := deps.enforceArgumentConstraints(t.Context(), constraints, arguments)
 	if violation == nil {
 		t.Fatalf("expected violation")
 	}
@@ -63,7 +63,7 @@ func TestEnforceArgumentConstraints_AllowRulesNotAllowed(t *testing.T) {
 	}
 	arguments := map[string]any{"branch": "feature/foo"}
 
-	violation := deps.enforceArgumentConstraints(constraints, arguments)
+	violation := deps.enforceArgumentConstraints(t.Context(), constraints, arguments)
 	if violation == nil {
 		t.Fatalf("expected violation")
 	}
@@ -96,7 +96,7 @@ func TestEnforceArgumentConstraints_AllowRulesMatch(t *testing.T) {
 		"branch": "main",
 	}
 
-	violation := deps.enforceArgumentConstraints(constraints, arguments)
+	violation := deps.enforceArgumentConstraints(t.Context(), constraints, arguments)
 	if violation != nil {
 		t.Fatalf("expected no violation, got %+v", violation)
 	}
@@ -128,7 +128,7 @@ func TestEnforceArgumentConstraints_JSONSchema(t *testing.T) {
 		},
 	}
 
-	violation := deps.enforceArgumentConstraints(constraints, arguments)
+	violation := deps.enforceArgumentConstraints(t.Context(), constraints, arguments)
 	if violation != nil {
 		t.Fatalf("expected no violation")
 	}

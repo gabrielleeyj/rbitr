@@ -345,7 +345,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		})
 	}
 
-	argConstraintViolation := d.enforceArgumentConstraints(decisionResult.Constraints, parseRESTArguments(bodyBytes))
+	argConstraintViolation := d.enforceArgumentConstraints(c.Request().Context(), decisionResult.Constraints, parseRESTArguments(bodyBytes))
 	if argConstraintViolation != nil {
 		c.Set(telemetry.CtxDecision, decisionDeny)
 
@@ -1048,7 +1048,7 @@ func (d *Dependencies) emitNotification(c *echo.Context, tenantID, eventType, se
 
 func (d *Dependencies) authenticateTenantRequest(c *echo.Context) (models.Tenant, string, error) {
 	agentID := c.Request().Header.Get(auth.AgentIDHeader)
-	tenantKey, usedFallback := auth.TenantKeyFromRequest(c.Request(), d.Config.DisableXTenantKey)
+	tenantKey, usedFallback := auth.TenantKeyFromRequest(c.Request(), d.disableXTenantKeyEnabled(c.Request().Context()))
 	authResult, err := auth.AuthenticateTenantDetailed(c.Request().Context(), d.Store, tenantKey, agentID)
 	if err != nil {
 		return models.Tenant{}, "", err

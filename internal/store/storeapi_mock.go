@@ -1260,6 +1260,126 @@ func (_c *MockStoreAPI_GetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(
 	return _c
 }
 
+// GetDefaultRateLimitConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDefaultRateLimitConfig")
+	}
+
+	var r0 models.RateLimitConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (models.RateLimitConfig, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) models.RateLimitConfig); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(models.RateLimitConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetDefaultRateLimitConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDefaultRateLimitConfig'
+type MockStoreAPI_GetDefaultRateLimitConfig_Call struct {
+	*mock.Call
+}
+
+// GetDefaultRateLimitConfig is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetDefaultRateLimitConfig(ctx interface{}) *MockStoreAPI_GetDefaultRateLimitConfig_Call {
+	return &MockStoreAPI_GetDefaultRateLimitConfig_Call{Call: _e.mock.On("GetDefaultRateLimitConfig", ctx)}
+}
+
+func (_c *MockStoreAPI_GetDefaultRateLimitConfig_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetDefaultRateLimitConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDefaultRateLimitConfig_Call) Return(rateLimitConfig models.RateLimitConfig, err error) *MockStoreAPI_GetDefaultRateLimitConfig_Call {
+	_c.Call.Return(rateLimitConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDefaultRateLimitConfig_Call) RunAndReturn(run func(ctx context.Context) (models.RateLimitConfig, error)) *MockStoreAPI_GetDefaultRateLimitConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDisableXTenantKey provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetDisableXTenantKey(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDisableXTenantKey")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetDisableXTenantKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDisableXTenantKey'
+type MockStoreAPI_GetDisableXTenantKey_Call struct {
+	*mock.Call
+}
+
+// GetDisableXTenantKey is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetDisableXTenantKey(ctx interface{}) *MockStoreAPI_GetDisableXTenantKey_Call {
+	return &MockStoreAPI_GetDisableXTenantKey_Call{Call: _e.mock.On("GetDisableXTenantKey", ctx)}
+}
+
+func (_c *MockStoreAPI_GetDisableXTenantKey_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetDisableXTenantKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDisableXTenantKey_Call) Return(b bool, err error) *MockStoreAPI_GetDisableXTenantKey_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetDisableXTenantKey_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetDisableXTenantKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetEffectiveRateLimitConfig provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error) {
 	ret := _mock.Called(ctx, tenantID)
@@ -1322,6 +1442,126 @@ func (_c *MockStoreAPI_GetEffectiveRateLimitConfig_Call) Return(rateLimitConfig 
 }
 
 func (_c *MockStoreAPI_GetEffectiveRateLimitConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.RateLimitConfig, error)) *MockStoreAPI_GetEffectiveRateLimitConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFeatureArgConstraints provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetFeatureArgConstraints(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureArgConstraints")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetFeatureArgConstraints_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFeatureArgConstraints'
+type MockStoreAPI_GetFeatureArgConstraints_Call struct {
+	*mock.Call
+}
+
+// GetFeatureArgConstraints is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetFeatureArgConstraints(ctx interface{}) *MockStoreAPI_GetFeatureArgConstraints_Call {
+	return &MockStoreAPI_GetFeatureArgConstraints_Call{Call: _e.mock.On("GetFeatureArgConstraints", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureArgConstraints_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureArgConstraints_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureArgConstraints_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureArgConstraints_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureArgConstraints_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureArgConstraints_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFeatureRateLimiting provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetFeatureRateLimiting(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureRateLimiting")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetFeatureRateLimiting_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFeatureRateLimiting'
+type MockStoreAPI_GetFeatureRateLimiting_Call struct {
+	*mock.Call
+}
+
+// GetFeatureRateLimiting is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetFeatureRateLimiting(ctx interface{}) *MockStoreAPI_GetFeatureRateLimiting_Call {
+	return &MockStoreAPI_GetFeatureRateLimiting_Call{Call: _e.mock.On("GetFeatureRateLimiting", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureRateLimiting_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureRateLimiting_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureRateLimiting_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureRateLimiting_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureRateLimiting_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureRateLimiting_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4393,6 +4633,246 @@ func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) Return(err error) *Moc
 }
 
 func (_c *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call) RunAndReturn(run func(ctx context.Context, seconds int) error) *MockStoreAPI_SetDefaultApprovalTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetDefaultRateLimitConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetDefaultRateLimitConfig(ctx context.Context, perMinute int64, perDay int64, scope string) error {
+	ret := _mock.Called(ctx, perMinute, perDay, scope)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetDefaultRateLimitConfig")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int64, int64, string) error); ok {
+		r0 = returnFunc(ctx, perMinute, perDay, scope)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetDefaultRateLimitConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetDefaultRateLimitConfig'
+type MockStoreAPI_SetDefaultRateLimitConfig_Call struct {
+	*mock.Call
+}
+
+// SetDefaultRateLimitConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - perMinute int64
+//   - perDay int64
+//   - scope string
+func (_e *MockStoreAPI_Expecter) SetDefaultRateLimitConfig(ctx interface{}, perMinute interface{}, perDay interface{}, scope interface{}) *MockStoreAPI_SetDefaultRateLimitConfig_Call {
+	return &MockStoreAPI_SetDefaultRateLimitConfig_Call{Call: _e.mock.On("SetDefaultRateLimitConfig", ctx, perMinute, perDay, scope)}
+}
+
+func (_c *MockStoreAPI_SetDefaultRateLimitConfig_Call) Run(run func(ctx context.Context, perMinute int64, perDay int64, scope string)) *MockStoreAPI_SetDefaultRateLimitConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int64
+		if args[1] != nil {
+			arg1 = args[1].(int64)
+		}
+		var arg2 int64
+		if args[2] != nil {
+			arg2 = args[2].(int64)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDefaultRateLimitConfig_Call) Return(err error) *MockStoreAPI_SetDefaultRateLimitConfig_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDefaultRateLimitConfig_Call) RunAndReturn(run func(ctx context.Context, perMinute int64, perDay int64, scope string) error) *MockStoreAPI_SetDefaultRateLimitConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetDisableXTenantKey provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetDisableXTenantKey(ctx context.Context, disabled bool) error {
+	ret := _mock.Called(ctx, disabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetDisableXTenantKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, disabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetDisableXTenantKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetDisableXTenantKey'
+type MockStoreAPI_SetDisableXTenantKey_Call struct {
+	*mock.Call
+}
+
+// SetDisableXTenantKey is a helper method to define mock.On call
+//   - ctx context.Context
+//   - disabled bool
+func (_e *MockStoreAPI_Expecter) SetDisableXTenantKey(ctx interface{}, disabled interface{}) *MockStoreAPI_SetDisableXTenantKey_Call {
+	return &MockStoreAPI_SetDisableXTenantKey_Call{Call: _e.mock.On("SetDisableXTenantKey", ctx, disabled)}
+}
+
+func (_c *MockStoreAPI_SetDisableXTenantKey_Call) Run(run func(ctx context.Context, disabled bool)) *MockStoreAPI_SetDisableXTenantKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDisableXTenantKey_Call) Return(err error) *MockStoreAPI_SetDisableXTenantKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetDisableXTenantKey_Call) RunAndReturn(run func(ctx context.Context, disabled bool) error) *MockStoreAPI_SetDisableXTenantKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetFeatureArgConstraints provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetFeatureArgConstraints(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetFeatureArgConstraints")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetFeatureArgConstraints_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetFeatureArgConstraints'
+type MockStoreAPI_SetFeatureArgConstraints_Call struct {
+	*mock.Call
+}
+
+// SetFeatureArgConstraints is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetFeatureArgConstraints(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureArgConstraints_Call {
+	return &MockStoreAPI_SetFeatureArgConstraints_Call{Call: _e.mock.On("SetFeatureArgConstraints", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetFeatureArgConstraints_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureArgConstraints_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureArgConstraints_Call) Return(err error) *MockStoreAPI_SetFeatureArgConstraints_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureArgConstraints_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureArgConstraints_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetFeatureRateLimiting provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetFeatureRateLimiting(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetFeatureRateLimiting")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetFeatureRateLimiting_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetFeatureRateLimiting'
+type MockStoreAPI_SetFeatureRateLimiting_Call struct {
+	*mock.Call
+}
+
+// SetFeatureRateLimiting is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetFeatureRateLimiting(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureRateLimiting_Call {
+	return &MockStoreAPI_SetFeatureRateLimiting_Call{Call: _e.mock.On("SetFeatureRateLimiting", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetFeatureRateLimiting_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureRateLimiting_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureRateLimiting_Call) Return(err error) *MockStoreAPI_SetFeatureRateLimiting_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureRateLimiting_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureRateLimiting_Call {
 	_c.Call.Return(run)
 	return _c
 }

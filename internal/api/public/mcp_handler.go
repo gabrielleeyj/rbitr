@@ -694,7 +694,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		}), nil
 	}
 
-	argConstraintViolation := d.enforceArgumentConstraints(decisionResult.Constraints, argumentsMap)
+	argConstraintViolation := d.enforceArgumentConstraints(ctx, decisionResult.Constraints, argumentsMap)
 	if argConstraintViolation != nil {
 		c.Set(telemetry.CtxDecision, decisionDeny)
 

@@ -129,6 +129,12 @@ export interface AdminSettings {
   admin_write_lock: boolean;
   default_approval_ttl_seconds: number;
   audit_retention_days: number;
+  disable_x_tenant_key?: boolean;
+  feature_rate_limiting?: boolean;
+  feature_arg_constraints?: boolean;
+  default_rate_limit_per_minute?: number;
+  default_rate_limit_per_day?: number;
+  default_rate_limit_scope?: "tenant" | "tenant_agent" | "tenant_tool" | "tenant_agent_tool";
   tenant_id?: string;
   enforcement_mode?: "enforce" | "shadow";
   mcp_passthrough_upstream_tool_id?: string;
@@ -559,6 +565,41 @@ export function setDefaultApprovalTTL(config: ApiConfig, seconds: number): Promi
   return request<void>(`/admin/settings/default-approval-ttl`, config, {
     method: "PUT",
     body: JSON.stringify({ seconds }),
+  });
+}
+
+export function setDefaultRateLimitConfig(
+  config: ApiConfig,
+  payload: {
+    per_minute: number;
+    per_day: number;
+    scope: "tenant" | "tenant_agent" | "tenant_tool" | "tenant_agent_tool";
+  }
+): Promise<void> {
+  return request<void>(`/admin/settings/default-rate-limit`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setDisableXTenantKey(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/disable-x-tenant-key`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setFeatureRateLimiting(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/feature-rate-limiting`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setFeatureArgConstraints(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/feature-arg-constraints`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
   });
 }
 

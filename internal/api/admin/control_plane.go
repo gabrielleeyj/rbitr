@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -53,6 +54,12 @@ type AuditRetentionRequest struct {
 	Days int `json:"days"`
 }
 
+type DefaultRateLimitRequest struct {
+	PerMinute int64  `json:"per_minute"`
+	PerDay    int64  `json:"per_day"`
+	Scope     string `json:"scope"`
+}
+
 type EnforcementModeRequest struct {
 	TenantID        string `json:"tenant_id"`
 	EnforcementMode string `json:"enforcement_mode"`
@@ -61,6 +68,10 @@ type EnforcementModeRequest struct {
 type MCPPassthroughUpstreamRequest struct {
 	TenantID string `json:"tenant_id"`
 	ToolID   string `json:"tool_id"`
+}
+
+type BooleanSettingRequest struct {
+	Enabled bool `json:"enabled"`
 }
 
 type NotificationConfigRequest struct {
@@ -126,6 +137,12 @@ type SettingsResponse struct {
 	AdminWriteLock               bool   `json:"admin_write_lock"`
 	DefaultApprovalTTLSeconds    int    `json:"default_approval_ttl_seconds"`
 	AuditRetentionDays           int    `json:"audit_retention_days"`
+	DisableXTenantKey            bool   `json:"disable_x_tenant_key"`
+	FeatureRateLimiting          bool   `json:"feature_rate_limiting"`
+	FeatureArgConstraints        bool   `json:"feature_arg_constraints"`
+	DefaultRateLimitPerMinute    int64  `json:"default_rate_limit_per_minute"`
+	DefaultRateLimitPerDay       int64  `json:"default_rate_limit_per_day"`
+	DefaultRateLimitScope        string `json:"default_rate_limit_scope"`
 	TenantID                     string `json:"tenant_id,omitempty"`
 	EnforcementMode              string `json:"enforcement_mode,omitempty"`
 	MCPPassthroughUpstreamToolID string `json:"mcp_passthrough_upstream_tool_id,omitempty"`
@@ -683,6 +700,26 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetAuditRetentionDays(c.Request().Context()); err == nil && value > 0 {
 		retentionDays = value
 	}
+	disableXTenantKey := d.Config.DisableXTenantKey
+	if value, err := d.Store.GetDisableXTenantKey(c.Request().Context()); err == nil {
+		disableXTenantKey = value
+	}
+	featureRateLimiting := d.Config.FeatureRateLimiting
+	if value, err := d.Store.GetFeatureRateLimiting(c.Request().Context()); err == nil {
+		featureRateLimiting = value
+	}
+	featureArgConstraints := d.Config.FeatureArgConstraints
+	if value, err := d.Store.GetFeatureArgConstraints(c.Request().Context()); err == nil {
+		featureArgConstraints = value
+	}
+	defaultRateLimit := models.RateLimitConfig{
+		PerMinute: 60,
+		PerDay:    10000,
+		Scope:     "tenant_agent_tool",
+	}
+	if value, err := d.Store.GetDefaultRateLimitConfig(c.Request().Context()); err == nil {
+		defaultRateLimit = value
+	}
 	enforcementMode := "enforce"
 	mcpPassthroughUpstreamToolID := ""
 	if tenantID != "" {
@@ -702,6 +739,12 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 		AdminWriteLock:               locked,
 		DefaultApprovalTTLSeconds:    defaultTTL,
 		AuditRetentionDays:           retentionDays,
+		DisableXTenantKey:            disableXTenantKey,
+		FeatureRateLimiting:          featureRateLimiting,
+		FeatureArgConstraints:        featureArgConstraints,
+		DefaultRateLimitPerMinute:    defaultRateLimit.PerMinute,
+		DefaultRateLimitPerDay:       defaultRateLimit.PerDay,
+		DefaultRateLimitScope:        defaultRateLimit.Scope,
 		TenantID:                     tenantID,
 		EnforcementMode:              enforcementMode,
 		MCPPassthroughUpstreamToolID: mcpPassthroughUpstreamToolID,
@@ -1382,6 +1425,54 @@ func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (d Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
+	if err != nil {
+		return err
+	}
+
+	var payload DefaultRateLimitRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	payload.Scope = strings.TrimSpace(payload.Scope)
+	if payload.PerMinute <= 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "per_minute must be > 0"})
+	}
+	if payload.PerDay <= 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "per_day must be > 0"})
+	}
+	if payload.PerDay < payload.PerMinute {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "per_day must be >= per_minute"})
+	}
+	if !isRateLimitScope(payload.Scope) {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "scope must be one of tenant, tenant_agent, tenant_tool, tenant_agent_tool",
+		})
+	}
+
+	beforeValue, _ := d.Store.GetDefaultRateLimitConfig(c.Request().Context())
+	if err := d.Store.SetDefaultRateLimitConfig(c.Request().Context(), payload.PerMinute, payload.PerDay, payload.Scope); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update default rate limit config"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.RATE_LIMIT_DEFAULT.SET", "SETTINGS", "default_rate_limit_config", map[string]any{
+		"per_minute": beforeValue.PerMinute,
+		"per_day":    beforeValue.PerDay,
+		"scope":      beforeValue.Scope,
+	}, map[string]any{
+		"per_minute": payload.PerMinute,
+		"per_day":    payload.PerDay,
+		"scope":      payload.Scope,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit default rate limit update",
+			"detail": err.Error(),
+		})
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
@@ -1486,6 +1577,79 @@ func (d Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error 
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleDisableXTenantKeyUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.DISABLE_X_TENANT_KEY.SET",
+		"disable_x_tenant_key",
+		d.Store.GetDisableXTenantKey,
+		d.Store.SetDisableXTenantKey,
+	)
+}
+
+func (d Dependencies) handleFeatureRateLimitingUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.FEATURE_RATE_LIMITING.SET",
+		"feature_rate_limiting",
+		d.Store.GetFeatureRateLimiting,
+		d.Store.SetFeatureRateLimiting,
+	)
+}
+
+func (d Dependencies) handleFeatureArgConstraintsUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.FEATURE_ARG_CONSTRAINTS.SET",
+		"feature_arg_constraints",
+		d.Store.GetFeatureArgConstraints,
+		d.Store.SetFeatureArgConstraints,
+	)
+}
+
+func (d Dependencies) handleBooleanSystemSettingUpdate(
+	c *echo.Context,
+	auditAction string,
+	resourceID string,
+	getter func(context.Context) (bool, error),
+	setter func(context.Context, bool) error,
+) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
+	if err != nil {
+		return err
+	}
+
+	var payload BooleanSettingRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	beforeValue, _ := getter(c.Request().Context())
+	if err := setter(c.Request().Context(), payload.Enabled); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update setting"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, "", auditAction, "SETTINGS", resourceID, map[string]any{
+		"value": beforeValue,
+	}, map[string]any{
+		"value": payload.Enabled,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit setting update",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func isRateLimitScope(scope string) bool {
+	switch strings.TrimSpace(scope) {
+	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+		return true
+	default:
+		return false
+	}
 }
 
 func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
