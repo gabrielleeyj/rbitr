@@ -38,7 +38,12 @@ const (
 func main() {
 	cfg := config.Load()
 
-	dbConn, err := db.Connect(cfg.DatabaseURL)
+	dbConn, err := db.Connect(cfg.DatabaseURL, db.PoolConfig{
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		ConnMaxLifetime: cfg.DBConnMaxLifetime,
+		ConnMaxIdleTime: cfg.DBConnMaxIdleTime,
+	})
 	if err != nil {
 		log.Fatalf("db connect failed: %v", err)
 	}

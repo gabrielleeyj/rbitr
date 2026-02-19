@@ -64,12 +64,23 @@ Wizard bootstrap sequence:
 
 Note: the setup flow currently validates that migrations are present but does not run migrations itself; run migrations before using `/setup/initialize`.
 
+### Database runtime defaults
+
+- If `DATABASE_URL` is not set, the gateway defaults to:
+  - `postgres://postgres@localhost:2345/rbitr?sslmode=require`
+- Connection pool defaults (overridable via env):
+  - `DB_MAX_OPEN_CONNS=30`
+  - `DB_MAX_IDLE_CONNS=10`
+  - `DB_CONN_MAX_LIFETIME_SECONDS=1800`
+  - `DB_CONN_MAX_IDLE_TIME_SECONDS=300`
+
 ### Option B: Local binaries
 
 1. Run migrations:
 
 ```bash
-export DATABASE_URL=postgres://postgres@localhost:2345/rbitr?sslmode=disable
+# Local dev Postgres in this repo runs without TLS, so sslmode=disable is explicit here.
+export DATABASE_URL=postgres://postgres:postgres@localhost:2345/rbitr?sslmode=disable
 goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
