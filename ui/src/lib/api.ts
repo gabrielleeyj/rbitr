@@ -8,6 +8,35 @@ export interface ApiConfig {
   adminKey: string;
 }
 
+export interface SetupStatus {
+  setup_required: boolean;
+  bootstrap_complete: boolean;
+  database_reachable: boolean;
+  schema_ready: boolean;
+  admin_key_count: number;
+  tenant_count: number;
+}
+
+export interface SetupInitializeRequest {
+  tenant_name: string;
+  tenant_id?: string;
+  admin_key?: string;
+  tenant_key?: string;
+}
+
+export interface SetupInitializeResponse {
+  bootstrap_complete: boolean;
+  tenant_id: string;
+  tenant_name: string;
+  tenant_key_id: string;
+  tenant_key: string;
+  tenant_key_created: boolean;
+  admin_key_id: string;
+  admin_key: string;
+  admin_key_created: boolean;
+  policy_version: string;
+}
+
 export interface AdminMeResponse {
   admin_key_id: string;
   scopes: string[];
@@ -116,6 +145,13 @@ export interface TenantKeyIssueResponse {
   api_key: string;
   key_id: string;
   key_prefix: string;
+}
+
+export interface CreateTenantResponse {
+  tenant_id: string;
+  name: string;
+  api_key: string;
+  key_id: string;
 }
 
 export interface RiskOverride {
@@ -251,6 +287,36 @@ function apiBaseUrl() {
   return import.meta.env.VITE_API_BASE_URL ?? defaultBaseUrl;
 }
 
+async function requestPublic<T>(path: string, init?: RequestInit, baseUrl?: string): Promise<T> {
+  const response = await fetch(`${baseUrl ?? apiBaseUrl()}${path}`, {
+    ...init,
+    cache: init?.cache ?? "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed: ${response.status}`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(invalidJSONError(path, text));
+  }
+}
+
 async function request<T>(path: string, config: ApiConfig, init?: RequestInit): Promise<T> {
   const method = init?.method?.toUpperCase() ?? "GET";
   const url = `${config.baseUrl ?? apiBaseUrl()}${path}`;
@@ -287,7 +353,11 @@ async function request<T>(path: string, config: ApiConfig, init?: RequestInit): 
     if (!text) {
       return undefined as T;
     }
-    return JSON.parse(text) as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error(invalidJSONError(path, text));
+    }
   })();
 
   if (method === "GET" || method === "HEAD") {
@@ -302,8 +372,72 @@ async function request<T>(path: string, config: ApiConfig, init?: RequestInit): 
   return requestPromise as Promise<T>;
 }
 
+function invalidJSONError(path: string, body: string): string {
+  const trimmed = body.trim();
+  if (
+    trimmed.startsWith("<!doctype html") ||
+    trimmed.startsWith("<html") ||
+    trimmed.startsWith("<")
+  ) {
+    return `Expected JSON from ${path} but received HTML. Check Vite proxy or VITE_API_BASE_URL.`;
+  }
+  return `Expected JSON from ${path} but response was not valid JSON.`;
+}
+
+export function getSetupStatus(baseUrl?: string): Promise<SetupStatus> {
+  return requestPublic<SetupStatus>("/setup/status", undefined, baseUrl);
+}
+
+export function initializeSetup(
+  payload: SetupInitializeRequest,
+  baseUrl?: string
+): Promise<SetupInitializeResponse> {
+  return requestPublic<SetupInitializeResponse>(
+    "/setup/initialize",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    baseUrl
+  );
+}
+
 export function listTenants(config: ApiConfig): Promise<TenantSummary[]> {
   return request<TenantSummary[]>("/admin/tenants", config);
+}
+
+export function createTenant(config: ApiConfig, payload: { name: string }): Promise<CreateTenantResponse> {
+  return request<CreateTenantResponse>("/admin/tenants", config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTenantConfig(
+  config: ApiConfig,
+  tenantId: string,
+  payload: { name?: string; tenant_key?: string }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/config`, config, {
+    method: "PUT",
+    body: JSON.stringify({
+      name: payload.name ?? "",
+      tenant_key: payload.tenant_key ?? "",
+    }),
+  });
+}
+
+export function setTenantEnabled(config: ApiConfig, tenantId: string, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/enabled`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function deleteTenant(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}`, config, {
+    method: "DELETE",
+  });
 }
 
 export function getAdminMe(config: ApiConfig): Promise<AdminMeResponse> {

@@ -145,7 +145,8 @@ func (s *Store) GetTenantByKeyHash(ctx context.Context, keyHash string) (models.
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
 		WHERE tk.key_hash = $1
 		  AND tk.revoked_at IS NULL
-		  AND t.enabled = true`
+		  AND t.enabled = true
+		  AND t.deleted_at IS NULL`
 	row := s.db.QueryRowContext(ctx, query, keyHash)
 	if err := row.Scan(&tenant.TenantID, &tenant.Name, &tenant.Enabled); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -180,6 +181,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]models.TenantSummary, error)
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.tenant_id`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -207,7 +209,8 @@ func (s *Store) GetTenant(ctx context.Context, tenantID string) (models.TenantSu
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
-		WHERE t.tenant_id = $1`
+		WHERE t.tenant_id = $1
+		  AND t.deleted_at IS NULL`
 	row := s.db.QueryRowContext(ctx, query, tenantID)
 	var tenant models.TenantSummary
 	if err := row.Scan(&tenant.TenantID, &tenant.Name, &tenant.ActivePolicyVersion, &tenant.ToolCount); err != nil {
@@ -338,7 +341,8 @@ func (s *Store) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string
 		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $2
 		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $3
 		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $4
-		WHERE t.tenant_id = $1`,
+		WHERE t.tenant_id = $1
+		  AND t.deleted_at IS NULL`,
 		tenantID,
 		defaultRateLimitPerMinuteKey,
 		defaultRateLimitPerDayKey,
@@ -2375,8 +2379,32 @@ func (s *Store) CreateTenant(ctx context.Context, tenantID, name string) error {
 
 func (s *Store) SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE rbitr.tenants SET enabled = $1 WHERE tenant_id = $2`,
+		`UPDATE rbitr.tenants SET enabled = $1 WHERE tenant_id = $2 AND deleted_at IS NULL`,
 		enabled, tenantID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) SoftDeleteTenant(ctx context.Context, tenantID string, deletedAt time.Time) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rbitr.tenants
+		 SET deleted_at = $1, enabled = false
+		 WHERE tenant_id = $2
+		   AND deleted_at IS NULL`,
+		deletedAt, tenantID,
+	)
 	if err != nil {
 		return err
 	}

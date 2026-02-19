@@ -44,7 +44,8 @@ func TestStoreGetTenantByKeyHash(t *testing.T) {
 		JOIN rbitr.tenants t ON t.tenant_id = tk.tenant_id
 		WHERE tk.key_hash = $1
 		  AND tk.revoked_at IS NULL
-		  AND t.enabled = true`)
+		  AND t.enabled = true
+		  AND t.deleted_at IS NULL`)
 			mock.ExpectQuery(query).WithArgs("hash").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -402,6 +403,7 @@ func TestStoreListTenants(t *testing.T) {
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.tenant_id`)
 			mock.ExpectQuery(query).WillReturnRows(tc.rows)
 
@@ -446,7 +448,8 @@ func TestStoreGetTenant(t *testing.T) {
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
-		WHERE t.tenant_id = $1`)
+		WHERE t.tenant_id = $1
+		  AND t.deleted_at IS NULL`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -618,6 +621,7 @@ func TestStoreListTenantsError(t *testing.T) {
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.tenant_id`)
 	mock.ExpectQuery(query).WillReturnError(errors.New("query failed"))
 
@@ -640,6 +644,7 @@ func TestStoreListTenantsRowError(t *testing.T) {
 			FROM rbitr.tools
 			GROUP BY tenant_id
 		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		WHERE t.deleted_at IS NULL
 		ORDER BY t.tenant_id`)
 	rows := sqlmock.NewRows([]string{"tenant_id", "name", "active_policy_version", "tool_count"}).
 		AddRow("t1", "Tenant", "p_v1", 1).
@@ -2976,7 +2981,8 @@ func TestStoreGetEffectiveRateLimitConfig(t *testing.T) {
 		LEFT JOIN rbitr.system_settings s_min ON s_min.key = $2
 		LEFT JOIN rbitr.system_settings s_day ON s_day.key = $3
 		LEFT JOIN rbitr.system_settings s_scope ON s_scope.key = $4
-		WHERE t.tenant_id = $1`)
+		WHERE t.tenant_id = $1
+		  AND t.deleted_at IS NULL`)
 			mock.ExpectQuery(query).
 				WithArgs("t1", "default_rate_limit_per_minute", "default_rate_limit_per_day", "default_rate_limit_scope").
 				WillReturnRows(sqlmock.NewRows([]string{

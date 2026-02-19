@@ -12,6 +12,7 @@ const storageKey = "rbitr_selected_tenant";
 interface TenantContextValue {
   selectedTenant: TenantSummary | null;
   setSelectedTenant: (tenant: TenantSummary) => void;
+  clearSelectedTenant: () => void;
 }
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -27,8 +28,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setSelectedTenantState(tenant);
   };
 
+  const clearSelectedTenant = () => {
+    localStorage.removeItem(storageKey);
+    setSelectedTenantState(null);
+  };
+
   const value = useMemo(
-    () => ({ selectedTenant, setSelectedTenant }),
+    () => ({ selectedTenant, setSelectedTenant, clearSelectedTenant }),
     [selectedTenant]
   );
 

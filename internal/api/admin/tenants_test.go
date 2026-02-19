@@ -17,6 +17,18 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
 )
 
+type softDeleteStoreMock struct {
+	*store.MockStoreAPI
+	softDeleteFn func(ctx context.Context, tenantID string, deletedAt time.Time) error
+}
+
+func (m *softDeleteStoreMock) SoftDeleteTenant(ctx context.Context, tenantID string, deletedAt time.Time) error {
+	if m.softDeleteFn == nil {
+		return nil
+	}
+	return m.softDeleteFn(ctx, tenantID, deletedAt)
+}
+
 func TestHandleTenantCreate(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -306,6 +318,83 @@ func TestHandleTenantSetEnabled(t *testing.T) {
 
 			deps := Dependencies{Store: storeMock, Metrics: newTestMetrics(), Config: config.Config{}}
 			_ = deps.handleTenantSetEnabled(ctx)
+			require.Equal(t, tc.expectedCode, rec.Code)
+		})
+	}
+}
+
+func TestHandleTenantDelete(t *testing.T) {
+	cases := []struct {
+		name         string
+		adminKey     string
+		scopes       []string
+		softDeleteFn func(ctx context.Context, tenantID string, deletedAt time.Time) error
+		expectedCode int
+	}{
+		{
+			name:         "unauthorized",
+			expectedCode: http.StatusUnauthorized,
+		},
+		{
+			name:     "success",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			softDeleteFn: func(_ context.Context, tenantID string, _ time.Time) error {
+				require.Equal(t, "t1", tenantID)
+				return nil
+			},
+			expectedCode: http.StatusNoContent,
+		},
+		{
+			name:     "not found",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			softDeleteFn: func(_ context.Context, _ string, _ time.Time) error {
+				return store.ErrNotFound
+			},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			name:     "write locked",
+			adminKey: "key",
+			scopes:   []string{"admin:write"},
+			softDeleteFn: func(_ context.Context, _ string, _ time.Time) error {
+				return store.ErrAdminWriteLocked
+			},
+			expectedCode: http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseMock := store.NewMockStoreAPI(t)
+			var st store.StoreAPI = baseMock
+
+			if tc.adminKey != "" {
+				baseMock.On("GetAdminKeyByHash", context.Background(), mock.Anything).
+					Return(modelsAdminKey(tc.scopes), nil)
+			}
+
+			if tc.softDeleteFn != nil {
+				if tc.expectedCode == http.StatusNoContent {
+					baseMock.On("InsertAuditEvent", mock.Anything, mock.Anything).Return(nil)
+				}
+				st = &softDeleteStoreMock{
+					MockStoreAPI: baseMock,
+					softDeleteFn: tc.softDeleteFn,
+				}
+			}
+
+			ctx, req, rec := testhelpers.MakeRequestWithParams(
+				http.MethodDelete, nil,
+				testhelpers.Params{Names: []string{"tenant_id"}, Values: []string{"t1"}},
+			)
+			if tc.adminKey != "" {
+				req.Header.Set(auth.AdminKeyHeader, tc.adminKey)
+			}
+
+			deps := Dependencies{Store: st, Metrics: newTestMetrics(), Config: config.Config{}}
+			_ = deps.handleTenantDelete(ctx)
 			require.Equal(t, tc.expectedCode, rec.Code)
 		})
 	}

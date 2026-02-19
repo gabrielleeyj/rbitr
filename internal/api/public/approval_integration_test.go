@@ -312,6 +312,25 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"admin_key_id", "key_hash", "scopes"}).
 			AddRow("admin_demo", adminKeyHash, "{admin:read,admin:write}"))
 
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT t.tenant_id, t.name, tc.active_policy_version, COALESCE(tool_counts.tool_count, 0)
+		FROM rbitr.tenants t
+		LEFT JOIN rbitr.tenant_config tc ON tc.tenant_id = t.tenant_id
+		LEFT JOIN (
+			SELECT tenant_id, COUNT(*) AS tool_count
+			FROM rbitr.tools
+			GROUP BY tenant_id
+		) tool_counts ON tool_counts.tenant_id = t.tenant_id
+		WHERE t.tenant_id = $1
+		  AND t.deleted_at IS NULL`)).
+		WithArgs("t_demo").
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "name", "active_policy_version", "tool_count"}).
+			AddRow("t_demo", "Demo", "p_v1", 1))
+
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT admin_key_id, key_hash, scopes FROM rbitr.admin_keys WHERE key_hash = $1`)).
+		WithArgs(adminKeyHash).
+		WillReturnRows(sqlmock.NewRows([]string{"admin_key_id", "key_hash", "scopes"}).
+			AddRow("admin_demo", adminKeyHash, "{admin:read,admin:write}"))
+
 	sm.ExpectQuery(regexp.QuoteMeta(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
 		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
 		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,

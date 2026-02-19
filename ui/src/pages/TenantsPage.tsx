@@ -1,19 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  createTenant,
   createTenantKey,
+  deleteTenant,
   getNotificationConfig,
   getPendingApprovalsCount,
   listTenantKeys,
   listTenants,
   revokeTenantKey,
   rotateTenantKey,
+  setTenantEnabled,
+  updateTenantConfig,
+  type CreateTenantResponse,
   type TenantKey,
   type TenantKeyIssueResponse,
 } from "@/lib/api";
@@ -25,13 +31,14 @@ import {
   scopeKeysRevoke,
   scopeKeysRotate,
   scopeNotificationsRead,
+  scopeTenantsWrite,
   scopeTenantsRead,
 } from "@/lib/scopes";
 import { toast } from "sonner";
 
 export function TenantsPage() {
   const { adminKey, hasScope } = useAdminKey();
-  const { selectedTenant, setSelectedTenant } = useTenant();
+  const { selectedTenant, setSelectedTenant, clearSelectedTenant } = useTenant();
   const navigate = useNavigate();
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [notificationStatus, setNotificationStatus] = useState<
@@ -52,10 +59,14 @@ export function TenantsPage() {
   const [keysActionError, setKeysActionError] = useState("");
   const [keysActionLoading, setKeysActionLoading] = useState<string | null>(null);
   const [issuedKey, setIssuedKey] = useState<TenantKeyIssueResponse | null>(null);
+  const [createdTenant, setCreatedTenant] = useState<CreateTenantResponse | null>(null);
+  const [tenantActionError, setTenantActionError] = useState("");
+  const [tenantActionLoading, setTenantActionLoading] = useState<string | null>(null);
+  const [newTenantName, setNewTenantName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const lastLoadedKeyRef = useRef<string | null>(null);
   const canReadTenants = hasScope(scopeTenantsRead);
+  const canWriteTenants = hasScope(scopeTenantsWrite);
   const canReadNotifications = hasScope(scopeNotificationsRead);
   const canReadApprovals = hasScope(scopeApprovalsRead);
   const canReadKeys = hasScope(scopeKeysRead);
@@ -63,42 +74,30 @@ export function TenantsPage() {
   const canRevokeKeys = hasScope(scopeKeysRevoke);
   const selectedTenantID = selectedTenant?.tenant_id;
 
-  useEffect(() => {
-    let isMounted = true;
+  const refreshTenants = useCallback(async (): Promise<TenantSummary[]> => {
+    if (!adminKey || !canReadTenants) {
+      setTenants([]);
+      setLoading(false);
+      return [];
+    }
 
-    const load = async () => {
-      if (!adminKey || !canReadTenants) {
-        if (isMounted) {
-          setTenants([]);
-          setLoading(false);
-        }
-        return;
-      }
-      const loadKey = adminKey;
-      if (lastLoadedKeyRef.current === loadKey) {
-        return;
-      }
-      try {
-        const data = await listTenants({ adminKey });
-        if (isMounted) {
-          setTenants(data);
-          setLoading(false);
-          lastLoadedKeyRef.current = loadKey;
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : "Failed to load tenants.");
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      isMounted = false;
-    };
+    setLoading(true);
+    setError("");
+    try {
+      const data = await listTenants({ adminKey });
+      setTenants(data);
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load tenants.");
+      return [];
+    } finally {
+      setLoading(false);
+    }
   }, [adminKey, canReadTenants]);
+
+  useEffect(() => {
+    void refreshTenants();
+  }, [refreshTenants]);
 
   useEffect(() => {
     if (!adminKey || !canReadNotifications || tenants.length === 0) {
@@ -270,6 +269,102 @@ export function TenantsPage() {
     }
   };
 
+  const handleCreateTenant = async () => {
+    if (!adminKey || !canWriteTenants) return;
+    if (!newTenantName.trim()) {
+      setTenantActionError("Tenant name is required.");
+      return;
+    }
+    setTenantActionError("");
+    setTenantActionLoading("create");
+    try {
+      const created = await createTenant({ adminKey }, { name: newTenantName.trim() });
+      setCreatedTenant(created);
+      setNewTenantName("");
+      setSelectedTenant({ tenant_id: created.tenant_id, name: created.name });
+      toast.success("Tenant created", { description: created.tenant_id });
+      await refreshTenants();
+    } catch (err) {
+      setTenantActionError(parseTenantError(err));
+    } finally {
+      setTenantActionLoading(null);
+    }
+  };
+
+  const handleRenameTenant = async (tenant: TenantSummary) => {
+    if (!adminKey || !canWriteTenants) return;
+    const nextName = window.prompt(`Rename tenant ${tenant.tenant_id}`, tenant.name ?? "");
+    if (nextName === null) return;
+    if (!nextName.trim()) {
+      setTenantActionError("Tenant name cannot be empty.");
+      return;
+    }
+
+    setTenantActionError("");
+    setTenantActionLoading(`rename:${tenant.tenant_id}`);
+    try {
+      await updateTenantConfig(
+        { adminKey },
+        tenant.tenant_id,
+        { name: nextName.trim() }
+      );
+      toast.success("Tenant updated", { description: tenant.tenant_id });
+      if (selectedTenant?.tenant_id === tenant.tenant_id) {
+        setSelectedTenant({
+          ...selectedTenant,
+          name: nextName.trim(),
+        });
+      }
+      await refreshTenants();
+    } catch (err) {
+      setTenantActionError(parseTenantError(err));
+    } finally {
+      setTenantActionLoading(null);
+    }
+  };
+
+  const handleSetTenantEnabled = async (tenant: TenantSummary, enabled: boolean) => {
+    if (!adminKey || !canWriteTenants) return;
+    setTenantActionError("");
+    setTenantActionLoading(`${enabled ? "enable" : "disable"}:${tenant.tenant_id}`);
+    try {
+      await setTenantEnabled({ adminKey }, tenant.tenant_id, enabled);
+      toast.success(enabled ? "Tenant enabled" : "Tenant disabled", { description: tenant.tenant_id });
+      await refreshTenants();
+    } catch (err) {
+      setTenantActionError(parseTenantError(err));
+    } finally {
+      setTenantActionLoading(null);
+    }
+  };
+
+  const handleDeleteTenant = async (tenant: TenantSummary) => {
+    if (!adminKey || !canWriteTenants) return;
+    const confirmed = window.confirm(
+      `Soft-delete tenant ${tenant.tenant_id}? This hides it from UI/API by default and disables access.`
+    );
+    if (!confirmed) return;
+
+    setTenantActionError("");
+    setTenantActionLoading(`delete:${tenant.tenant_id}`);
+    try {
+      await deleteTenant({ adminKey }, tenant.tenant_id);
+      toast.success("Tenant deleted", { description: tenant.tenant_id });
+      const updated = await refreshTenants();
+      if (selectedTenant?.tenant_id === tenant.tenant_id) {
+        if (updated.length > 0) {
+          setSelectedTenant(updated[0]);
+        } else {
+          clearSelectedTenant();
+        }
+      }
+    } catch (err) {
+      setTenantActionError(parseTenantError(err));
+    } finally {
+      setTenantActionLoading(null);
+    }
+  };
+
   const legendFlags = useMemo(() => {
     const values = Object.values(notificationStatus);
     return {
@@ -301,15 +396,70 @@ export function TenantsPage() {
           ) : null}
         </CardHeader>
         <CardContent className="space-y-4">
+          {createdTenant ? (
+            <Alert>
+              <AlertDescription>
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">
+                    Tenant created: {createdTenant.tenant_id}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Initial tenant API key (shown once)
+                  </div>
+                  <code className="block overflow-auto rounded border bg-muted px-2 py-1 text-xs">
+                    {createdTenant.api_key}
+                  </code>
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={() => setCreatedTenant(null)}>
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {tenantActionError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{tenantActionError}</AlertDescription>
             </Alert>
           ) : null}
           {!canReadTenants ? (
             <Alert>
               <AlertDescription>Missing scope: {scopeTenantsRead}</AlertDescription>
             </Alert>
+          ) : null}
+          {canWriteTenants ? (
+            <div className="flex flex-wrap items-end gap-2 rounded-md border p-3">
+              <div className="min-w-56 flex-1">
+                <div className="mb-1 text-xs text-muted-foreground">Create tenant</div>
+                <Input
+                  placeholder="Tenant name"
+                  value={newTenantName}
+                  onChange={(event) => setNewTenantName(event.target.value)}
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={() => void handleCreateTenant()}
+                disabled={tenantActionLoading === "create"}
+              >
+                {tenantActionLoading === "create" ? "Creating..." : "Create tenant"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void refreshTenants()}
+                disabled={loading}
+              >
+                Refresh
+              </Button>
+            </div>
           ) : null}
           {loading ? (
             <div className="text-sm text-muted-foreground">Loading tenants...</div>
@@ -374,6 +524,42 @@ export function TenantsPage() {
                     <TableCell>{tenant.tool_count ?? "—"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-wrap justify-end gap-2">
+                        {canWriteTenants ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleRenameTenant(tenant)}
+                              disabled={Boolean(tenantActionLoading)}
+                            >
+                              {tenantActionLoading === `rename:${tenant.tenant_id}` ? "Renaming..." : "Rename"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleSetTenantEnabled(tenant, true)}
+                              disabled={Boolean(tenantActionLoading)}
+                            >
+                              {tenantActionLoading === `enable:${tenant.tenant_id}` ? "Enabling..." : "Enable"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleSetTenantEnabled(tenant, false)}
+                              disabled={Boolean(tenantActionLoading)}
+                            >
+                              {tenantActionLoading === `disable:${tenant.tenant_id}` ? "Disabling..." : "Disable"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void handleDeleteTenant(tenant)}
+                              disabled={Boolean(tenantActionLoading)}
+                            >
+                              {tenantActionLoading === `delete:${tenant.tenant_id}` ? "Deleting..." : "Delete"}
+                            </Button>
+                          </>
+                        ) : null}
                         <Button
                           size="sm"
                           variant={selectedTenant?.tenant_id === tenant.tenant_id ? "secondary" : "outline"}
@@ -541,4 +727,21 @@ export function TenantsPage() {
       </Card>
     </div>
   );
+}
+
+function parseTenantError(err: unknown): string {
+  const message = err instanceof Error ? err.message.trim() : String(err ?? "").trim();
+  if (!message) {
+    return "Tenant operation failed.";
+  }
+
+  try {
+    const parsed = JSON.parse(message) as { error?: string };
+    if (parsed.error) {
+      return parsed.error;
+    }
+  } catch {
+    // Ignore parse failure and return original message.
+  }
+  return message;
 }

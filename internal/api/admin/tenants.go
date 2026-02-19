@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
+	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
@@ -32,6 +35,10 @@ type TenantKeyIssueResponse struct {
 	APIKey    string `json:"api_key"`
 	KeyID     string `json:"key_id"`
 	KeyPrefix string `json:"key_prefix"`
+}
+
+type tenantSoftDeleteStore interface {
+	SoftDeleteTenant(ctx context.Context, tenantID string, deletedAt time.Time) error
 }
 
 func (d Dependencies) handleTenantCreate(c *echo.Context) error {
@@ -247,6 +254,44 @@ func (d Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 	}
 	_ = d.emitAuditEvent(c, adminKey, tenantID, action, "TENANT", tenantID, nil, map[string]any{
 		"enabled": payload.Enabled,
+	})
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d Dependencies) handleTenantDelete(c *echo.Context) error {
+	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
+		c.Set(telemetry.CtxRequestID, requestID)
+	}
+	adminKey, err := requireAdminScope(c, d.Store, scopeTenantsWrite)
+	if err != nil {
+		return err
+	}
+	tenantID := c.Param("tenant_id")
+	c.Set(telemetry.CtxTenantID, tenantID)
+
+	deleter, ok := d.Store.(tenantSoftDeleteStore)
+	if !ok {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "tenant delete not supported"})
+	}
+
+	now := time.Now().UTC()
+	if err := deleter.SoftDeleteTenant(c.Request().Context(), tenantID, now); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+		}
+		if errors.Is(err, store.ErrAdminWriteLocked) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to delete tenant"})
+	}
+
+	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.DELETED", "TENANT", tenantID, map[string]any{
+		"deleted_at": nil,
+		"enabled":    true,
+	}, map[string]any{
+		"deleted_at": now,
+		"enabled":    false,
 	})
 
 	return c.NoContent(http.StatusNoContent)

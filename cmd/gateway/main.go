@@ -16,6 +16,7 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/api/admin"
 	"github.com/gabrielleeyj/rbitr/internal/api/public"
+	apisetup "github.com/gabrielleeyj/rbitr/internal/api/setup"
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
@@ -76,6 +77,11 @@ func main() {
 
 	toolCache := cache.New[models.Tool](cacheTTL)
 	riskOverrideCache := cache.New[string](cacheTTL)
+	setupService := apisetup.NewService(dbConn)
+
+	apisetup.RegisterRoutes(e, &apisetup.Dependencies{
+		Service: setupService,
+	})
 
 	public.RegisterRoutes(e, &public.Dependencies{
 		Store:             st,

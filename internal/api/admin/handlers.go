@@ -56,57 +56,60 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup := e.Group("/admin")
 
 	adminGroup.GET("/tenants", deps.handleTenantList)
-	adminGroup.GET("/tenants/:tenant_id", deps.handleTenantDetail)
-	adminGroup.GET("/tenants/:tenant_id/evidence", deps.handleEvidenceList)
-	adminGroup.PUT("/tenants/:tenant_id/config", deps.handleTenantConfigUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id", deps.handleToolConfigUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/policy", deps.handlePolicyUpdate)
-
-	adminGroup.GET("/tenants/:tenant_id/policies", deps.handlePolicyVersions)
-	adminGroup.GET("/tenants/:tenant_id/policies/:policy_version", deps.handlePolicyVersionGet)
-	adminGroup.POST("/tenants/:tenant_id/policies", deps.handlePolicyCreate)
-	adminGroup.POST("/tenants/:tenant_id/policies/simulate", deps.handlePolicySimulate)
-	adminGroup.PUT("/tenants/:tenant_id/policies/:policy_version/publish", deps.handlePolicyPublish)
-	adminGroup.PUT("/tenants/:tenant_id/policies/rollback", deps.handlePolicyRollback)
-
-	adminGroup.GET("/tenants/:tenant_id/risk-overrides", deps.handleRiskOverridesList)
-	adminGroup.PUT("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
-	adminGroup.DELETE("/tenants/:tenant_id/risk-overrides/:action_type", deps.handleRiskOverrideDelete)
-
-	adminGroup.GET("/tenants/:tenant_id/approvals", deps.handleApprovalsList)
-	adminGroup.GET("/tenants/:tenant_id/approvals/:approval_request_id", deps.handleApprovalDetail)
-	adminGroup.GET("/tenants/:tenant_id/approvals/pending-count", deps.handleApprovalsPendingCount)
-	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/approve", deps.handleApprovalApprove)
-	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/deny", deps.handleApprovalDeny)
-	adminGroup.POST("/tenants/:tenant_id/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
-
-	adminGroup.GET("/tenants/:tenant_id/tools", deps.handleToolsList)
-	adminGroup.PUT("/tenants/:tenant_id/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
-
-	adminGroup.GET("/tenants/:tenant_id/audit", deps.handleAuditList)
-	adminGroup.GET("/tenants/:tenant_id/audit/export", deps.handleAuditExport)
-	adminGroup.GET("/tenants/:tenant_id/audit/resource-types", deps.handleAuditResourceTypes)
-
-	adminGroup.GET("/tenants/:tenant_id/notifications", deps.handleNotificationConfigGet)
-	adminGroup.PUT("/tenants/:tenant_id/notifications", deps.handleNotificationConfigUpdate)
-	adminGroup.PUT("/tenants/:tenant_id/notifications/slack-secret-ref", deps.handleNotificationSlackSecretRefSet)
-	adminGroup.PUT("/tenants/:tenant_id/notifications/email-secret-ref", deps.handleNotificationEmailSecretRefSet)
-	adminGroup.POST("/tenants/:tenant_id/notifications/test/slack", deps.handleNotificationTestSlack)
-	adminGroup.POST("/tenants/:tenant_id/notifications/test/slack-bot", deps.handleNotificationTestSlackBot)
-	adminGroup.POST("/tenants/:tenant_id/notifications/test/email", deps.handleNotificationTestEmail)
-	adminGroup.GET("/tenants/:tenant_id/notifications/suppressions", deps.handleNotificationSuppressions)
-
-	adminGroup.GET("/tenants/:tenant_id/mailing-lists", deps.handleMailingListsList)
-	adminGroup.POST("/tenants/:tenant_id/mailing-lists", deps.handleMailingListCreate)
-	adminGroup.PUT("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListUpdate)
-	adminGroup.DELETE("/tenants/:tenant_id/mailing-lists/:mailing_list_id", deps.handleMailingListDelete)
-
 	adminGroup.POST("/tenants", deps.handleTenantCreate)
-	adminGroup.PUT("/tenants/:tenant_id/enabled", deps.handleTenantSetEnabled)
-	adminGroup.GET("/tenants/:tenant_id/keys", deps.handleTenantKeysList)
-	adminGroup.POST("/tenants/:tenant_id/keys", deps.handleTenantKeyCreate)
-	adminGroup.POST("/tenants/:tenant_id/keys/rotate", deps.handleTenantKeyRotate)
-	adminGroup.POST("/tenants/:tenant_id/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
+
+	tenantGroup := adminGroup.Group("/tenants/:tenant_id", deps.requireTenantVisible)
+	tenantGroup.GET("", deps.handleTenantDetail)
+	tenantGroup.DELETE("", deps.handleTenantDelete)
+	tenantGroup.GET("/evidence", deps.handleEvidenceList)
+	tenantGroup.PUT("/config", deps.handleTenantConfigUpdate)
+	tenantGroup.PUT("/tools/:tool_id", deps.handleToolConfigUpdate)
+	tenantGroup.PUT("/policy", deps.handlePolicyUpdate)
+
+	tenantGroup.GET("/policies", deps.handlePolicyVersions)
+	tenantGroup.GET("/policies/:policy_version", deps.handlePolicyVersionGet)
+	tenantGroup.POST("/policies", deps.handlePolicyCreate)
+	tenantGroup.POST("/policies/simulate", deps.handlePolicySimulate)
+	tenantGroup.PUT("/policies/:policy_version/publish", deps.handlePolicyPublish)
+	tenantGroup.PUT("/policies/rollback", deps.handlePolicyRollback)
+
+	tenantGroup.GET("/risk-overrides", deps.handleRiskOverridesList)
+	tenantGroup.PUT("/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)
+	tenantGroup.DELETE("/risk-overrides/:action_type", deps.handleRiskOverrideDelete)
+
+	tenantGroup.GET("/approvals", deps.handleApprovalsList)
+	tenantGroup.GET("/approvals/:approval_request_id", deps.handleApprovalDetail)
+	tenantGroup.GET("/approvals/pending-count", deps.handleApprovalsPendingCount)
+	tenantGroup.POST("/approvals/:approval_request_id/approve", deps.handleApprovalApprove)
+	tenantGroup.POST("/approvals/:approval_request_id/deny", deps.handleApprovalDeny)
+	tenantGroup.POST("/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
+
+	tenantGroup.GET("/tools", deps.handleToolsList)
+	tenantGroup.PUT("/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
+
+	tenantGroup.GET("/audit", deps.handleAuditList)
+	tenantGroup.GET("/audit/export", deps.handleAuditExport)
+	tenantGroup.GET("/audit/resource-types", deps.handleAuditResourceTypes)
+
+	tenantGroup.GET("/notifications", deps.handleNotificationConfigGet)
+	tenantGroup.PUT("/notifications", deps.handleNotificationConfigUpdate)
+	tenantGroup.PUT("/notifications/slack-secret-ref", deps.handleNotificationSlackSecretRefSet)
+	tenantGroup.PUT("/notifications/email-secret-ref", deps.handleNotificationEmailSecretRefSet)
+	tenantGroup.POST("/notifications/test/slack", deps.handleNotificationTestSlack)
+	tenantGroup.POST("/notifications/test/slack-bot", deps.handleNotificationTestSlackBot)
+	tenantGroup.POST("/notifications/test/email", deps.handleNotificationTestEmail)
+	tenantGroup.GET("/notifications/suppressions", deps.handleNotificationSuppressions)
+
+	tenantGroup.GET("/mailing-lists", deps.handleMailingListsList)
+	tenantGroup.POST("/mailing-lists", deps.handleMailingListCreate)
+	tenantGroup.PUT("/mailing-lists/:mailing_list_id", deps.handleMailingListUpdate)
+	tenantGroup.DELETE("/mailing-lists/:mailing_list_id", deps.handleMailingListDelete)
+
+	tenantGroup.PUT("/enabled", deps.handleTenantSetEnabled)
+	tenantGroup.GET("/keys", deps.handleTenantKeysList)
+	tenantGroup.POST("/keys", deps.handleTenantKeyCreate)
+	tenantGroup.POST("/keys/rotate", deps.handleTenantKeyRotate)
+	tenantGroup.POST("/keys/:key_id/revoke", deps.handleTenantKeyRevoke)
 
 	adminGroup.GET("/me", deps.handleAdminMe)
 	adminGroup.GET("/action-types", deps.handleActionTypes)
@@ -124,6 +127,31 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/enforcement-mode", deps.handleEnforcementModeUpdate)
 	adminGroup.PUT("/settings/mcp-passthrough-upstream", deps.handleMCPPassthroughUpstreamUpdate)
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
+}
+
+func (d Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		adminKey := auth.AdminKeyFromRequest(c.Request())
+		key, err := auth.AuthenticateAdminAny(c.Request().Context(), d.Store, adminKey)
+		if err != nil {
+			return authError(c, err)
+		}
+		if key.AdminKeyID != "" {
+			c.Set(telemetry.CtxAdminID, key.AdminKeyID)
+		}
+
+		tenantID := c.Param("tenant_id")
+		if tenantID == "" {
+			return next(c)
+		}
+		if _, err := d.Store.GetTenant(c.Request().Context(), tenantID); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+			}
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant"})
+		}
+		return next(c)
+	}
 }
 
 func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
