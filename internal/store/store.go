@@ -38,6 +38,7 @@ const (
 	defaultRateLimitPerMinuteVal = int64(60)
 	defaultRateLimitPerDayVal    = int64(10000)
 	defaultRateLimitScopeVal     = "tenant_agent_tool"
+	defaultPageLimit             = 50
 )
 
 type StoreAPI interface {
@@ -59,8 +60,8 @@ type StoreAPI interface {
 	GetRiskOverride(ctx context.Context, tenantID, actionType string) (string, error)
 	ListRiskOverrides(ctx context.Context, tenantID string) ([]models.RiskOverride, error)
 	DeleteRiskOverride(ctx context.Context, tenantID, actionType string) error
-	InsertADR(ctx context.Context, record models.ActionDecisionRecord) error
-	InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error
+	InsertADR(ctx context.Context, record *models.ActionDecisionRecord) error
+	InsertApprovalRequest(ctx context.Context, req *models.ApprovalRequest) error
 	ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error)
 	GetApprovalRequest(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
 	GetApprovalForExecution(ctx context.Context, tenantID, approvalRequestID string) (models.ApprovalRequest, error)
@@ -97,22 +98,22 @@ type StoreAPI interface {
 	GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error)
 	SetTenantEnforcementMode(ctx context.Context, tenantID, enforcementMode string) error
 	SetTenantMCPPassthroughUpstreamToolID(ctx context.Context, tenantID, toolID string) error
-	IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error)
+	IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (allowed bool, count int64, err error)
 	ListAuditEvents(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
 	ListAuditEventsExport(ctx context.Context, tenantID string, limit, offset int, action, resourceType, actorID string, from, to *time.Time) ([]models.AdminAuditEvent, error)
 	ListAuditResourceTypes(ctx context.Context, tenantID string) ([]string, error)
-	InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error
+	InsertAuditEvent(ctx context.Context, event *models.AdminAuditEvent) error
 	DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error)
 	GetNotificationConfig(ctx context.Context, tenantID string) (models.NotificationConfig, error)
-	UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error
+	UpsertNotificationConfig(ctx context.Context, config *models.NotificationConfig) error
 	ListMailingLists(ctx context.Context, tenantID string) ([]models.MailingList, error)
 	GetMailingList(ctx context.Context, tenantID, mailingListID string) (models.MailingList, error)
 	ListMailingListMembers(ctx context.Context, mailingListID string) ([]models.MailingListMember, error)
-	CreateMailingList(ctx context.Context, list models.MailingList, members []string) error
-	UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error
+	CreateMailingList(ctx context.Context, list *models.MailingList, members []string) error
+	UpdateMailingList(ctx context.Context, list *models.MailingList, members []string) error
 	DeleteMailingList(ctx context.Context, tenantID, mailingListID string) error
 	GetNotificationSuppression(ctx context.Context, dedupKey string) (models.NotificationSuppression, error)
-	UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error
+	UpsertNotificationSuppression(ctx context.Context, suppression *models.NotificationSuppression) error
 	ListNotificationSuppressions(ctx context.Context, tenantID string, limit, offset int, eventType, channel, severity string) ([]models.NotificationSuppression, error)
 	ListApprovalsExpiring(ctx context.Context, now time.Time, window time.Duration) ([]models.ApprovalRequest, error)
 	ListApprovalsExpired(ctx context.Context, now time.Time) ([]models.ApprovalRequest, error)
@@ -124,7 +125,7 @@ type StoreAPI interface {
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
 
 	// Tenant key lifecycle (Epic 7)
-	CreateTenantKey(ctx context.Context, key models.TenantKey) error
+	CreateTenantKey(ctx context.Context, key *models.TenantKey) error
 	ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error)
 	RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
 }
@@ -563,8 +564,11 @@ func (s *Store) DeleteRiskOverride(ctx context.Context, tenantID, actionType str
 	return s.bumpTenantConfigVersion(ctx, tenantID)
 }
 
-//nolint:gocritic // API favors value records for test setup convenience.
-func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecord) error {
+func (s *Store) InsertADR(ctx context.Context, record *models.ActionDecisionRecord) error {
+	if record == nil {
+		return errors.New("action decision record required")
+	}
+
 	reasonsJSON, err := json.Marshal(record.Reasons)
 	if err != nil {
 		return err
@@ -608,8 +612,11 @@ func (s *Store) InsertADR(ctx context.Context, record models.ActionDecisionRecor
 	return err
 }
 
-//nolint:gocritic // API favors value records for test setup convenience.
-func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error {
+func (s *Store) InsertApprovalRequest(ctx context.Context, req *models.ApprovalRequest) error {
+	if req == nil {
+		return errors.New("approval request required")
+	}
+
 	query := `INSERT INTO rbitr.approval_requests (
 		approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash,
 		status, approval_token_hash, expires_at, created_at, policy_version,
@@ -663,7 +670,7 @@ func (s *Store) InsertApprovalRequest(ctx context.Context, req models.ApprovalRe
 
 func (s *Store) ListApprovalRequests(ctx context.Context, tenantID, status string, limit, offset int) ([]models.ApprovalRequest, error) {
 	if limit <= 0 {
-		limit = 50
+		limit = defaultPageLimit
 	}
 	if offset < 0 {
 		offset = 0
@@ -671,20 +678,31 @@ func (s *Store) ListApprovalRequests(ctx context.Context, tenantID, status strin
 
 	args := []any{tenantID}
 	clauses := []string{"tenant_id = $1"}
+
 	if status != "" {
 		args = append(args, status)
-		clauses = append(clauses, fmt.Sprintf("status = $%d", len(args)))
+		clauses = append(clauses, "status = $"+strconv.Itoa(len(args)))
 	}
+
+	limitPos := len(args) + 1
+	offsetPos := len(args) + 2 //nolint:mnd // ignore arg pos
+
 	args = append(args, limit, offset)
 
-	query := fmt.Sprintf(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
-		approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
-		executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
-		risk, rule_id, request_context, reasons
-		FROM rbitr.approval_requests
-		WHERE %s
-		ORDER BY created_at DESC
-		LIMIT $%d OFFSET $%d`, strings.Join(clauses, " AND "), len(args)-1, len(args))
+	var b strings.Builder
+	b.WriteString(`SELECT approval_request_id, tenant_id, agent_id, tool_id, action_type, request_hash, status,
+	approval_token_hash, expires_at, created_at, policy_version, decided_at, decided_by, decision_comment,
+	executed_at, executed_request_id, executed_decision_id, request_decision_id, action_summary,
+	risk, rule_id, request_context, reasons
+	FROM rbitr.approval_requests
+	WHERE `)
+	b.WriteString(strings.Join(clauses, " AND "))
+	b.WriteString(" ORDER BY created_at DESC LIMIT $")
+	b.WriteString(strconv.Itoa(limitPos))
+	b.WriteString(" OFFSET $")
+	b.WriteString(strconv.Itoa(offsetPos))
+
+	query := b.String()
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -1023,6 +1041,7 @@ func (s *Store) ListEvidenceFiltered(ctx context.Context, tenantID, decision, ac
 	}
 
 	args = append(args, limit)
+	//nolint:gosec // #nosec G201 - dynamic fragments are generated from fixed query clauses with positional placeholders.
 	query := fmt.Sprintf(`SELECT decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
 		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
 		reasons, constraints, tags, policy_version, reason, request_hash,
@@ -1338,10 +1357,10 @@ func (s *Store) GetFeatureArgConstraints(ctx context.Context) (bool, error) {
 
 func (s *Store) SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error {
 	if perMinute <= 0 || perDay <= 0 {
-		return fmt.Errorf("per_minute and per_day must be > 0")
+		return errors.New("per_minute and per_day must be > 0")
 	}
 	if scope = strings.TrimSpace(scope); !isRateLimitScope(scope) {
-		return fmt.Errorf("invalid rate limit scope")
+		return errors.New("invalid rate limit scope")
 	}
 
 	now := time.Now().UTC()
@@ -1443,7 +1462,12 @@ func (s *Store) getSystemSettingBool(ctx context.Context, key string) (bool, err
 	return value == settingTrue, nil
 }
 
-func (s *Store) IncrementRateLimitCounter(ctx context.Context, tenantID, agentID, toolID, actionType, window string, bucketStart, now time.Time, limit int64) (bool, int64, error) {
+func (s *Store) IncrementRateLimitCounter(
+	ctx context.Context,
+	tenantID, agentID, toolID, actionType, window string,
+	bucketStart, now time.Time,
+	limit int64,
+) (allowed bool, count int64, err error) {
 	if limit <= 0 {
 		return true, 0, nil
 	}
@@ -1467,8 +1491,7 @@ func (s *Store) IncrementRateLimitCounter(ctx context.Context, tenantID, agentID
 		limit,
 	)
 
-	var count int64
-	if err := row.Scan(&count); err != nil {
+	if err = row.Scan(&count); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, 0, nil
 		}
@@ -1526,6 +1549,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, tenantID string, limit, off
 		args = append(args, *to)
 	}
 	args = append(args, limit, offset)
+	//nolint:gosec // #nosec G201 -- dynamic fragments are generated from fixed query clauses with positional placeholders.
 	query := fmt.Sprintf(`SELECT audit_event_id, tenant_id, stream_id, event_hash, prev_hash,
 		actor_type, actor_id, actor_display, action, resource_type, resource_id,
 		before, after, request_id, ip, user_agent, created_at
@@ -1787,7 +1811,11 @@ func (s *Store) DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (
 	return rows, nil
 }
 
-func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+func (s *Store) InsertAuditEvent(ctx context.Context, event *models.AdminAuditEvent) error {
+	if event == nil {
+		return errors.New("audit event required")
+	}
+
 	if event.CreatedAt.IsZero() {
 		event.CreatedAt = time.Now().UTC()
 	}
@@ -1803,7 +1831,7 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event models.AdminAuditEve
 		return err
 	}
 	payload := audit.BuildHashPayload(event, event.StreamID)
-	eventHash, err := audit.ComputeEventHash(prevHash, payload)
+	eventHash, err := audit.ComputeEventHash(prevHash, &payload)
 	if err != nil {
 		return err
 	}
@@ -1944,7 +1972,11 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	return config, nil
 }
 
-func (s *Store) UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error {
+func (s *Store) UpsertNotificationConfig(ctx context.Context, config *models.NotificationConfig) error {
+	if config == nil {
+		return errors.New("notification config required")
+	}
+
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.notification_config (
 		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
@@ -2061,12 +2093,18 @@ func (s *Store) ListMailingListMembers(ctx context.Context, mailingListID string
 	return members, rows.Err()
 }
 
-func (s *Store) CreateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+func (s *Store) CreateMailingList(ctx context.Context, list *models.MailingList, members []string) error {
+	if list == nil {
+		return errors.New("mailing list required")
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	_, err = tx.ExecContext(ctx, `INSERT INTO rbitr.mailing_lists (mailing_list_id, tenant_id, name, description, created_at, updated_at)
 		VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -2094,12 +2132,18 @@ func (s *Store) CreateMailingList(ctx context.Context, list models.MailingList, 
 	return tx.Commit()
 }
 
-func (s *Store) UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+func (s *Store) UpdateMailingList(ctx context.Context, list *models.MailingList, members []string) error {
+	if list == nil {
+		return errors.New("mailing list required")
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	_, err = tx.ExecContext(ctx, `UPDATE rbitr.mailing_lists
 		SET name = $1, description = $2, updated_at = $3
@@ -2179,7 +2223,11 @@ func (s *Store) GetNotificationSuppression(ctx context.Context, dedupKey string)
 	return suppression, nil
 }
 
-func (s *Store) UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error {
+func (s *Store) UpsertNotificationSuppression(ctx context.Context, suppression *models.NotificationSuppression) error {
+	if suppression == nil {
+		return errors.New("notification suppression required")
+	}
+
 	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.notification_suppressions (
 		dedup_key, tenant_id, channel, event_type, resource_id, severity,
 		first_seen_at, last_seen_at, last_sent_at, suppressed_until,
@@ -2238,6 +2286,7 @@ func (s *Store) ListNotificationSuppressions(ctx context.Context, tenantID strin
 	}
 	args = append(args, limit, offset)
 
+	//nolint:gosec // #nosec G201 -- dynamic fragments are generated from fixed query clauses with positional placeholders.
 	query := fmt.Sprintf(`SELECT dedup_key, tenant_id, channel, event_type, resource_id, severity,
 		first_seen_at, last_seen_at, last_sent_at, suppressed_until, suppressed_count, last_payload_hash, updated_at
 		FROM rbitr.notification_suppressions
@@ -2420,7 +2469,11 @@ func (s *Store) SoftDeleteTenant(ctx context.Context, tenantID string, deletedAt
 
 // Tenant key lifecycle (Epic 7)
 
-func (s *Store) CreateTenantKey(ctx context.Context, key models.TenantKey) error {
+func (s *Store) CreateTenantKey(ctx context.Context, key *models.TenantKey) error {
+	if key == nil {
+		return errors.New("tenant key required")
+	}
+
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO rbitr.tenant_keys (key_id, tenant_id, key_hash, key_prefix, created_at)
 		 VALUES ($1, $2, $3, $4, $5)`,

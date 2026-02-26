@@ -96,6 +96,23 @@ type NotificationMetadataResponse struct {
 	Channels   []string `json:"channels"`
 }
 
+type approvalStatus string
+
+const (
+	approvalStatusPending   approvalStatus = "PENDING"
+	approvalStatusApproved  approvalStatus = "APPROVED"
+	approvalStatusDenied    approvalStatus = "DENIED"
+	approvalStatusExecuting approvalStatus = "EXECUTING"
+	approvalStatusExecuted  approvalStatus = "EXECUTED"
+	approvalStatusFailed    approvalStatus = "FAILED"
+	approvalStatusExpired   approvalStatus = "EXPIRED"
+	approvalStatusRevoked   approvalStatus = "REVOKED"
+	enforcementModeEnforce                 = "enforce"
+	enforcementModeShadow                  = "shadow"
+	defaultMinutes                         = 60
+	defaultDays                            = 10000
+)
+
 type NotificationConfigResponse struct {
 	TenantID                   string    `json:"tenant_id"`
 	SlackWebhookEnabled        bool      `json:"slack_webhook_enabled"`
@@ -167,7 +184,7 @@ type ToolResponse struct {
 	MCP      *MCPConfig  `json:"mcp,omitempty"`
 }
 
-func (d Dependencies) handleTenantList(c *echo.Context) error {
+func (d *Dependencies) handleTenantList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeTenantsRead); err != nil {
 		return err
 	}
@@ -178,7 +195,7 @@ func (d Dependencies) handleTenantList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func (d Dependencies) handleTenantDetail(c *echo.Context) error {
+func (d *Dependencies) handleTenantDetail(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeTenantsRead); err != nil {
 		return err
 	}
@@ -194,7 +211,7 @@ func (d Dependencies) handleTenantDetail(c *echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
-func (d Dependencies) handleEvidenceList(c *echo.Context) error {
+func (d *Dependencies) handleEvidenceList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
@@ -209,8 +226,8 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 	risk := c.QueryParam("risk")
 	var since *time.Time
 	if sinceParam := c.QueryParam("since"); sinceParam != "" {
-		parsed, err := time.Parse(time.RFC3339, sinceParam)
-		if err != nil {
+		parsed, parseErr := time.Parse(time.RFC3339, sinceParam)
+		if parseErr != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid since"})
 		}
 		since = &parsed
@@ -263,7 +280,7 @@ func (d Dependencies) handleEvidenceList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"tenant_id": tenantID, "records": exported})
 }
 
-func (d Dependencies) handleApprovalsList(c *echo.Context) error {
+func (d *Dependencies) handleApprovalsList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
@@ -290,7 +307,7 @@ func (d Dependencies) handleApprovalsList(c *echo.Context) error {
 	for i := range approvals {
 		if approvalExpired(&approvals[i], now) {
 			if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvals[i].ApprovalRequestID, now); err == nil {
-				approvals[i].Status = "EXPIRED"
+				approvals[i].Status = string(approvalStatusExpired)
 				approvals[i].DecidedAt = &now
 			}
 		}
@@ -298,7 +315,7 @@ func (d Dependencies) handleApprovalsList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, approvals)
 }
 
-func (d Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
+func (d *Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
@@ -313,7 +330,7 @@ func (d Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
+func (d *Dependencies) handleApprovalDetail(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
@@ -330,26 +347,26 @@ func (d Dependencies) handleApprovalDetail(c *echo.Context) error {
 	now := time.Now().UTC()
 	if approvalExpired(&approval, now) {
 		if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvalID, now); err == nil {
-			approval.Status = "EXPIRED"
+			approval.Status = string(approvalStatusExpired)
 			approval.DecidedAt = &now
 		}
 	}
 	return c.JSON(http.StatusOK, approval)
 }
 
-func (d Dependencies) handleApprovalApprove(c *echo.Context) error {
-	return d.handleApprovalDecision(c, "APPROVED", "APPROVAL.REQUEST.APPROVE")
+func (d *Dependencies) handleApprovalApprove(c *echo.Context) error {
+	return d.handleApprovalDecision(c, string(approvalStatusApproved), "APPROVAL.REQUEST.APPROVE")
 }
 
-func (d Dependencies) handleApprovalDeny(c *echo.Context) error {
-	return d.handleApprovalDecision(c, "DENIED", "APPROVAL.REQUEST.DENY")
+func (d *Dependencies) handleApprovalDeny(c *echo.Context) error {
+	return d.handleApprovalDecision(c, string(approvalStatusDenied), "APPROVAL.REQUEST.DENY")
 }
 
-func (d Dependencies) handleApprovalRevoke(c *echo.Context) error {
-	return d.handleApprovalDecision(c, "REVOKED", "APPROVAL.REQUEST.REVOKE")
+func (d *Dependencies) handleApprovalRevoke(c *echo.Context) error {
+	return d.handleApprovalDecision(c, string(approvalStatusRevoked), "APPROVAL.REQUEST.REVOKE")
 }
 
-func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
+func (d *Dependencies) handlePolicyVersions(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
@@ -372,7 +389,7 @@ func (d Dependencies) handlePolicyVersions(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (d Dependencies) handlePolicyVersionGet(c *echo.Context) error {
+func (d *Dependencies) handlePolicyVersionGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
@@ -389,7 +406,7 @@ func (d Dependencies) handlePolicyVersionGet(c *echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
-func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
+func (d *Dependencies) handlePolicyCreate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
@@ -436,7 +453,7 @@ func (d Dependencies) handlePolicyCreate(c *echo.Context) error {
 	return c.NoContent(http.StatusCreated)
 }
 
-func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
+func (d *Dependencies) handlePolicyPublish(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesPub)
 	if err != nil {
 		return err
@@ -474,7 +491,7 @@ func (d Dependencies) handlePolicyPublish(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
+func (d *Dependencies) handlePolicyRollback(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesRB)
 	if err != nil {
 		return err
@@ -519,7 +536,7 @@ func (d Dependencies) handlePolicyRollback(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handlePolicySimulate(c *echo.Context) error {
+func (d *Dependencies) handlePolicySimulate(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopePoliciesSim); err != nil {
 		return err
 	}
@@ -534,6 +551,7 @@ func (d Dependencies) handlePolicySimulate(c *echo.Context) error {
 
 	tenantID := c.Param("tenant_id")
 	regoModule := payload.RegoModule
+	//nolint:nestif // Selecting policy source inline keeps version/active fallback behavior explicit.
 	if regoModule == "" {
 		if payload.PolicyVersion != "" {
 			version, err := d.Store.GetPolicyVersion(c.Request().Context(), tenantID, payload.PolicyVersion)
@@ -605,7 +623,7 @@ func simulationMatchedRules(rules []opa.MatchedRule) []map[string]any {
 	return out
 }
 
-func (d Dependencies) handleRiskOverridesList(c *echo.Context) error {
+func (d *Dependencies) handleRiskOverridesList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
@@ -618,7 +636,7 @@ func (d Dependencies) handleRiskOverridesList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, overrides)
 }
 
-func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
+func (d *Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopePoliciesWrite)
 	if err != nil {
 		return err
@@ -643,7 +661,7 @@ func (d Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleToolsList(c *echo.Context) error {
+func (d *Dependencies) handleToolsList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeToolsRead); err != nil {
 		return err
 	}
@@ -654,27 +672,27 @@ func (d Dependencies) handleToolsList(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list tools"})
 	}
 	response := make([]ToolResponse, 0, len(tools))
-	for _, tool := range tools {
+	for i := range tools {
 		toolResponse := ToolResponse{
-			ToolID:   tool.ToolID,
-			TenantID: tool.TenantID,
+			ToolID:   tools[i].ToolID,
+			TenantID: tools[i].TenantID,
 		}
 
 		// Add HTTP config if base_url is set
-		if tool.BaseURL != "" {
+		if tools[i].BaseURL != "" {
 			toolResponse.HTTP = &HTTPConfig{
-				BaseURL:  tool.BaseURL,
-				AuthType: tool.AuthType,
-				AuthSet:  tool.AuthValue != "",
+				BaseURL:  tools[i].BaseURL,
+				AuthType: tools[i].AuthType,
+				AuthSet:  tools[i].AuthValue != "",
 			}
 		}
 
 		// Add MCP config if any MCP fields are set
-		if tool.MCPUpstreamURL != "" || tool.Description != "" || len(tool.InputSchemaJSON) > 0 {
+		if tools[i].MCPUpstreamURL != "" || tools[i].Description != "" || len(tools[i].InputSchemaJSON) > 0 {
 			toolResponse.MCP = &MCPConfig{
-				UpstreamURL:     tool.MCPUpstreamURL,
-				Description:     tool.Description,
-				InputSchemaJSON: tool.InputSchemaJSON,
+				UpstreamURL:     tools[i].MCPUpstreamURL,
+				Description:     tools[i].Description,
+				InputSchemaJSON: tools[i].InputSchemaJSON,
 			}
 		}
 
@@ -683,7 +701,7 @@ func (d Dependencies) handleToolsList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (d Dependencies) handleSettingsGet(c *echo.Context) error {
+func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeSettingsRead); err != nil {
 		return err
 	}
@@ -713,14 +731,14 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 		featureArgConstraints = value
 	}
 	defaultRateLimit := models.RateLimitConfig{
-		PerMinute: 60,
-		PerDay:    10000,
+		PerMinute: defaultMinutes,
+		PerDay:    defaultDays,
 		Scope:     "tenant_agent_tool",
 	}
 	if value, err := d.Store.GetDefaultRateLimitConfig(c.Request().Context()); err == nil {
 		defaultRateLimit = value
 	}
-	enforcementMode := "enforce"
+	enforcementMode := enforcementModeEnforce
 	mcpPassthroughUpstreamToolID := ""
 	if tenantID != "" {
 		tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
@@ -730,7 +748,7 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
 		}
-		if mode := strings.TrimSpace(tenantConfig.EnforcementMode); mode == "shadow" {
+		if mode := strings.TrimSpace(tenantConfig.EnforcementMode); mode == string(enforcementModeShadow) {
 			enforcementMode = mode
 		}
 		mcpPassthroughUpstreamToolID = strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
@@ -751,7 +769,7 @@ func (d Dependencies) handleSettingsGet(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleAuditList(c *echo.Context) error {
+func (d *Dependencies) handleAuditList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
@@ -785,7 +803,7 @@ func (d Dependencies) handleAuditList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, events)
 }
 
-func (d Dependencies) handleAuditResourceTypes(c *echo.Context) error {
+func (d *Dependencies) handleAuditResourceTypes(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
@@ -799,7 +817,7 @@ func (d Dependencies) handleAuditResourceTypes(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleAuditExport(c *echo.Context) error {
+func (d *Dependencies) handleAuditExport(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditExport); err != nil {
 		return err
 	}
@@ -807,7 +825,7 @@ func (d Dependencies) handleAuditExport(c *echo.Context) error {
 	return d.handleAuditExportResponse(c, tenantID)
 }
 
-func (d Dependencies) handleAuditExportResponse(c *echo.Context, tenantID string) error {
+func (d *Dependencies) handleAuditExportResponse(c *echo.Context, tenantID string) error {
 	format := strings.ToLower(strings.TrimSpace(c.QueryParam("format")))
 	if format == "" {
 		format = "json"
@@ -868,7 +886,7 @@ func (d Dependencies) handleAuditExportResponse(c *echo.Context, tenantID string
 	}
 }
 
-func (d Dependencies) handleAuditListAll(c *echo.Context) error {
+func (d *Dependencies) handleAuditListAll(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
@@ -901,7 +919,7 @@ func (d Dependencies) handleAuditListAll(c *echo.Context) error {
 	return c.JSON(http.StatusOK, events)
 }
 
-func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
+func (d *Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
@@ -935,7 +953,7 @@ func (d Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
+func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -988,7 +1006,7 @@ func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		NotifyTokenAbuse:           payload.NotifyTokenAbuse,
 		NotifyPolicyInvalid:        payload.NotifyPolicyInvalid,
 	}
-	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), &config); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update notification config"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.UPDATE", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
@@ -1010,7 +1028,7 @@ func (d Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error {
+func (d *Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -1030,7 +1048,7 @@ func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error
 	config.TenantID = tenantID
 	config.SlackWebhookSecretRef = payload.SecretRef
 
-	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), &config); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update slack secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.SLACK_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
@@ -1046,7 +1064,7 @@ func (d Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) error
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error {
+func (d *Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -1066,7 +1084,7 @@ func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error
 	config.TenantID = tenantID
 	config.EmailSecretRef = payload.SecretRef
 
-	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), config); err != nil {
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), &config); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update email secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.EMAIL_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
@@ -1082,7 +1100,7 @@ func (d Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) error
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleMailingListsList(c *echo.Context) error {
+func (d *Dependencies) handleMailingListsList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
@@ -1094,7 +1112,7 @@ func (d Dependencies) handleMailingListsList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, lists)
 }
 
-func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
+func (d *Dependencies) handleMailingListCreate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -1119,7 +1137,7 @@ func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
 		Name:          payload.Name,
 		Description:   payload.Description,
 	}
-	if err := d.Store.CreateMailingList(c.Request().Context(), list, payload.Members); err != nil {
+	if err := d.Store.CreateMailingList(c.Request().Context(), &list, payload.Members); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create mailing list"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.CREATE", "MAILING_LIST", list.MailingListID, map[string]any{}, map[string]any{
@@ -1135,7 +1153,7 @@ func (d Dependencies) handleMailingListCreate(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, list)
 }
 
-func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
+func (d *Dependencies) handleMailingListUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -1162,7 +1180,7 @@ func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
 		Name:          payload.Name,
 		Description:   payload.Description,
 	}
-	if err := d.Store.UpdateMailingList(c.Request().Context(), list, payload.Members); err != nil {
+	if err := d.Store.UpdateMailingList(c.Request().Context(), &list, payload.Members); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update mailing list"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.UPDATE", "MAILING_LIST", listID, map[string]any{
@@ -1181,7 +1199,7 @@ func (d Dependencies) handleMailingListUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleMailingListDelete(c *echo.Context) error {
+func (d *Dependencies) handleMailingListDelete(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
 	if err != nil {
 		return err
@@ -1204,7 +1222,7 @@ func (d Dependencies) handleMailingListDelete(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
+func (d *Dependencies) handleNotificationTestSlack(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
@@ -1238,7 +1256,7 @@ func (d Dependencies) handleNotificationTestSlack(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
+func (d *Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
@@ -1279,7 +1297,7 @@ func (d Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
+func (d *Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
 		return err
 	}
@@ -1313,7 +1331,7 @@ func (d Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
+func (d *Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
@@ -1336,7 +1354,7 @@ func (d Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func (d Dependencies) handleNotificationEventTypes(c *echo.Context) error {
+func (d *Dependencies) handleNotificationEventTypes(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
@@ -1353,7 +1371,7 @@ func (d Dependencies) handleNotificationEventTypes(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleActionTypes(c *echo.Context) error {
+func (d *Dependencies) handleActionTypes(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopePoliciesRead); err != nil {
 		return err
 	}
@@ -1362,7 +1380,7 @@ func (d Dependencies) handleActionTypes(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
+func (d *Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
@@ -1395,7 +1413,7 @@ func (d Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
+func (d *Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
@@ -1425,7 +1443,7 @@ func (d Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
+func (d *Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
@@ -1473,7 +1491,7 @@ func (d Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
+func (d *Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
@@ -1520,14 +1538,14 @@ func (d Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error {
+func (d *Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
 	if err != nil {
 		return err
 	}
 
 	var payload MCPPassthroughUpstreamRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 	payload.TenantID = strings.TrimSpace(payload.TenantID)
@@ -1579,7 +1597,7 @@ func (d Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error 
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleDisableXTenantKeyUpdate(c *echo.Context) error {
+func (d *Dependencies) handleDisableXTenantKeyUpdate(c *echo.Context) error {
 	return d.handleBooleanSystemSettingUpdate(
 		c,
 		"SETTINGS.DISABLE_X_TENANT_KEY.SET",
@@ -1589,7 +1607,7 @@ func (d Dependencies) handleDisableXTenantKeyUpdate(c *echo.Context) error {
 	)
 }
 
-func (d Dependencies) handleFeatureRateLimitingUpdate(c *echo.Context) error {
+func (d *Dependencies) handleFeatureRateLimitingUpdate(c *echo.Context) error {
 	return d.handleBooleanSystemSettingUpdate(
 		c,
 		"SETTINGS.FEATURE_RATE_LIMITING.SET",
@@ -1599,7 +1617,7 @@ func (d Dependencies) handleFeatureRateLimitingUpdate(c *echo.Context) error {
 	)
 }
 
-func (d Dependencies) handleFeatureArgConstraintsUpdate(c *echo.Context) error {
+func (d *Dependencies) handleFeatureArgConstraintsUpdate(c *echo.Context) error {
 	return d.handleBooleanSystemSettingUpdate(
 		c,
 		"SETTINGS.FEATURE_ARG_CONSTRAINTS.SET",
@@ -1609,7 +1627,7 @@ func (d Dependencies) handleFeatureArgConstraintsUpdate(c *echo.Context) error {
 	)
 }
 
-func (d Dependencies) handleBooleanSystemSettingUpdate(
+func (d *Dependencies) handleBooleanSystemSettingUpdate(
 	c *echo.Context,
 	auditAction string,
 	resourceID string,
@@ -1652,14 +1670,14 @@ func isRateLimitScope(scope string) bool {
 	}
 }
 
-func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
+func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditAction string) error {
 	adminKey, err := requireAdminScope(c, d.Store, scopeApprovalsDec)
 	if err != nil {
 		return err
 	}
 
 	var payload ApprovalDecisionRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
@@ -1674,18 +1692,18 @@ func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditActio
 	}
 	now := time.Now().UTC()
 	if approvalExpired(&before, now) {
-		if err := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvalID, now); err == nil {
+		if expireErr := d.Store.MarkApprovalExpired(c.Request().Context(), tenantID, approvalID, now); expireErr == nil {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "approval expired"})
 		}
 	}
 
 	decidedAt := time.Now().UTC()
-	switch status {
-	case "APPROVED":
+	switch approvalStatus(status) {
+	case approvalStatusApproved:
 		err = d.Store.ApproveApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
-	case "DENIED":
+	case approvalStatusDenied:
 		err = d.Store.DenyApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
-	case "REVOKED":
+	case approvalStatusRevoked:
 		err = d.Store.RevokeApprovalRequest(c.Request().Context(), tenantID, approvalID, adminKey.AdminKeyID, payload.Comment, decidedAt)
 	default:
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status"})
@@ -1705,12 +1723,12 @@ func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditActio
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
 	}
 	if d.Metrics != nil {
-		switch status {
-		case "APPROVED":
+		switch approvalStatus(status) {
+		case approvalStatusApproved:
 			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("approved").Inc()
-		case "DENIED":
+		case approvalStatusDenied:
 			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("denied").Inc()
-		case "REVOKED":
+		case approvalStatusRevoked:
 			d.Metrics.ApprovalsResolvedTotal.WithLabelValues("revoked").Inc()
 		}
 	}
@@ -1734,7 +1752,7 @@ func (d Dependencies) handleApprovalDecision(c *echo.Context, status, auditActio
 	return c.JSON(http.StatusOK, after)
 }
 
-func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, tenantID, action, resourceType, resourceID string, before, after map[string]any) error {
+func (d *Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, tenantID, action, resourceType, resourceID string, before, after map[string]any) error {
 	action = strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
 			return -1
@@ -1780,7 +1798,7 @@ func (d Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey, 
 		UserAgent:    c.Request().UserAgent(),
 		CreatedAt:    time.Now().UTC(),
 	}
-	return d.Store.InsertAuditEvent(c.Request().Context(), event)
+	return d.Store.InsertAuditEvent(c.Request().Context(), &event)
 }
 
 func marshalAuditPayload(resourceType string, payload map[string]any) (json.RawMessage, error) {
@@ -1796,8 +1814,15 @@ func marshalAuditPayload(resourceType string, payload map[string]any) (json.RawM
 }
 
 func isApprovalStatus(value string) bool {
-	switch value {
-	case "PENDING", "APPROVED", "DENIED", "EXECUTING", "EXECUTED", "FAILED", "EXPIRED", "REVOKED":
+	switch approvalStatus(value) {
+	case approvalStatusPending,
+		approvalStatusApproved,
+		approvalStatusDenied,
+		approvalStatusExecuting,
+		approvalStatusExecuted,
+		approvalStatusFailed,
+		approvalStatusExpired,
+		approvalStatusRevoked:
 		return true
 	default:
 		return false
@@ -1808,7 +1833,8 @@ func approvalExpired(approval *models.ApprovalRequest, now time.Time) bool {
 	if approval == nil {
 		return false
 	}
-	if approval.Status != "PENDING" && approval.Status != "APPROVED" {
+	status := approvalStatus(approval.Status)
+	if status != approvalStatusPending && status != approvalStatusApproved {
 		return false
 	}
 	return now.After(approval.ExpiresAt)
@@ -1816,7 +1842,7 @@ func approvalExpired(approval *models.ApprovalRequest, now time.Time) bool {
 
 func parseLimit(value string) (int, error) {
 	if value == "" {
-		return 50, nil
+		return 50, nil //nolint:mnd // ignore default limit.
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
@@ -1838,7 +1864,7 @@ func parseOffset(value string) (int, error) {
 
 func parseExportLimit(value string) (int, error) {
 	if value == "" {
-		return 1000, nil
+		return 1000, nil //nolint:mnd // ignore default limit.
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed <= 0 {
@@ -1847,6 +1873,7 @@ func parseExportLimit(value string) (int, error) {
 	return parsed, nil
 }
 
+//nolint:nilnil // nil time with nil error indicates optional query parameter is absent.
 func parseTimeParam(value string) (*time.Time, error) {
 	if strings.TrimSpace(value) == "" {
 		return nil, nil
@@ -1885,26 +1912,26 @@ func writeAuditCSV(writer *csv.Writer, events []models.AdminAuditEvent, includeD
 	if err := writer.Write(header); err != nil {
 		return err
 	}
-	for _, event := range events {
+	for i := range events {
 		row := []string{
-			event.AuditEventID,
-			event.TenantID,
-			event.StreamID,
-			event.EventHash,
-			event.PrevHash,
-			event.ActorType,
-			event.ActorID,
-			event.ActorDisplay,
-			event.Action,
-			event.ResourceType,
-			event.ResourceID,
-			event.RequestID,
-			event.IP,
-			event.UserAgent,
-			event.CreatedAt.UTC().Format(time.RFC3339Nano),
+			events[i].AuditEventID,
+			events[i].TenantID,
+			events[i].StreamID,
+			events[i].EventHash,
+			events[i].PrevHash,
+			events[i].ActorType,
+			events[i].ActorID,
+			events[i].ActorDisplay,
+			events[i].Action,
+			events[i].ResourceType,
+			events[i].ResourceID,
+			events[i].RequestID,
+			events[i].IP,
+			events[i].UserAgent,
+			events[i].CreatedAt.UTC().Format(time.RFC3339Nano),
 		}
 		if includeDetails {
-			row = append(row, string(event.Before), string(event.After))
+			row = append(row, string(events[i].Before), string(events[i].After))
 		}
 		if err := writer.Write(row); err != nil {
 			return err

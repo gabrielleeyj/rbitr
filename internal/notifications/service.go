@@ -3,7 +3,6 @@ package notifications
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -40,7 +39,7 @@ func (s *Service) Send(ctx context.Context, tenantID string, event NotificationE
 		}
 		return err
 	}
-	if !eventEnabled(config, event.EventType) {
+	if !eventEnabled(&config, event.EventType) {
 		return nil
 	}
 
@@ -74,7 +73,7 @@ func (s *Service) Send(ctx context.Context, tenantID string, event NotificationE
 	}
 
 	if config.EmailEnabled {
-		emailErr := s.sendEmail(ctx, config, event, msg)
+		emailErr := s.sendEmail(ctx, &config, event, msg)
 		if emailErr != nil {
 			errs = append(errs, emailErr)
 		}
@@ -88,12 +87,15 @@ func (s *Service) Send(ctx context.Context, tenantID string, event NotificationE
 
 func (s *Service) ResolveSecret(ctx context.Context, ref string) (string, error) {
 	if s.Resolver == nil {
-		return "", fmt.Errorf("secret resolver not configured")
+		return "", errors.New("secret resolver not configured")
 	}
 	return s.Resolver.Resolve(ctx, ref)
 }
 
-func eventEnabled(config models.NotificationConfig, eventType string) bool {
+func eventEnabled(config *models.NotificationConfig, eventType string) bool {
+	if config == nil {
+		return false
+	}
 	switch eventType {
 	case EventApprovalExpiring, EventApprovalExpired:
 		return config.NotifyApprovalExpiring
@@ -106,12 +108,15 @@ func eventEnabled(config models.NotificationConfig, eventType string) bool {
 	}
 }
 
-func (s *Service) sendEmail(ctx context.Context, config models.NotificationConfig, event NotificationEvent, msg NotificationMessage) error {
+func (s *Service) sendEmail(ctx context.Context, config *models.NotificationConfig, event NotificationEvent, msg NotificationMessage) error {
+	if config == nil {
+		return errors.New("notification config not provided")
+	}
 	if config.EmailProvider == "" || config.EmailFrom == "" {
-		return fmt.Errorf("email provider or from address missing")
+		return errors.New("email provider or from address missing")
 	}
 	if config.EmailDefaultMailingListID == "" {
-		return fmt.Errorf("email default mailing list missing")
+		return errors.New("email default mailing list missing")
 	}
 
 	members, err := s.Store.ListMailingListMembers(ctx, config.EmailDefaultMailingListID)
@@ -125,7 +130,7 @@ func (s *Service) sendEmail(ctx context.Context, config models.NotificationConfi
 		}
 	}
 	if len(recipients) == 0 {
-		return fmt.Errorf("email mailing list has no members")
+		return errors.New("email mailing list has no members")
 	}
 
 	secretValue := ""
@@ -146,7 +151,7 @@ func (s *Service) sendEmail(ctx context.Context, config models.NotificationConfi
 	case "mailgun":
 		sender, err = NewMailgunSender(secretValue, config.EmailDomain)
 	default:
-		return fmt.Errorf("unsupported email provider")
+		return errors.New("unsupported email provider")
 	}
 	if err != nil {
 		return err

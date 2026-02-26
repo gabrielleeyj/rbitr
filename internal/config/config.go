@@ -39,10 +39,10 @@ func Load() Config {
 		ListenAddr:            getEnv("LISTEN_ADDR", ":8080"),
 		BodyLimitSize:         getEnvInt64("BODY_LIMIT_BYTES", defaultLimitBytes),
 		ResponseLimit:         getEnvInt64("RESPONSE_LIMIT_BYTES", defaultLimitBytes),
-		DisableXTenantKey:     getEnvBool("RBTR_DISABLE_X_TENANT_KEY", false),
-		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING", false),
-		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS", false),
-		FeatureShadowMode:     getEnvBool("RBTR_FEATURE_SHADOW_MODE", false),
+		DisableXTenantKey:     getEnvBool("RBTR_DISABLE_X_TENANT_KEY"),
+		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING"),
+		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS"),
+		FeatureShadowMode:     getEnvBool("RBTR_FEATURE_SHADOW_MODE"),
 	}
 }
 
@@ -80,11 +80,11 @@ func getEnvDurationFromSeconds(key string, fallback time.Duration) time.Duration
 	return fallback
 }
 
-func getEnvBool(key string, fallback bool) bool {
+func getEnvBool(key string) bool {
 	if v := os.Getenv(key); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			return parsed
 		}
 	}
-	return fallback
+	return false
 }

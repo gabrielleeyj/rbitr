@@ -129,7 +129,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
 }
 
-func (d Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {
+func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		adminKey := auth.AdminKeyFromRequest(c.Request())
 		key, err := auth.AuthenticateAdminAny(c.Request().Context(), d.Store, adminKey)
@@ -154,7 +154,7 @@ func (d Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFu
 	}
 }
 
-func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
+func (d *Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -203,7 +203,7 @@ func (d Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
+func (d *Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -248,7 +248,7 @@ func (d Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
+func (d *Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -313,7 +313,7 @@ func (d Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
+func (d *Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -351,7 +351,7 @@ func (d Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
+func (d *Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -392,7 +392,7 @@ func (d Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleBootstrapComplete(c *echo.Context) error {
+func (d *Dependencies) handleBootstrapComplete(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -430,7 +430,7 @@ func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) (models
 	return key, nil
 }
 
-func (d Dependencies) handleAdminMe(c *echo.Context) error {
+func (d *Dependencies) handleAdminMe(c *echo.Context) error {
 	adminKey := auth.AdminKeyFromRequest(c.Request())
 	key, err := auth.AuthenticateAdminAny(c.Request().Context(), d.Store, adminKey)
 	if err != nil {

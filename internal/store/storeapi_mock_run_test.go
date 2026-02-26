@@ -186,22 +186,22 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 
 	t.Run("InsertADR", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().InsertADR(ctx, models.ActionDecisionRecord{DecisionID: "d1"})
-		call.Run(func(context.Context, models.ActionDecisionRecord) {})
-		call.RunAndReturn(func(context.Context, models.ActionDecisionRecord) error {
+		call := storeMock.EXPECT().InsertADR(ctx, &models.ActionDecisionRecord{DecisionID: "d1"})
+		call.Run(func(context.Context, *models.ActionDecisionRecord) {})
+		call.RunAndReturn(func(context.Context, *models.ActionDecisionRecord) error {
 			return nil
 		})
-		_ = storeMock.InsertADR(ctx, models.ActionDecisionRecord{DecisionID: "d1"})
+		_ = storeMock.InsertADR(ctx, &models.ActionDecisionRecord{DecisionID: "d1"})
 	})
 
 	t.Run("InsertApprovalRequest", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().InsertApprovalRequest(ctx, models.ApprovalRequest{ApprovalRequestID: "ar1"})
-		call.Run(func(context.Context, models.ApprovalRequest) {})
-		call.RunAndReturn(func(context.Context, models.ApprovalRequest) error {
+		call := storeMock.EXPECT().InsertApprovalRequest(ctx, &models.ApprovalRequest{ApprovalRequestID: "ar1"})
+		call.Run(func(context.Context, *models.ApprovalRequest) {})
+		call.RunAndReturn(func(context.Context, *models.ApprovalRequest) error {
 			return nil
 		})
-		_ = storeMock.InsertApprovalRequest(ctx, models.ApprovalRequest{ApprovalRequestID: "ar1"})
+		_ = storeMock.InsertApprovalRequest(ctx, &models.ApprovalRequest{ApprovalRequestID: "ar1"})
 	})
 
 	t.Run("ListApprovalRequests", func(t *testing.T) {
@@ -406,11 +406,11 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 
 	t.Run("InsertAuditEvent", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().InsertAuditEvent(ctx, models.AdminAuditEvent{AuditEventID: "ae_1"})
-		call.Run(func(context.Context, models.AdminAuditEvent) {})
-		call.RunAndReturn(func(context.Context, models.AdminAuditEvent) error {
+		call := storeMock.EXPECT().InsertAuditEvent(ctx, &models.AdminAuditEvent{AuditEventID: "ae_1"})
+		call.Run(func(context.Context, *models.AdminAuditEvent) {})
+		call.RunAndReturn(func(context.Context, *models.AdminAuditEvent) error {
 			return nil
 		})
-		_ = storeMock.InsertAuditEvent(ctx, models.AdminAuditEvent{AuditEventID: "ae_1"})
+		_ = storeMock.InsertAuditEvent(ctx, &models.AdminAuditEvent{AuditEventID: "ae_1"})
 	})
 }

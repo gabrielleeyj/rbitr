@@ -1105,7 +1105,7 @@ func TestStoreInsertADR(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	err = st.InsertADR(context.Background(), models.ActionDecisionRecord{
+	err = st.InsertADR(context.Background(), &models.ActionDecisionRecord{
 		DecisionID:        "d1",
 		RequestID:         "r1",
 		TenantID:          "t1",
@@ -1151,7 +1151,7 @@ func TestStoreInsertADRError(t *testing.T) {
 		WillReturnError(errors.New("insert failed"))
 
 	st := New(db)
-	err = st.InsertADR(context.Background(), models.ActionDecisionRecord{
+	err = st.InsertADR(context.Background(), &models.ActionDecisionRecord{
 		DecisionID:        "d1",
 		RequestID:         "r1",
 		TenantID:          "t1",
@@ -1301,7 +1301,7 @@ func TestStoreInsertApprovalRequest(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	err = st.InsertApprovalRequest(context.Background(), models.ApprovalRequest{
+	err = st.InsertApprovalRequest(context.Background(), &models.ApprovalRequest{
 		ApprovalRequestID: "ar1",
 		TenantID:          "t1",
 		AgentID:           "a1",
@@ -1322,7 +1322,7 @@ func TestStoreInsertApprovalRequestBadReasons(t *testing.T) {
 	defer db.Close()
 
 	st := New(db)
-	err = st.InsertApprovalRequest(context.Background(), models.ApprovalRequest{
+	err = st.InsertApprovalRequest(context.Background(), &models.ApprovalRequest{
 		ApprovalRequestID: "ar1",
 		TenantID:          "t1",
 		AgentID:           "a1",
@@ -1503,6 +1503,7 @@ func TestScanApprovalRequestInvalidReasons(t *testing.T) {
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
 func TestStoreApproveApprovalRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -1768,7 +1769,7 @@ func TestStoreInsertAuditEvent(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	require.NoError(t, st.InsertAuditEvent(context.Background(), models.AdminAuditEvent{
+	require.NoError(t, st.InsertAuditEvent(context.Background(), &models.AdminAuditEvent{
 		AuditEventID: "ae_1",
 		TenantID:     "t1",
 		ActorType:    "admin_key",
@@ -1814,7 +1815,7 @@ func TestStoreInsertAuditEventChainsHashes(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	require.NoError(t, st.InsertAuditEvent(context.Background(), models.AdminAuditEvent{
+	require.NoError(t, st.InsertAuditEvent(context.Background(), &models.AdminAuditEvent{
 		AuditEventID: "ae_2",
 		TenantID:     "t1",
 		ActorType:    "admin_key",
@@ -1944,7 +1945,9 @@ func TestStoreUpgradeTenantKeyHash(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	err = st.(*Store).UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
+	storeImpl, ok := st.(*Store)
+	require.True(t, ok)
+	err = storeImpl.UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -1961,7 +1964,9 @@ func TestStoreUpgradeTenantKeyHashNotFound(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 0))
 
 	st := New(db)
-	err = st.(*Store).UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
+	storeImpl, ok := st.(*Store)
+	require.True(t, ok)
+	err = storeImpl.UpgradeTenantKeyHash(context.Background(), "old_hash", "new_hash")
 	require.ErrorIs(t, err, ErrNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -2356,7 +2361,9 @@ func TestEnsureAdminWritesAllowed(t *testing.T) {
 				mock.ExpectQuery(query).WithArgs(adminWriteLockKey).WillReturnRows(tc.rows)
 			}
 
-			st := New(db).(*Store)
+			stIface := New(db)
+			st, ok := stIface.(*Store)
+			require.True(t, ok)
 			err = st.ensureAdminWritesAllowed(context.Background())
 			if tc.expectErr != nil {
 				require.ErrorIs(t, err, tc.expectErr)
@@ -2401,7 +2408,9 @@ func TestApprovalStateError(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow(tc.status))
 			}
 
-			st := New(db).(*Store)
+			stIface := New(db)
+			st, ok := stIface.(*Store)
+			require.True(t, ok)
 			err = st.approvalStateError(context.Background(), "t1", "ar1")
 			require.ErrorIs(t, err, tc.expectErr)
 			require.NoError(t, mock.ExpectationsWereMet())
@@ -2548,7 +2557,7 @@ func TestStoreUpsertNotificationConfig(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	err = st.UpsertNotificationConfig(context.Background(), models.NotificationConfig{
+	err = st.UpsertNotificationConfig(context.Background(), &models.NotificationConfig{
 		TenantID:                   "t1",
 		SlackWebhookEnabled:        true,
 		SlackWebhookSecretRef:      "env://SLACK",
@@ -2640,7 +2649,7 @@ func TestStoreCreateMailingList(t *testing.T) {
 	mock.ExpectCommit()
 
 	st := New(db)
-	err = st.CreateMailingList(context.Background(), models.MailingList{
+	err = st.CreateMailingList(context.Background(), &models.MailingList{
 		MailingListID: "ml1",
 		TenantID:      "t1",
 		Name:          "Security",
@@ -2671,7 +2680,7 @@ func TestStoreUpdateMailingList(t *testing.T) {
 	mock.ExpectCommit()
 
 	st := New(db)
-	err = st.UpdateMailingList(context.Background(), models.MailingList{
+	err = st.UpdateMailingList(context.Background(), &models.MailingList{
 		MailingListID: "ml1",
 		TenantID:      "t1",
 		Name:          "Security",
@@ -2779,7 +2788,7 @@ func TestStoreUpsertNotificationSuppression(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
-	err = st.UpsertNotificationSuppression(context.Background(), models.NotificationSuppression{
+	err = st.UpsertNotificationSuppression(context.Background(), &models.NotificationSuppression{
 		DedupKey:        "d1",
 		TenantID:        "t1",
 		Channel:         "slack",

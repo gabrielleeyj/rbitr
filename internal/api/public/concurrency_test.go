@@ -124,7 +124,7 @@ func TestConcurrentApprovalExecution(t *testing.T) {
 			}
 
 			var wg sync.WaitGroup
-			results := make([]int, 2)
+			var results [2]int
 
 			for i := range 2 {
 				wg.Add(1)

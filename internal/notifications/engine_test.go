@@ -43,8 +43,8 @@ func TestEngineSendSuccess(t *testing.T) {
 
 	storeMock.On("GetNotificationSuppression", context.Background(), key).
 		Return(models.NotificationSuppression{}, store.ErrNotFound)
-	storeMock.On("UpsertNotificationSuppression", context.Background(), mock.MatchedBy(func(s models.NotificationSuppression) bool {
-		return s.DedupKey == key && s.LastSentAt != nil && s.SuppressedUntil != nil
+	storeMock.On("UpsertNotificationSuppression", context.Background(), mock.MatchedBy(func(s *models.NotificationSuppression) bool {
+		return s != nil && s.DedupKey == key && s.LastSentAt != nil && s.SuppressedUntil != nil
 	})).Return(nil)
 
 	notifier := &stubNotifier{name: "slack"}
@@ -77,8 +77,8 @@ func TestEngineSendSuppressed(t *testing.T) {
 			SuppressedUntil: ptrTime(now.Add(5 * time.Minute)),
 			SuppressedCount: 1,
 		}, nil)
-	storeMock.On("UpsertNotificationSuppression", context.Background(), mock.MatchedBy(func(s models.NotificationSuppression) bool {
-		return s.DedupKey == key && s.SuppressedCount == 2
+	storeMock.On("UpsertNotificationSuppression", context.Background(), mock.MatchedBy(func(s *models.NotificationSuppression) bool {
+		return s != nil && s.DedupKey == key && s.SuppressedCount == 2
 	})).Return(nil)
 
 	notifier := &stubNotifier{name: "slack"}

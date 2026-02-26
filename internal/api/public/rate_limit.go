@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"math"
 	"strings"
 	"time"
@@ -16,6 +17,9 @@ const (
 	rateLimitScopeTenantAgent     = "tenant_agent"
 	rateLimitScopeTenantTool      = "tenant_tool"
 	rateLimitScopeTenantAgentTool = "tenant_agent_tool"
+	bucketRateLimit               = 24 * time.Hour
+	defaultMinutes                = 60
+	defaultDays                   = 10000
 )
 
 type rateLimitConfig struct {
@@ -45,6 +49,7 @@ type policyRateLimitOverride struct {
 	Scope     *string
 }
 
+//nolint:nilnil // nil violation with nil error means request is allowed or rate limiting is disabled.
 func (d *Dependencies) enforceRateLimit(ctx context.Context, tenantID, agentID, toolID, actionType string, constraints map[string]any) (*rateLimitViolation, error) {
 	if !d.featureRateLimitingEnabled(ctx) {
 		return nil, nil
@@ -62,8 +67,8 @@ func (d *Dependencies) enforceRateLimit(ctx context.Context, tenantID, agentID, 
 	defer recordLatency()
 
 	cfg := rateLimitConfig{
-		PerMinute: 60,
-		PerDay:    10000,
+		PerMinute: defaultMinutes,
+		PerDay:    defaultDays,
 		Scope:     rateLimitScopeTenantAgentTool,
 	}
 	if storedConfig, err := d.Store.GetEffectiveRateLimitConfig(ctx, tenantID); err == nil {
@@ -275,15 +280,13 @@ func secondsUntilNextMinute(now time.Time) int64 {
 }
 
 func secondsUntilNextDay(now time.Time) int64 {
-	next := dayBucketStart(now).Add(24 * time.Hour)
+	next := dayBucketStart(now).Add(bucketRateLimit)
 	return int64(math.Ceil(next.Sub(now).Seconds()))
 }
 
 func withRateLimitConstraint(constraints map[string]any, violation *rateLimitViolation) map[string]any {
 	cloned := map[string]any{}
-	for key, value := range constraints {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, constraints)
 	if violation != nil {
 		cloned["rate_limit_enforced"] = map[string]any{
 			"window":              violation.Window,

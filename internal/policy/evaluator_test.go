@@ -117,7 +117,8 @@ func TestEvaluatorCacheHit(t *testing.T) {
 		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: invalidPolicy, PolicyVersion: "p_v1"}, nil)
 
 	evalIface := NewEvaluator(storeMock)
-	evaluator := evalIface.(*Evaluator)
+	evaluator, ok := evalIface.(*Evaluator)
+	require.True(t, ok)
 
 	prepared, err := opa.PrepareQuery(context.Background(), allowPolicy)
 	require.NoError(t, err)
@@ -141,7 +142,8 @@ func TestEvaluatorCacheHitInvalidOutput(t *testing.T) {
 		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
 
 	evalIface := NewEvaluator(storeMock)
-	evaluator := evalIface.(*Evaluator)
+	evaluator, ok := evalIface.(*Evaluator)
+	require.True(t, ok)
 
 	invalidOutputPolicy := `package rbitr.policy
 
@@ -173,7 +175,8 @@ func TestEvaluatorCacheKeyVersionMismatch(t *testing.T) {
 		Return(models.Policy{PolicyID: "p2", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v2"}, nil)
 
 	evalIface := NewEvaluator(storeMock)
-	evaluator := evalIface.(*Evaluator)
+	evaluator, ok := evalIface.(*Evaluator)
+	require.True(t, ok)
 
 	prepared, err := opa.PrepareQuery(context.Background(), invalidPolicy)
 	require.NoError(t, err)
@@ -196,7 +199,8 @@ func TestEvaluatorCacheExpired(t *testing.T) {
 		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
 
 	evalIface := NewEvaluator(storeMock)
-	evaluator := evalIface.(*Evaluator)
+	evaluator, ok := evalIface.(*Evaluator)
+	require.True(t, ok)
 
 	prepared, err := opa.PrepareQuery(context.Background(), allowPolicy)
 	require.NoError(t, err)
@@ -218,7 +222,8 @@ func TestEvaluatorCacheModuleChanged(t *testing.T) {
 		Return(models.Policy{PolicyID: "p1", TenantID: "t1", RegoModule: allowPolicy, PolicyVersion: "p_v1"}, nil)
 
 	evalIface := NewEvaluator(storeMock)
-	evaluator := evalIface.(*Evaluator)
+	evaluator, ok := evalIface.(*Evaluator)
+	require.True(t, ok)
 
 	prepared, err := opa.PrepareQuery(context.Background(), invalidPolicy)
 	require.NoError(t, err)

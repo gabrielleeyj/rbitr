@@ -389,7 +389,7 @@ func TestAdminKeyFromRequest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set(tc.headerKey, tc.headerVal)
 			if got := AdminKeyFromRequest(req); got != tc.expect {
 				t.Fatalf("expected %q got %q", tc.expect, got)
@@ -464,7 +464,7 @@ func TestTenantKeyFromRequest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 			if tc.authorization != "" {
 				req.Header.Set(AuthorizationHeader, tc.authorization)
 			}

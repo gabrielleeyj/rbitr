@@ -27,12 +27,12 @@ func TestComputeEventHashDeterministic(t *testing.T) {
 	event.Before = beforeJSON
 	event.After = afterJSON
 
-	payload := BuildHashPayload(event, "t1")
-	hash1, err := ComputeEventHash("prev", payload)
+	payload := BuildHashPayload(&event, "t1")
+	hash1, err := ComputeEventHash("prev", &payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	hash2, err := ComputeEventHash("prev", payload)
+	hash2, err := ComputeEventHash("prev", &payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

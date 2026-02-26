@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
@@ -25,7 +26,13 @@ type HashPayload struct {
 	After         json.RawMessage `json:"after_redacted"`
 }
 
-func BuildHashPayload(event models.AdminAuditEvent, streamID string) HashPayload {
+func BuildHashPayload(event *models.AdminAuditEvent, streamID string) HashPayload {
+	if event == nil {
+		return HashPayload{
+			SchemaVersion: HashSchemaVersion,
+			StreamID:      streamID,
+		}
+	}
 	createdAt := event.CreatedAt.UTC()
 	return HashPayload{
 		SchemaVersion: HashSchemaVersion,
@@ -43,7 +50,10 @@ func BuildHashPayload(event models.AdminAuditEvent, streamID string) HashPayload
 	}
 }
 
-func ComputeEventHash(prevHash string, payload HashPayload) (string, error) {
+func ComputeEventHash(prevHash string, payload *HashPayload) (string, error) {
+	if payload == nil {
+		return "", errors.New("hash payload required")
+	}
 	canonical, err := CanonicalJSON(payload)
 	if err != nil {
 		return "", err

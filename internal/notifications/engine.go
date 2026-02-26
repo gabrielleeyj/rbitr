@@ -18,6 +18,7 @@ const (
 	ResultSent       = "sent"
 	ResultFailed     = "failed"
 	ResultSuppressed = "suppressed"
+	defaultCooldown  = 10 * time.Minute
 )
 
 type Notifier interface {
@@ -48,7 +49,7 @@ type Engine struct {
 
 func NewEngine(st store.StoreAPI, notifiers map[string]Notifier, cooldown time.Duration, metrics *telemetry.Metrics) *Engine {
 	if cooldown == 0 {
-		cooldown = 10 * time.Minute
+		cooldown = defaultCooldown
 	}
 	return &Engine{
 		Store:     st,
@@ -88,10 +89,10 @@ func (e *Engine) Send(ctx context.Context, channel string, event NotificationEve
 
 	if !shouldSend {
 		next := buildSuppression(event, channel, dedupKey, payloadHash, existing.FirstSeenAt)
-		next = mergeSuppression(next, existing)
+		mergeSuppression(&next, &existing)
 		next.LastSeenAt = now
 		next.SuppressedCount++
-		if err := e.Store.UpsertNotificationSuppression(ctx, next); err != nil {
+		if err := e.Store.UpsertNotificationSuppression(ctx, &next); err != nil {
 			return err
 		}
 		if e.Metrics != nil && e.Metrics.NotificationsSuppressedTotal != nil {
@@ -106,9 +107,9 @@ func (e *Engine) Send(ctx context.Context, channel string, event NotificationEve
 
 	if sendErr != nil {
 		next := buildSuppression(event, channel, dedupKey, payloadHash, existing.FirstSeenAt)
-		next = mergeSuppression(next, existing)
+		mergeSuppression(&next, &existing)
 		next.LastSeenAt = now
-		if err := e.Store.UpsertNotificationSuppression(ctx, next); err != nil {
+		if err := e.Store.UpsertNotificationSuppression(ctx, &next); err != nil {
 			return err
 		}
 		recordNotificationMetrics(e.Metrics, channel, event.EventType, ResultFailed, latency)
@@ -116,11 +117,11 @@ func (e *Engine) Send(ctx context.Context, channel string, event NotificationEve
 	}
 
 	next := buildSuppression(event, channel, dedupKey, payloadHash, existing.FirstSeenAt)
-	next = mergeSuppression(next, existing)
+	mergeSuppression(&next, &existing)
 	next.LastSeenAt = now
 	next.LastSentAt = &now
 	next.SuppressedUntil = ptrTime(now.Add(e.Cooldown))
-	if err := e.Store.UpsertNotificationSuppression(ctx, next); err != nil {
+	if err := e.Store.UpsertNotificationSuppression(ctx, &next); err != nil {
 		return err
 	}
 	recordNotificationMetrics(e.Metrics, channel, event.EventType, ResultSent, latency)
@@ -143,15 +144,17 @@ func buildSuppression(event NotificationEvent, channel, dedupKey, payloadHash st
 	}
 }
 
-func mergeSuppression(next, existing models.NotificationSuppression) models.NotificationSuppression {
+func mergeSuppression(next, existing *models.NotificationSuppression) {
+	if next == nil || existing == nil {
+		return
+	}
 	if existing.DedupKey == "" {
-		return next
+		return
 	}
 	next.FirstSeenAt = existing.FirstSeenAt
 	next.SuppressedCount = existing.SuppressedCount
 	next.LastSentAt = existing.LastSentAt
 	next.SuppressedUntil = existing.SuppressedUntil
-	return next
 }
 
 func dedupKey(event NotificationEvent, channel string) string {

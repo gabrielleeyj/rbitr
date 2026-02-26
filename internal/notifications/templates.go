@@ -7,6 +7,7 @@ type templateDefinition struct {
 	Body  string
 }
 
+//nolint:gochecknoglobals // immutable template registry for notification messages.
 var templates = map[string]templateDefinition{
 	EventApprovalExpiring:    {Title: "Approval expiring soon"},
 	EventApprovalExpired:     {Title: "Approval expired"},

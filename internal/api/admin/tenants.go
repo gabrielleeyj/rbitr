@@ -23,7 +23,7 @@ type CreateTenantRequest struct {
 type CreateTenantResponse struct {
 	TenantID string `json:"tenant_id"`
 	Name     string `json:"name"`
-	APIKey   string `json:"api_key"`
+	APIKey   string `json:"api_key"` //nolint:gosec // #nosec G117 -- API key is intentionally returned once during key issuance.
 	KeyID    string `json:"key_id"`
 }
 
@@ -32,7 +32,7 @@ type SetTenantEnabledRequest struct {
 }
 
 type TenantKeyIssueResponse struct {
-	APIKey    string `json:"api_key"`
+	APIKey    string `json:"api_key"` //nolint:gosec // #nosec G117 -- API key is intentionally returned once during key issuance.
 	KeyID     string `json:"key_id"`
 	KeyPrefix string `json:"key_prefix"`
 }
@@ -41,7 +41,7 @@ type tenantSoftDeleteStore interface {
 	SoftDeleteTenant(ctx context.Context, tenantID string, deletedAt time.Time) error
 }
 
-func (d Dependencies) handleTenantCreate(c *echo.Context) error {
+func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -50,7 +50,7 @@ func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 		return err
 	}
 	var payload CreateTenantRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 	if payload.Name == "" {
@@ -60,7 +60,7 @@ func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 	ctx := c.Request().Context()
 	tenantID := "t_" + uuid.NewString()[:8]
 
-	if err := d.Store.CreateTenant(ctx, tenantID, payload.Name); err != nil {
+	if createErr := d.Store.CreateTenant(ctx, tenantID, payload.Name); createErr != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create tenant"})
 	}
 
@@ -70,7 +70,7 @@ func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 	}
 	keyID := uuid.NewString()
 	now := time.Now().UTC()
-	if err := d.Store.CreateTenantKey(ctx, models.TenantKey{
+	if err := d.Store.CreateTenantKey(ctx, &models.TenantKey{
 		KeyID:     keyID,
 		TenantID:  tenantID,
 		KeyHash:   keyHash,
@@ -93,7 +93,7 @@ func (d Dependencies) handleTenantCreate(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleTenantKeysList(c *echo.Context) error {
+func (d *Dependencies) handleTenantKeysList(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -114,7 +114,7 @@ func (d Dependencies) handleTenantKeysList(c *echo.Context) error {
 	return c.JSON(http.StatusOK, keys)
 }
 
-func (d Dependencies) handleTenantKeyCreate(c *echo.Context) error {
+func (d *Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -132,7 +132,7 @@ func (d Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
 	}
 	keyID := uuid.NewString()
-	if err := d.Store.CreateTenantKey(ctx, models.TenantKey{
+	if err := d.Store.CreateTenantKey(ctx, &models.TenantKey{
 		KeyID:     keyID,
 		TenantID:  tenantID,
 		KeyHash:   keyHash,
@@ -153,7 +153,7 @@ func (d Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
+func (d *Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -183,7 +183,7 @@ func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
 	}
 	keyID := uuid.NewString()
-	if err := d.Store.CreateTenantKey(ctx, models.TenantKey{
+	if err := d.Store.CreateTenantKey(ctx, &models.TenantKey{
 		KeyID:     keyID,
 		TenantID:  tenantID,
 		KeyHash:   keyHash,
@@ -204,7 +204,7 @@ func (d Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	})
 }
 
-func (d Dependencies) handleTenantKeyRevoke(c *echo.Context) error {
+func (d *Dependencies) handleTenantKeyRevoke(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -228,7 +228,7 @@ func (d Dependencies) handleTenantKeyRevoke(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleTenantSetEnabled(c *echo.Context) error {
+func (d *Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}
@@ -259,7 +259,7 @@ func (d Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (d Dependencies) handleTenantDelete(c *echo.Context) error {
+func (d *Dependencies) handleTenantDelete(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}

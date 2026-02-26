@@ -58,7 +58,7 @@ func (n *emailNotifier) Send(ctx context.Context, msg NotificationMessage) error
 type sesCredentials struct {
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
-	SessionToken    string `json:"session_token"`
+	SessionToken    string `json:"session_token"` //nolint:gosec // #nosec G117 -- AWS temporary credential field name is required for JSON unmarshalling.
 	Region          string `json:"region"`
 }
 
@@ -66,7 +66,7 @@ type sesSender struct {
 	client *sesv2.Client
 }
 
-func NewSESSender(ctx context.Context, region string, secretValue string) (EmailSender, error) {
+func NewSESSender(ctx context.Context, region, secretValue string) (EmailSender, error) {
 	creds, err := parseSESCredentials(secretValue)
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (s *sendGridSender) Send(ctx context.Context, from string, to []string, sub
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode >= 300 { //nolint:mnd // just need to check status codes above 300.
 		return fmt.Errorf("sendgrid status %d", resp.StatusCode)
 	}
 	return nil
@@ -182,6 +182,7 @@ func (m *mailgunSender) Send(ctx context.Context, from string, to []string, subj
 	return err
 }
 
+//nolint:nilnil,mnd // empty credential value is treated as "not configured" rather than an error.
 func parseSESCredentials(value string) (*sesCredentials, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -190,7 +191,7 @@ func parseSESCredentials(value string) (*sesCredentials, error) {
 	if strings.HasPrefix(trimmed, "{") {
 		var creds sesCredentials
 		if err := json.Unmarshal([]byte(trimmed), &creds); err != nil {
-			return nil, fmt.Errorf("invalid ses credentials json")
+			return nil, errors.New("invalid ses credentials json")
 		}
 		if creds.AccessKeyID == "" || creds.SecretAccessKey == "" {
 			return nil, errors.New("ses credentials missing access_key_id or secret_access_key")

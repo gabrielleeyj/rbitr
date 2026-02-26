@@ -117,3 +117,14 @@ func TestSlackNotifierNames(t *testing.T) {
 		t.Fatalf("expected bot name %s got %s", SlackBotChannel, bot.Name())
 	}
 }
+
+func TestSlackWebhookNotifierInvalidURL(t *testing.T) {
+	notifier := NewSlackWebhookNotifier("ftp://example/webhook", "C01")
+	err := notifier.Send(context.Background(), NotificationMessage{Title: "x"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "invalid slack webhook URL") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

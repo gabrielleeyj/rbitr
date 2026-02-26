@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gabrielleeyj/rbitr/internal/utils"
 	"github.com/stretchr/testify/require"
+
+	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -52,6 +53,11 @@ func TestRESTExecute(t *testing.T) {
 		{
 			name:      "invalid url",
 			request:   Request{Method: http.MethodGet, URL: "http://[::1"},
+			expectErr: true,
+		},
+		{
+			name:      "unsupported scheme",
+			request:   Request{Method: http.MethodGet, URL: "ftp://example"},
 			expectErr: true,
 		},
 	}

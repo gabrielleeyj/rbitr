@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -37,7 +39,10 @@ func (n *SlackWebhookNotifier) Name() string {
 
 func (n *SlackWebhookNotifier) Send(ctx context.Context, msg NotificationMessage) error {
 	if n.webhookURL == "" {
-		return fmt.Errorf("slack webhook not configured")
+		return errors.New("slack webhook not configured")
+	}
+	if err := validateSlackWebhookURL(n.webhookURL); err != nil {
+		return err
 	}
 
 	payload := slack.WebhookMessage{
@@ -58,6 +63,7 @@ func (n *SlackWebhookNotifier) Send(ctx context.Context, msg NotificationMessage
 	if client == nil {
 		client = http.DefaultClient
 	}
+	//nolint:gosec // G704: webhook URL is operator-provided configuration validated before execution.
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -65,6 +71,19 @@ func (n *SlackWebhookNotifier) Send(ctx context.Context, msg NotificationMessage
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("slack webhook failed: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func validateSlackWebhookURL(rawURL string) error {
+	const invalidWebhookURLError = "invalid slack webhook URL"
+
+	parsed, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return errors.New(invalidWebhookURLError)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return errors.New(invalidWebhookURLError)
 	}
 	return nil
 }
@@ -94,7 +113,7 @@ func (n *SlackBotNotifier) Name() string {
 
 func (n *SlackBotNotifier) Send(ctx context.Context, msg NotificationMessage) error {
 	if n.client == nil {
-		return fmt.Errorf("slack bot not configured")
+		return errors.New("slack bot not configured")
 	}
 	_, _, err := n.client.PostMessageContext(
 		ctx,
@@ -139,7 +158,7 @@ func buildSlackText(msg NotificationMessage) string {
 }
 
 func buildSlackBlocks(msg NotificationMessage) []slack.Block {
-	blocks := make([]slack.Block, 0, 3)
+	blocks := make([]slack.Block, 0, 3) //nolint:mnd // ignore blocks here.
 	if msg.Title != "" {
 		blocks = append(blocks, slack.NewHeaderBlock(slack.NewTextBlockObject("plain_text", msg.Title, false, false)))
 	}
@@ -160,7 +179,7 @@ func buildSlackBlocks(msg NotificationMessage) []slack.Block {
 			if b.Len() > 0 {
 				b.WriteString("\n")
 			}
-			b.WriteString(fmt.Sprintf("<%s|%s>", msg.Links[key], key))
+			fmt.Fprintf(&b, "<%s|%s>", msg.Links[key], key)
 		}
 		linkText := slack.NewTextBlockObject("mrkdwn", b.String(), false, false)
 		blocks = append(blocks, slack.NewSectionBlock(linkText, nil, nil))

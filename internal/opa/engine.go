@@ -48,7 +48,7 @@ type PolicyOutputError struct {
 
 func (e PolicyOutputError) Error() string {
 	if e.Err == nil {
-		return fmt.Sprintf("invalid policy output: %s", e.Reason)
+		return "invalid policy output: " + e.Reason
 	}
 	return fmt.Sprintf("invalid policy output: %s: %v", e.Reason, e.Err)
 }
@@ -148,9 +148,9 @@ func parseResult(resultSet rego.ResultSet) (Result, error) {
 		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
 	}
 	tags := []string{}
-	if tagsValue, ok := value["tags"].([]any); ok {
+	if tagsValue, tagsOK := value["tags"].([]any); tagsOK {
 		for _, tag := range tagsValue {
-			if tagStr, ok := tag.(string); ok {
+			if tagStr, tagOK := tag.(string); tagOK {
 				tags = append(tags, tagStr)
 			}
 		}
@@ -297,6 +297,7 @@ func matchedRuleLess(left, right MatchedRule) bool {
 func decisionRank(decision string) int {
 	// Fixed governance tie-break precedence for equal-priority rules:
 	// DENY > REQUIRE_APPROVAL > ALLOW.
+	//nolint:mnd // this justs returns a priority.
 	switch decision {
 	case "DENY":
 		return 3

@@ -16,9 +16,12 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
-const enforcementModeEnforce = "enforce"
-const enforcementModeShadow = "shadow"
-const restShadowDenyHeader = "X-Rbitr-Shadow-Deny"
+const (
+	enforcementModeEnforce = "enforce"
+	enforcementModeShadow  = "shadow"
+	restShadowDenyHeader   = "X-Rbitr-Shadow-Deny"
+	mcpClientTimeout       = 30 * time.Second
+)
 
 func normalizeEnforcementMode(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
@@ -51,7 +54,7 @@ func buildShadowDecisionMetadata(ruleID, risk, policyVersion string, reasons []m
 	meta := map[string]any{
 		"mode":              enforcementModeShadow,
 		"enforced":          false,
-		"original_decision": decisionDeny,
+		"original_decision": string(decisionDeny),
 		"reasons":           decisionReasonsAsMaps(reasons),
 	}
 	if ruleID != "" {
@@ -101,7 +104,7 @@ func (d *Dependencies) executeRESTShadowDeny(
 	c.Response().Header().Set(restShadowDenyHeader, "true")
 	return c.JSON(http.StatusOK, ToolCallResponse{
 		RequestID:    requestID,
-		Decision:     decisionDeny,
+		Decision:     string(decisionDeny),
 		Reason:       firstReasonMessage(reasons),
 		ToolStatus:   resp.Status,
 		ToolHeaders:  resp.Headers,
@@ -113,18 +116,18 @@ func (d *Dependencies) executeRESTShadowDeny(
 
 func (d *Dependencies) executeMCPShadowDeny(
 	ctx context.Context,
-	tool models.Tool,
+	tool *models.Tool,
 	forwardReq *mcp.Request,
 	shadowMeta map[string]any,
 ) (*mcp.Response, error) {
-	if tool.MCPUpstreamURL == "" {
+	if tool == nil || tool.MCPUpstreamURL == "" {
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("tool not configured for MCP")), nil
 	}
 
-	mcpClient := connector.NewMCPClient(30 * time.Second)
+	mcpClient := connector.NewMCPClient(mcpClientTimeout)
 	toolStart := time.Now()
 	upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
 	if d.Metrics != nil {

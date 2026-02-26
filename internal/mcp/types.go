@@ -129,6 +129,8 @@ func (r *RequestID) UnmarshalJSON(data []byte) error {
 }
 
 // ErrorObject represents a JSON-RPC 2.0 error object.
+//
+//nolint:errname // JSON-RPC spec uses the `ErrorObject` type name.
 type ErrorObject struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
@@ -140,7 +142,7 @@ func (e *ErrorObject) Error() string {
 	return e.Message
 }
 
-// Standard JSON-RPC 2.0 error codes
+// Standard JSON-RPC 2.0 error codes.
 const (
 	ErrorParseError     = -32700 // Parse error
 	ErrorInvalidRequest = -32600 // Invalid Request
@@ -149,7 +151,7 @@ const (
 	ErrorInternalError  = -32603 // Internal error
 )
 
-// Application-specific error codes (as defined in EPIC_6.md)
+// Application-specific error codes (as defined in EPIC_6.md).
 const (
 	ErrorApprovalRequired  = -32001 // Approval required
 	ErrorUnauthorized      = -32002 // Authentication failed
@@ -158,7 +160,7 @@ const (
 	ErrorRateLimitExceeded = -32005 // Rate limit exceeded
 )
 
-// MCP method names
+// MCP method names.
 const (
 	MethodInitialize               = "initialize"
 	MethodNotificationsInitialized = "notifications/initialized"
@@ -198,9 +200,9 @@ type InitializeParams struct {
 
 // InitializeResult represents the result for an initialize response.
 type InitializeResult struct {
-	ProtocolVersion string                 `json:"protocolVersion"`
-	Capabilities    map[string]interface{} `json:"capabilities"`
-	ServerInfo      Implementation         `json:"serverInfo"`
+	ProtocolVersion string         `json:"protocolVersion"`
+	Capabilities    map[string]any `json:"capabilities"`
+	ServerInfo      Implementation `json:"serverInfo"`
 }
 
 // ToolsCallParams represents the params for a tools/call request.

@@ -2,6 +2,7 @@ package audit
 
 import "strings"
 
+//nolint:gochecknoglobals // centralized allowlist used by redaction helpers.
 var resourceAllowlist = map[string]map[string]struct{}{
 	"TENANT.CONFIG": {
 		"name":     {},

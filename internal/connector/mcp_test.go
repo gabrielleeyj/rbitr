@@ -47,7 +47,8 @@ func TestMCPClient_ForwardRequest_Success(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 
@@ -92,7 +93,8 @@ func TestMCPClient_ForwardRequest_UpstreamError(t *testing.T) {
 	// Create mock upstream MCP server that returns an error
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
 
 		resp := mcp.Response{
 			JSONRPC: "2.0",
@@ -104,7 +106,8 @@ func TestMCPClient_ForwardRequest_UpstreamError(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		err = json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 
@@ -133,7 +136,8 @@ func TestMCPClient_ForwardRequest_UpstreamHTTPError(t *testing.T) {
 	// Create mock upstream that returns HTTP 500
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		_, err := w.Write([]byte("Internal Server Error"))
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 
@@ -185,6 +189,21 @@ func TestMCPClient_ForwardRequest_Timeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "upstream request failed")
 }
 
+func TestMCPClient_ForwardRequest_InvalidUpstreamURL(t *testing.T) {
+	client := NewMCPClient(5 * time.Second)
+	reqID := mcp.NewStringID("test-invalid-url")
+	req := &mcp.Request{
+		JSONRPC: "2.0",
+		ID:      reqID,
+		Method:  "tools/call",
+		Params:  json.RawMessage(`{}`),
+	}
+
+	_, err := client.ForwardRequest(context.Background(), "ftp://example", req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid outbound URL")
+}
+
 func TestMCPClient_ForwardRequest_IDMismatch(t *testing.T) {
 	// Create upstream that returns wrong ID
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +216,8 @@ func TestMCPClient_ForwardRequest_IDMismatch(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(resp)
+		err := json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 
@@ -226,11 +246,9 @@ func TestMCPClient_ForwardRequest_OversizedResponse(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 
 		// Write more than 10MB of data
-		largeData := make([]byte, 11*1024*1024)
-		for i := range largeData {
-			largeData[i] = 'A'
-		}
-		w.Write(largeData)
+		largeData := strings.Repeat("A", 11*1024*1024)
+		_, err := w.Write([]byte(largeData))
+		require.NoError(t, err)
 	}))
 	defer upstream.Close()
 

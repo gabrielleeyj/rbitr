@@ -2,10 +2,9 @@ package public
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
@@ -32,22 +31,14 @@ func TestStatelessDesign(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			storeMock := newPublicStoreMock(t)
-
 			// Create two independent Dependencies (simulating two replicas)
 			deps1 := &Dependencies{
-				Store:             storeMock,
-				Metrics:           newTestMetrics(),
-				Config:            config.Config{BodyLimitSize: 256 * 1024},
-				ToolCache:         cache.New[models.Tool](30 * time.Second),
-				RiskOverrideCache: cache.New[string](30 * time.Second),
+				Config:    config.Config{BodyLimitSize: 256 * 1024},
+				ToolCache: cache.New[models.Tool](30 * time.Second),
 			}
 			deps2 := &Dependencies{
-				Store:             storeMock,
-				Metrics:           newTestMetrics(),
-				Config:            config.Config{BodyLimitSize: 256 * 1024},
-				ToolCache:         cache.New[models.Tool](30 * time.Second),
-				RiskOverrideCache: cache.New[string](30 * time.Second),
+				Config:    config.Config{BodyLimitSize: 256 * 1024},
+				ToolCache: cache.New[models.Tool](30 * time.Second),
 			}
 
 			// Populate cache in replica 1

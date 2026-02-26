@@ -28,6 +28,10 @@ func NewREST(responseLimit int64) *REST {
 
 // Execute forwards the http request from the original source to the destination.
 func (r *REST) Execute(ctx context.Context, req Request) (Response, error) {
+	if err := validateOutboundURL(req.URL); err != nil {
+		return Response{}, err
+	}
+
 	httpReq, err := http.NewRequestWithContext(ctx, req.Method, req.URL, bytes.NewReader(req.Body))
 	if err != nil {
 		return Response{}, err
@@ -36,6 +40,7 @@ func (r *REST) Execute(ctx context.Context, req Request) (Response, error) {
 		httpReq.Header.Set(key, value)
 	}
 
+	//nolint:gosec // G704: request URL is tenant-admin configured and validated before execution.
 	resp, err := r.Client.Do(httpReq)
 	if err != nil {
 		return Response{}, err

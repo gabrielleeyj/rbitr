@@ -1,6 +1,6 @@
 package admin
 
-func (d Dependencies) invalidateTenantCaches(tenantID string) {
+func (d *Dependencies) invalidateTenantCaches(tenantID string) {
 	if tenantID == "" {
 		return
 	}

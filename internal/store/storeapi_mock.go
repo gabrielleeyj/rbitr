@@ -274,7 +274,7 @@ func (_c *MockStoreAPI_CountPendingApprovals_Call) RunAndReturn(run func(ctx con
 }
 
 // CreateMailingList provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) CreateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+func (_mock *MockStoreAPI) CreateMailingList(ctx context.Context, list *models.MailingList, members []string) error {
 	ret := _mock.Called(ctx, list, members)
 
 	if len(ret) == 0 {
@@ -282,7 +282,7 @@ func (_mock *MockStoreAPI) CreateMailingList(ctx context.Context, list models.Ma
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.MailingList, []string) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.MailingList, []string) error); ok {
 		r0 = returnFunc(ctx, list, members)
 	} else {
 		r0 = ret.Error(0)
@@ -297,21 +297,21 @@ type MockStoreAPI_CreateMailingList_Call struct {
 
 // CreateMailingList is a helper method to define mock.On call
 //   - ctx context.Context
-//   - list models.MailingList
+//   - list *models.MailingList
 //   - members []string
 func (_e *MockStoreAPI_Expecter) CreateMailingList(ctx interface{}, list interface{}, members interface{}) *MockStoreAPI_CreateMailingList_Call {
 	return &MockStoreAPI_CreateMailingList_Call{Call: _e.mock.On("CreateMailingList", ctx, list, members)}
 }
 
-func (_c *MockStoreAPI_CreateMailingList_Call) Run(run func(ctx context.Context, list models.MailingList, members []string)) *MockStoreAPI_CreateMailingList_Call {
+func (_c *MockStoreAPI_CreateMailingList_Call) Run(run func(ctx context.Context, list *models.MailingList, members []string)) *MockStoreAPI_CreateMailingList_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.MailingList
+		var arg1 *models.MailingList
 		if args[1] != nil {
-			arg1 = args[1].(models.MailingList)
+			arg1 = args[1].(*models.MailingList)
 		}
 		var arg2 []string
 		if args[2] != nil {
@@ -331,7 +331,7 @@ func (_c *MockStoreAPI_CreateMailingList_Call) Return(err error) *MockStoreAPI_C
 	return _c
 }
 
-func (_c *MockStoreAPI_CreateMailingList_Call) RunAndReturn(run func(ctx context.Context, list models.MailingList, members []string) error) *MockStoreAPI_CreateMailingList_Call {
+func (_c *MockStoreAPI_CreateMailingList_Call) RunAndReturn(run func(ctx context.Context, list *models.MailingList, members []string) error) *MockStoreAPI_CreateMailingList_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -481,7 +481,7 @@ func (_c *MockStoreAPI_CreateTenant_Call) RunAndReturn(run func(ctx context.Cont
 }
 
 // CreateTenantKey provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) CreateTenantKey(ctx context.Context, key models.TenantKey) error {
+func (_mock *MockStoreAPI) CreateTenantKey(ctx context.Context, key *models.TenantKey) error {
 	ret := _mock.Called(ctx, key)
 
 	if len(ret) == 0 {
@@ -489,7 +489,7 @@ func (_mock *MockStoreAPI) CreateTenantKey(ctx context.Context, key models.Tenan
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.TenantKey) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.TenantKey) error); ok {
 		r0 = returnFunc(ctx, key)
 	} else {
 		r0 = ret.Error(0)
@@ -504,20 +504,20 @@ type MockStoreAPI_CreateTenantKey_Call struct {
 
 // CreateTenantKey is a helper method to define mock.On call
 //   - ctx context.Context
-//   - key models.TenantKey
+//   - key *models.TenantKey
 func (_e *MockStoreAPI_Expecter) CreateTenantKey(ctx interface{}, key interface{}) *MockStoreAPI_CreateTenantKey_Call {
 	return &MockStoreAPI_CreateTenantKey_Call{Call: _e.mock.On("CreateTenantKey", ctx, key)}
 }
 
-func (_c *MockStoreAPI_CreateTenantKey_Call) Run(run func(ctx context.Context, key models.TenantKey)) *MockStoreAPI_CreateTenantKey_Call {
+func (_c *MockStoreAPI_CreateTenantKey_Call) Run(run func(ctx context.Context, key *models.TenantKey)) *MockStoreAPI_CreateTenantKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.TenantKey
+		var arg1 *models.TenantKey
 		if args[1] != nil {
-			arg1 = args[1].(models.TenantKey)
+			arg1 = args[1].(*models.TenantKey)
 		}
 		run(
 			arg0,
@@ -532,7 +532,7 @@ func (_c *MockStoreAPI_CreateTenantKey_Call) Return(err error) *MockStoreAPI_Cre
 	return _c
 }
 
-func (_c *MockStoreAPI_CreateTenantKey_Call) RunAndReturn(run func(ctx context.Context, key models.TenantKey) error) *MockStoreAPI_CreateTenantKey_Call {
+func (_c *MockStoreAPI_CreateTenantKey_Call) RunAndReturn(run func(ctx context.Context, key *models.TenantKey) error) *MockStoreAPI_CreateTenantKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2420,8 +2420,8 @@ func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Run(run func(ctx context.
 	return _c
 }
 
-func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Return(b bool, n int64, err error) *MockStoreAPI_IncrementRateLimitCounter_Call {
-	_c.Call.Return(b, n, err)
+func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Return(allowed bool, count int64, err error) *MockStoreAPI_IncrementRateLimitCounter_Call {
+	_c.Call.Return(allowed, count, err)
 	return _c
 }
 
@@ -2431,7 +2431,7 @@ func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) RunAndReturn(run func(ctx
 }
 
 // InsertADR provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) InsertADR(ctx context.Context, record models.ActionDecisionRecord) error {
+func (_mock *MockStoreAPI) InsertADR(ctx context.Context, record *models.ActionDecisionRecord) error {
 	ret := _mock.Called(ctx, record)
 
 	if len(ret) == 0 {
@@ -2439,7 +2439,7 @@ func (_mock *MockStoreAPI) InsertADR(ctx context.Context, record models.ActionDe
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.ActionDecisionRecord) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.ActionDecisionRecord) error); ok {
 		r0 = returnFunc(ctx, record)
 	} else {
 		r0 = ret.Error(0)
@@ -2454,20 +2454,20 @@ type MockStoreAPI_InsertADR_Call struct {
 
 // InsertADR is a helper method to define mock.On call
 //   - ctx context.Context
-//   - record models.ActionDecisionRecord
+//   - record *models.ActionDecisionRecord
 func (_e *MockStoreAPI_Expecter) InsertADR(ctx interface{}, record interface{}) *MockStoreAPI_InsertADR_Call {
 	return &MockStoreAPI_InsertADR_Call{Call: _e.mock.On("InsertADR", ctx, record)}
 }
 
-func (_c *MockStoreAPI_InsertADR_Call) Run(run func(ctx context.Context, record models.ActionDecisionRecord)) *MockStoreAPI_InsertADR_Call {
+func (_c *MockStoreAPI_InsertADR_Call) Run(run func(ctx context.Context, record *models.ActionDecisionRecord)) *MockStoreAPI_InsertADR_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.ActionDecisionRecord
+		var arg1 *models.ActionDecisionRecord
 		if args[1] != nil {
-			arg1 = args[1].(models.ActionDecisionRecord)
+			arg1 = args[1].(*models.ActionDecisionRecord)
 		}
 		run(
 			arg0,
@@ -2482,13 +2482,13 @@ func (_c *MockStoreAPI_InsertADR_Call) Return(err error) *MockStoreAPI_InsertADR
 	return _c
 }
 
-func (_c *MockStoreAPI_InsertADR_Call) RunAndReturn(run func(ctx context.Context, record models.ActionDecisionRecord) error) *MockStoreAPI_InsertADR_Call {
+func (_c *MockStoreAPI_InsertADR_Call) RunAndReturn(run func(ctx context.Context, record *models.ActionDecisionRecord) error) *MockStoreAPI_InsertADR_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // InsertApprovalRequest provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) InsertApprovalRequest(ctx context.Context, req models.ApprovalRequest) error {
+func (_mock *MockStoreAPI) InsertApprovalRequest(ctx context.Context, req *models.ApprovalRequest) error {
 	ret := _mock.Called(ctx, req)
 
 	if len(ret) == 0 {
@@ -2496,7 +2496,7 @@ func (_mock *MockStoreAPI) InsertApprovalRequest(ctx context.Context, req models
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.ApprovalRequest) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.ApprovalRequest) error); ok {
 		r0 = returnFunc(ctx, req)
 	} else {
 		r0 = ret.Error(0)
@@ -2511,20 +2511,20 @@ type MockStoreAPI_InsertApprovalRequest_Call struct {
 
 // InsertApprovalRequest is a helper method to define mock.On call
 //   - ctx context.Context
-//   - req models.ApprovalRequest
+//   - req *models.ApprovalRequest
 func (_e *MockStoreAPI_Expecter) InsertApprovalRequest(ctx interface{}, req interface{}) *MockStoreAPI_InsertApprovalRequest_Call {
 	return &MockStoreAPI_InsertApprovalRequest_Call{Call: _e.mock.On("InsertApprovalRequest", ctx, req)}
 }
 
-func (_c *MockStoreAPI_InsertApprovalRequest_Call) Run(run func(ctx context.Context, req models.ApprovalRequest)) *MockStoreAPI_InsertApprovalRequest_Call {
+func (_c *MockStoreAPI_InsertApprovalRequest_Call) Run(run func(ctx context.Context, req *models.ApprovalRequest)) *MockStoreAPI_InsertApprovalRequest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.ApprovalRequest
+		var arg1 *models.ApprovalRequest
 		if args[1] != nil {
-			arg1 = args[1].(models.ApprovalRequest)
+			arg1 = args[1].(*models.ApprovalRequest)
 		}
 		run(
 			arg0,
@@ -2539,13 +2539,13 @@ func (_c *MockStoreAPI_InsertApprovalRequest_Call) Return(err error) *MockStoreA
 	return _c
 }
 
-func (_c *MockStoreAPI_InsertApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, req models.ApprovalRequest) error) *MockStoreAPI_InsertApprovalRequest_Call {
+func (_c *MockStoreAPI_InsertApprovalRequest_Call) RunAndReturn(run func(ctx context.Context, req *models.ApprovalRequest) error) *MockStoreAPI_InsertApprovalRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // InsertAuditEvent provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) InsertAuditEvent(ctx context.Context, event models.AdminAuditEvent) error {
+func (_mock *MockStoreAPI) InsertAuditEvent(ctx context.Context, event *models.AdminAuditEvent) error {
 	ret := _mock.Called(ctx, event)
 
 	if len(ret) == 0 {
@@ -2553,7 +2553,7 @@ func (_mock *MockStoreAPI) InsertAuditEvent(ctx context.Context, event models.Ad
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.AdminAuditEvent) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.AdminAuditEvent) error); ok {
 		r0 = returnFunc(ctx, event)
 	} else {
 		r0 = ret.Error(0)
@@ -2568,20 +2568,20 @@ type MockStoreAPI_InsertAuditEvent_Call struct {
 
 // InsertAuditEvent is a helper method to define mock.On call
 //   - ctx context.Context
-//   - event models.AdminAuditEvent
+//   - event *models.AdminAuditEvent
 func (_e *MockStoreAPI_Expecter) InsertAuditEvent(ctx interface{}, event interface{}) *MockStoreAPI_InsertAuditEvent_Call {
 	return &MockStoreAPI_InsertAuditEvent_Call{Call: _e.mock.On("InsertAuditEvent", ctx, event)}
 }
 
-func (_c *MockStoreAPI_InsertAuditEvent_Call) Run(run func(ctx context.Context, event models.AdminAuditEvent)) *MockStoreAPI_InsertAuditEvent_Call {
+func (_c *MockStoreAPI_InsertAuditEvent_Call) Run(run func(ctx context.Context, event *models.AdminAuditEvent)) *MockStoreAPI_InsertAuditEvent_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.AdminAuditEvent
+		var arg1 *models.AdminAuditEvent
 		if args[1] != nil {
-			arg1 = args[1].(models.AdminAuditEvent)
+			arg1 = args[1].(*models.AdminAuditEvent)
 		}
 		run(
 			arg0,
@@ -2596,7 +2596,7 @@ func (_c *MockStoreAPI_InsertAuditEvent_Call) Return(err error) *MockStoreAPI_In
 	return _c
 }
 
-func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.Context, event models.AdminAuditEvent) error) *MockStoreAPI_InsertAuditEvent_Call {
+func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.Context, event *models.AdminAuditEvent) error) *MockStoreAPI_InsertAuditEvent_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5133,7 +5133,7 @@ func (_c *MockStoreAPI_TryAdvisoryLock_Call) RunAndReturn(run func(ctx context.C
 }
 
 // UpdateMailingList provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) UpdateMailingList(ctx context.Context, list models.MailingList, members []string) error {
+func (_mock *MockStoreAPI) UpdateMailingList(ctx context.Context, list *models.MailingList, members []string) error {
 	ret := _mock.Called(ctx, list, members)
 
 	if len(ret) == 0 {
@@ -5141,7 +5141,7 @@ func (_mock *MockStoreAPI) UpdateMailingList(ctx context.Context, list models.Ma
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.MailingList, []string) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.MailingList, []string) error); ok {
 		r0 = returnFunc(ctx, list, members)
 	} else {
 		r0 = ret.Error(0)
@@ -5156,21 +5156,21 @@ type MockStoreAPI_UpdateMailingList_Call struct {
 
 // UpdateMailingList is a helper method to define mock.On call
 //   - ctx context.Context
-//   - list models.MailingList
+//   - list *models.MailingList
 //   - members []string
 func (_e *MockStoreAPI_Expecter) UpdateMailingList(ctx interface{}, list interface{}, members interface{}) *MockStoreAPI_UpdateMailingList_Call {
 	return &MockStoreAPI_UpdateMailingList_Call{Call: _e.mock.On("UpdateMailingList", ctx, list, members)}
 }
 
-func (_c *MockStoreAPI_UpdateMailingList_Call) Run(run func(ctx context.Context, list models.MailingList, members []string)) *MockStoreAPI_UpdateMailingList_Call {
+func (_c *MockStoreAPI_UpdateMailingList_Call) Run(run func(ctx context.Context, list *models.MailingList, members []string)) *MockStoreAPI_UpdateMailingList_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.MailingList
+		var arg1 *models.MailingList
 		if args[1] != nil {
-			arg1 = args[1].(models.MailingList)
+			arg1 = args[1].(*models.MailingList)
 		}
 		var arg2 []string
 		if args[2] != nil {
@@ -5190,7 +5190,7 @@ func (_c *MockStoreAPI_UpdateMailingList_Call) Return(err error) *MockStoreAPI_U
 	return _c
 }
 
-func (_c *MockStoreAPI_UpdateMailingList_Call) RunAndReturn(run func(ctx context.Context, list models.MailingList, members []string) error) *MockStoreAPI_UpdateMailingList_Call {
+func (_c *MockStoreAPI_UpdateMailingList_Call) RunAndReturn(run func(ctx context.Context, list *models.MailingList, members []string) error) *MockStoreAPI_UpdateMailingList_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5565,7 +5565,7 @@ func (_c *MockStoreAPI_UpdateToolMetadata_Call) RunAndReturn(run func(ctx contex
 }
 
 // UpsertNotificationConfig provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) UpsertNotificationConfig(ctx context.Context, config models.NotificationConfig) error {
+func (_mock *MockStoreAPI) UpsertNotificationConfig(ctx context.Context, config *models.NotificationConfig) error {
 	ret := _mock.Called(ctx, config)
 
 	if len(ret) == 0 {
@@ -5573,7 +5573,7 @@ func (_mock *MockStoreAPI) UpsertNotificationConfig(ctx context.Context, config 
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.NotificationConfig) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.NotificationConfig) error); ok {
 		r0 = returnFunc(ctx, config)
 	} else {
 		r0 = ret.Error(0)
@@ -5588,20 +5588,20 @@ type MockStoreAPI_UpsertNotificationConfig_Call struct {
 
 // UpsertNotificationConfig is a helper method to define mock.On call
 //   - ctx context.Context
-//   - config models.NotificationConfig
+//   - config *models.NotificationConfig
 func (_e *MockStoreAPI_Expecter) UpsertNotificationConfig(ctx interface{}, config interface{}) *MockStoreAPI_UpsertNotificationConfig_Call {
 	return &MockStoreAPI_UpsertNotificationConfig_Call{Call: _e.mock.On("UpsertNotificationConfig", ctx, config)}
 }
 
-func (_c *MockStoreAPI_UpsertNotificationConfig_Call) Run(run func(ctx context.Context, config models.NotificationConfig)) *MockStoreAPI_UpsertNotificationConfig_Call {
+func (_c *MockStoreAPI_UpsertNotificationConfig_Call) Run(run func(ctx context.Context, config *models.NotificationConfig)) *MockStoreAPI_UpsertNotificationConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.NotificationConfig
+		var arg1 *models.NotificationConfig
 		if args[1] != nil {
-			arg1 = args[1].(models.NotificationConfig)
+			arg1 = args[1].(*models.NotificationConfig)
 		}
 		run(
 			arg0,
@@ -5616,13 +5616,13 @@ func (_c *MockStoreAPI_UpsertNotificationConfig_Call) Return(err error) *MockSto
 	return _c
 }
 
-func (_c *MockStoreAPI_UpsertNotificationConfig_Call) RunAndReturn(run func(ctx context.Context, config models.NotificationConfig) error) *MockStoreAPI_UpsertNotificationConfig_Call {
+func (_c *MockStoreAPI_UpsertNotificationConfig_Call) RunAndReturn(run func(ctx context.Context, config *models.NotificationConfig) error) *MockStoreAPI_UpsertNotificationConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpsertNotificationSuppression provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) UpsertNotificationSuppression(ctx context.Context, suppression models.NotificationSuppression) error {
+func (_mock *MockStoreAPI) UpsertNotificationSuppression(ctx context.Context, suppression *models.NotificationSuppression) error {
 	ret := _mock.Called(ctx, suppression)
 
 	if len(ret) == 0 {
@@ -5630,7 +5630,7 @@ func (_mock *MockStoreAPI) UpsertNotificationSuppression(ctx context.Context, su
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, models.NotificationSuppression) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.NotificationSuppression) error); ok {
 		r0 = returnFunc(ctx, suppression)
 	} else {
 		r0 = ret.Error(0)
@@ -5645,20 +5645,20 @@ type MockStoreAPI_UpsertNotificationSuppression_Call struct {
 
 // UpsertNotificationSuppression is a helper method to define mock.On call
 //   - ctx context.Context
-//   - suppression models.NotificationSuppression
+//   - suppression *models.NotificationSuppression
 func (_e *MockStoreAPI_Expecter) UpsertNotificationSuppression(ctx interface{}, suppression interface{}) *MockStoreAPI_UpsertNotificationSuppression_Call {
 	return &MockStoreAPI_UpsertNotificationSuppression_Call{Call: _e.mock.On("UpsertNotificationSuppression", ctx, suppression)}
 }
 
-func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Run(run func(ctx context.Context, suppression models.NotificationSuppression)) *MockStoreAPI_UpsertNotificationSuppression_Call {
+func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Run(run func(ctx context.Context, suppression *models.NotificationSuppression)) *MockStoreAPI_UpsertNotificationSuppression_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 models.NotificationSuppression
+		var arg1 *models.NotificationSuppression
 		if args[1] != nil {
-			arg1 = args[1].(models.NotificationSuppression)
+			arg1 = args[1].(*models.NotificationSuppression)
 		}
 		run(
 			arg0,
@@ -5673,7 +5673,7 @@ func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Return(err error) *Mo
 	return _c
 }
 
-func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) RunAndReturn(run func(ctx context.Context, suppression models.NotificationSuppression) error) *MockStoreAPI_UpsertNotificationSuppression_Call {
+func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) RunAndReturn(run func(ctx context.Context, suppression *models.NotificationSuppression) error) *MockStoreAPI_UpsertNotificationSuppression_Call {
 	_c.Call.Return(run)
 	return _c
 }

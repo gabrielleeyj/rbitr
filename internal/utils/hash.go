@@ -33,6 +33,7 @@ const (
 	KeyPrefix       = "rbtr_live_"
 	keyEntropyBytes = 32
 
+	//nolint:gosec // #nosec G101 -- constant is an environment variable name, not a credential.
 	TenantKeyHMACSecretsEnv = "RBTR_TENANT_KEY_HMAC_SECRETS"
 )
 
@@ -41,13 +42,13 @@ const (
 // If RBTR_TENANT_KEY_HMAC_SECRETS is configured, hashes use HMAC-SHA256 with
 // the first secret; otherwise it falls back to SHA-256.
 func GenerateAPIKey() (rawKey, keyHash, prefix string, err error) {
-	buf := make([]byte, keyEntropyBytes)
-	if _, err = rand.Read(buf); err != nil {
+	var buf [keyEntropyBytes]byte
+	if _, err = rand.Read(buf[:]); err != nil {
 		return "", "", "", err
 	}
-	rawKey = KeyPrefix + base64.RawURLEncoding.EncodeToString(buf)
+	rawKey = KeyPrefix + base64.RawURLEncoding.EncodeToString(buf[:])
 	keyHash = HashTenantKey(rawKey)
-	// Prefix for display: first 12 chars (rbtr_live_ + 2 chars of entropy)
+	//nolint:mnd // Prefix for display: first 12 chars (rbtr_live_ + 2 chars of entropy).
 	prefix = rawKey[:min(14, len(rawKey))]
 	return rawKey, keyHash, prefix, nil
 }

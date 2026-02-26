@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/testhelpers"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
-	"github.com/labstack/echo/v5"
 )
 
 func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {

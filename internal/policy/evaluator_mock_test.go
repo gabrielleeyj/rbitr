@@ -20,7 +20,7 @@ func TestInvalidPolicyOutputErrorMethods(t *testing.T) {
 	if got := err.Error(); got != "boom" {
 		t.Fatalf("expected wrapped error, got %q", got)
 	}
-	if err.Unwrap() != base {
+	if !errors.Is(err.Unwrap(), base) {
 		t.Fatalf("expected unwrap to return base error")
 	}
 }

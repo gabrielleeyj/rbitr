@@ -18,15 +18,15 @@ import (
 )
 
 var (
-	ErrSetupComplete   = errors.New("setup already complete")
-	ErrSchemaNotReady  = errors.New("schema not ready")
-	ErrInvalidRequest  = errors.New("invalid setup request")
-	tenantIDPattern    = regexp.MustCompile(`^[a-zA-Z0-9_.\-]{3,64}$`)
-	adminKeyIDPattern  = "admin_%s"
-	defaultPolicyNotes = "Initialized by setup workflow"
+	ErrSetupComplete  = errors.New("setup already complete")
+	ErrSchemaNotReady = errors.New("schema not ready")
+	ErrInvalidRequest = errors.New("invalid setup request")
+	tenantIDPattern   = regexp.MustCompile(`^[a-zA-Z0-9_.\-]{3,64}$`)
 )
 
 const (
+	adminKeyIDPattern      = "admin_%s"
+	defaultPolicyNotes     = "Initialized by setup workflow"
 	setupBootstrapKey      = "bootstrap_complete"
 	setupAdminWriteLockKey = "admin_write_lock"
 
@@ -40,10 +40,8 @@ const (
 
 	defaultBooleanFalse = "false"
 
-	adminKeyPrefix = "rbtr_admin_"
-)
-
-const defaultPolicyModule = `package rbitr.policy
+	adminKeyPrefix      = "rbtr_admin_"
+	defaultPolicyModule = `package rbitr.policy
 
 import rego.v1
 
@@ -94,6 +92,7 @@ decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 10
 	input.action_risk == "CRITICAL"
 } else := decision_obj("DENY", "MEDIUM", "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule or missing required fields")
 `
+)
 
 type StatusResponse struct {
 	SetupRequired     bool `json:"setup_required"`
@@ -179,7 +178,7 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 	if tenantName == "" {
 		return InitializeResponse{}, fmt.Errorf("%w: tenant_name is required", ErrInvalidRequest)
 	}
-	if len(tenantName) > 120 {
+	if len(tenantName) > 120 { //nolint:mnd // ignore tenantName.
 		return InitializeResponse{}, fmt.Errorf("%w: tenant_name too long", ErrInvalidRequest)
 	}
 
@@ -201,7 +200,7 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 		adminKey = generated
 		adminKeyCreated = true
 	}
-	if len(adminKey) < 16 {
+	if len(adminKey) < 16 { //nolint:mnd // ignore this as its a character checker.
 		return InitializeResponse{}, fmt.Errorf("%w: admin_key must be at least 16 characters", ErrInvalidRequest)
 	}
 
@@ -219,7 +218,7 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 		tenantKeyPrefix = prefix
 		tenantKeyCreated = true
 	} else {
-		if len(tenantKey) < 16 {
+		if len(tenantKey) < 16 { //nolint:mnd // ignore this as its a character checker.
 			return InitializeResponse{}, fmt.Errorf("%w: tenant_key must be at least 16 characters", ErrInvalidRequest)
 		}
 		tenantKeyHash = utils.HashTenantKey(tenantKey)
@@ -402,13 +401,14 @@ func countRows(ctx context.Context, q setupQuerier, query string) (int, error) {
 }
 
 func generateSecret(prefix string) (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	var buf [32]byte
+	if _, err := rand.Read(buf[:]); err != nil {
 		return "", err
 	}
-	return prefix + base64.RawURLEncoding.EncodeToString(buf), nil
+	return prefix + base64.RawURLEncoding.EncodeToString(buf[:]), nil
 }
 
+//nolint:mnd // ignore trimming of keyPrefix.
 func keyPrefix(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if len(trimmed) <= 14 {

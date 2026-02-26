@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/gabrielleeyj/rbitr/internal/models"
 )
 
 func TestMockStoreAPIExpectations(t *testing.T) {
@@ -120,13 +121,13 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 	t.Run("InsertADR", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
 		storeMock.EXPECT().InsertADR(ctx, mock.Anything).Return(nil)
-		_ = storeMock.InsertADR(ctx, models.ActionDecisionRecord{DecisionID: "d1"})
+		_ = storeMock.InsertADR(ctx, &models.ActionDecisionRecord{DecisionID: "d1"})
 	})
 
 	t.Run("InsertApprovalRequest", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
 		storeMock.EXPECT().InsertApprovalRequest(ctx, mock.Anything).Return(nil)
-		_ = storeMock.InsertApprovalRequest(ctx, models.ApprovalRequest{ApprovalRequestID: "ar1"})
+		_ = storeMock.InsertApprovalRequest(ctx, &models.ApprovalRequest{ApprovalRequestID: "ar1"})
 	})
 
 	t.Run("ListApprovalRequests", func(t *testing.T) {
@@ -253,6 +254,6 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 	t.Run("InsertAuditEvent", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
 		storeMock.EXPECT().InsertAuditEvent(ctx, mock.Anything).Return(nil)
-		_ = storeMock.InsertAuditEvent(ctx, models.AdminAuditEvent{AuditEventID: "ae_1"})
+		_ = storeMock.InsertAuditEvent(ctx, &models.AdminAuditEvent{AuditEventID: "ae_1"})
 	})
 }

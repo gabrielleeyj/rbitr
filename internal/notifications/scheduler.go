@@ -21,6 +21,7 @@ const (
 	EventPolicyEvalError     = "POLICY.EVAL_ERROR"
 	SeverityWarn             = "WARN"
 	SeverityCritical         = "CRITICAL"
+	defaultWindow            = 5 * time.Minute
 )
 
 type ApprovalExpiryScheduler struct {
@@ -46,7 +47,7 @@ func (s *ApprovalExpiryScheduler) Start(ctx context.Context) {
 		s.Interval = time.Minute
 	}
 	if s.Window == 0 {
-		s.Window = 5 * time.Minute
+		s.Window = defaultWindow
 	}
 
 	ticker := time.NewTicker(s.Interval)
@@ -73,8 +74,8 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 		return
 	}
 	defer func() {
-		if err := s.Store.ReleaseAdvisoryLock(ctx, s.LockKey); err != nil {
-			log.Printf("approval expiry unlock failed: %v", err)
+		if releaseErr := s.Store.ReleaseAdvisoryLock(ctx, s.LockKey); releaseErr != nil {
+			log.Printf("approval expiry unlock failed: %v", releaseErr)
 		}
 	}()
 
@@ -84,9 +85,10 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 		log.Printf("approval expiry list expiring failed: %v", err)
 		return
 	}
-	for _, approval := range expiring {
-		if err := s.notifyApproval(ctx, approval, EventApprovalExpiring, now); err != nil {
-			log.Printf("approval expiring notify failed: %v", err)
+	for i := range expiring {
+		approval := &expiring[i]
+		if notifyErr := s.notifyApproval(ctx, approval, EventApprovalExpiring, now); notifyErr != nil {
+			log.Printf("approval expiring notify failed: %v", notifyErr)
 		}
 	}
 
@@ -95,7 +97,8 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 		log.Printf("approval expiry list expired failed: %v", err)
 		return
 	}
-	for _, approval := range expired {
+	for i := range expired {
+		approval := &expired[i]
 		if err := s.Store.MarkApprovalExpired(ctx, approval.TenantID, approval.ApprovalRequestID, now); err != nil {
 			if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrInvalidState) {
 				continue
@@ -109,7 +112,7 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 	}
 }
 
-func (s *ApprovalExpiryScheduler) notifyApproval(ctx context.Context, approval models.ApprovalRequest, eventType string, now time.Time) error {
+func (s *ApprovalExpiryScheduler) notifyApproval(ctx context.Context, approval *models.ApprovalRequest, eventType string, now time.Time) error {
 	if s.Sender == nil {
 		return nil
 	}
@@ -122,7 +125,7 @@ func (s *ApprovalExpiryScheduler) notifyApproval(ctx context.Context, approval m
 	}, message)
 }
 
-func ApprovalNotificationMessage(approval models.ApprovalRequest, eventType string, now time.Time) NotificationMessage {
+func ApprovalNotificationMessage(approval *models.ApprovalRequest, eventType string, now time.Time) NotificationMessage {
 	expiresIn := approval.ExpiresAt.Sub(now)
 	fields := map[string]string{
 		"Tenant":   approval.TenantID,
@@ -138,10 +141,7 @@ func ApprovalNotificationMessage(approval models.ApprovalRequest, eventType stri
 }
 
 func formatDurationMinutes(value time.Duration) string {
-	minutes := int(value.Minutes())
-	if minutes < 0 {
-		minutes = 0
-	}
+	minutes := max(int(value.Minutes()), 0)
 	if minutes == 0 {
 		return "now"
 	}
@@ -153,5 +153,5 @@ func hashLockKey(value string) int64 {
 	data := []byte(sum)
 	var buf [8]byte
 	copy(buf[:], data)
-	return int64(binary.LittleEndian.Uint64(buf[:]))
+	return int64(binary.LittleEndian.Uint32(buf[:4]))
 }

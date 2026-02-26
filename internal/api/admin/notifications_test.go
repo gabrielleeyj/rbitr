@@ -150,8 +150,8 @@ func TestHandleNotificationConfigUpdate(t *testing.T) {
 						SlackBotSecretRef:     "env://SLACK_BOT",
 						EmailSecretRef:        "env://EMAIL",
 					}, nil)
-				storeMock.On("UpsertNotificationConfig", context.Background(), mock.MatchedBy(func(cfg models.NotificationConfig) bool {
-					return cfg.TenantID == "t1" && cfg.SlackWebhookEnabled && cfg.SlackWebhookSecretRef != ""
+				storeMock.On("UpsertNotificationConfig", context.Background(), mock.MatchedBy(func(cfg *models.NotificationConfig) bool {
+					return cfg != nil && cfg.TenantID == "t1" && cfg.SlackWebhookEnabled && cfg.SlackWebhookSecretRef != ""
 				})).Return(nil)
 				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).
 					Return(nil)

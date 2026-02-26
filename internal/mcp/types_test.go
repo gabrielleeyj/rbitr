@@ -97,12 +97,13 @@ func TestRequestID_UnmarshalJSON(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			if tt.expectNull {
+			switch {
+			case tt.expectNull:
 				assert.True(t, id.IsNull())
-			} else if tt.expectStr != nil {
+			case tt.expectStr != nil:
 				require.NotNil(t, id.String())
 				assert.Equal(t, *tt.expectStr, *id.String())
-			} else if tt.expectNum != nil {
+			case tt.expectNum != nil:
 				require.NotNil(t, id.Number())
 				assert.Equal(t, *tt.expectNum, *id.Number())
 			}
@@ -153,12 +154,13 @@ func TestRequest_RoundTrip(t *testing.T) {
 
 			// Compare IDs
 			require.NotNil(t, decoded.ID)
-			if tt.req.ID.IsNull() {
+			switch {
+			case tt.req.ID.IsNull():
 				assert.True(t, decoded.ID.IsNull())
-			} else if tt.req.ID.String() != nil {
+			case tt.req.ID.String() != nil:
 				require.NotNil(t, decoded.ID.String())
 				assert.Equal(t, *tt.req.ID.String(), *decoded.ID.String())
-			} else if tt.req.ID.Number() != nil {
+			case tt.req.ID.Number() != nil:
 				require.NotNil(t, decoded.ID.Number())
 				assert.Equal(t, *tt.req.ID.Number(), *decoded.ID.Number())
 			}
@@ -226,7 +228,7 @@ func TestResponse_WithResult(t *testing.T) {
 	assert.Equal(t, "jira", decodedResult.Tools[0].Name)
 }
 
-// Helper functions
+// Helper functions.
 func stringPtr(s string) *string {
 	return &s
 }

@@ -101,7 +101,7 @@ func NewMethodNotFoundError(method string) *ErrorObject {
 func NewInvalidParamsError(msg string) *ErrorObject {
 	return &ErrorObject{
 		Code:    ErrorInvalidParams,
-		Message: fmt.Sprintf("invalid params: %s", msg),
+		Message: "invalid params: " + msg,
 	}
 }
 
@@ -137,9 +137,9 @@ func NewDeniedError(data *DeniedData) *ErrorObject {
 type PolicyErrorCode string
 
 const (
-	PolicyErrorInvalidOutput  PolicyErrorCode = "POLICY_INVALID_OUTPUT"
-	PolicyErrorEvalFailed     PolicyErrorCode = "POLICY_EVAL_FAILED"
-	PolicyErrorNotFound       PolicyErrorCode = "POLICY_NOT_FOUND"
+	PolicyErrorInvalidOutput   PolicyErrorCode = "POLICY_INVALID_OUTPUT"
+	PolicyErrorEvalFailed      PolicyErrorCode = "POLICY_EVAL_FAILED"
+	PolicyErrorNotFound        PolicyErrorCode = "POLICY_NOT_FOUND"
 	PolicyErrorSchemaViolation PolicyErrorCode = "POLICY_SCHEMA_VIOLATION"
 )
 

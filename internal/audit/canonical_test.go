@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -18,7 +19,7 @@ func TestCanonicalJSONDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if string(first) != string(second) {
+	if !bytes.Equal(first, second) {
 		t.Fatalf("expected deterministic canonical json")
 	}
 }

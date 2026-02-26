@@ -19,6 +19,35 @@ const (
 	RiskCritical = "CRITICAL"
 )
 
+type ActionType string
+
+const (
+	ActionTypeCRMDelete        ActionType = "CRM.DELETE"
+	ActionTypeDataDelete       ActionType = "DATA.DELETE"
+	ActionTypeDataBulkExport   ActionType = "DATA.BULK_EXPORT"
+	ActionTypeDataExport       ActionType = "DATA.EXPORT"
+	ActionTypeAccessGrant      ActionType = "ACCESS.GRANT"
+	ActionTypeCRMRead          ActionType = "CRM.READ"
+	ActionTypeDataQuery        ActionType = "DATA.QUERY"
+	ActionTypeDataUpdate       ActionType = "DATA.UPDATE"
+	ActionTypeDataRead         ActionType = "DATA.READ"
+	ActionTypeTicketCreate     ActionType = "TICKET.CREATE"
+	ActionTypeTicketComment    ActionType = "TICKET.COMMENT"
+	ActionTypeTicketUpdate     ActionType = "TICKET.UPDATE"
+	ActionTypePaymentRefund    ActionType = "PAYMENT.REFUND"
+	ActionTypeAccessRoleChange ActionType = "ACCESS.ROLE_CHANGE"
+)
+
+const (
+	methodGet     = "GET"
+	methodHead    = "HEAD"
+	methodOptions = "OPTIONS"
+	methodPost    = "POST"
+	methodPut     = "PUT"
+	methodPatch   = "PATCH"
+	methodDelete  = "DELETE"
+)
+
 type classifyInput struct {
 	method         string
 	rawPath        string
@@ -36,18 +65,18 @@ func Classify(toolID, method, path, query string, headers map[string]string) Res
 	toolID = strings.ToLower(strings.TrimSpace(toolID))
 
 	if toolID == "jira" {
-		return classifyJira(input)
+		return classifyJira(&input)
 	}
 	if toolID == "mock_internal" {
-		return classifyMockInternal(input)
+		return classifyMockInternal(&input)
 	}
-	return classifyGeneric(input)
+	return classifyGeneric(&input)
 }
 
 func newClassifyInput(method, path, query string) classifyInput {
 	normalizedMethod := strings.ToUpper(strings.TrimSpace(method))
 	if normalizedMethod == "" {
-		normalizedMethod = "GET"
+		normalizedMethod = methodGet
 	}
 
 	rawPath := strings.TrimSpace(path)
@@ -75,127 +104,91 @@ func newClassifyInput(method, path, query string) classifyInput {
 	}
 }
 
-func classifyGeneric(input classifyInput) Result {
-	actionType := classifyGenericActionType(input)
+func newResult(actionType ActionType, summary string) Result {
 	return Result{
-		ActionType:    actionType,
+		ActionType:    string(actionType),
 		ActionRisk:    defaultRisk(actionType),
-		ActionSummary: requestSummary(input),
+		ActionSummary: summary,
 	}
 }
 
-func classifyGenericActionType(input classifyInput) string {
+func classifyGeneric(input *classifyInput) Result {
+	actionType := classifyGenericActionType(input)
+	return newResult(actionType, requestSummary(input))
+}
+
+func classifyGenericActionType(input *classifyInput) ActionType {
 	if isDeleteIntent(input) {
 		if isCRMEntity(input) {
-			return "CRM.DELETE"
+			return ActionTypeCRMDelete
 		}
-		return "DATA.DELETE"
+		return ActionTypeDataDelete
 	}
 	if isBulkExportIntent(input) {
-		return "DATA.BULK_EXPORT"
+		return ActionTypeDataBulkExport
 	}
 	if isExportIntent(input) {
-		return "DATA.EXPORT"
+		return ActionTypeDataExport
 	}
 	if isAccessGrantIntent(input) {
-		return "ACCESS.GRANT"
+		return ActionTypeAccessGrant
 	}
 	if isCRMEntity(input) && (isReadMethod(input.method) || isQueryIntent(input)) {
-		return "CRM.READ"
+		return ActionTypeCRMRead
 	}
 	if isQueryIntent(input) {
-		return "DATA.QUERY"
+		return ActionTypeDataQuery
 	}
 
 	switch input.method {
-	case "POST", "PUT", "PATCH":
-		return "DATA.UPDATE"
-	case "DELETE":
-		return "DATA.DELETE"
+	case methodPost, methodPut, methodPatch:
+		return ActionTypeDataUpdate
+	case methodDelete:
+		return ActionTypeDataDelete
 	default:
-		return "DATA.READ"
+		return ActionTypeDataRead
 	}
 }
 
-func classifyJira(input classifyInput) Result {
+func classifyJira(input *classifyInput) Result {
 	if isJiraIssueCreate(input) {
-		return Result{
-			ActionType:    "TICKET.CREATE",
-			ActionRisk:    defaultRisk("TICKET.CREATE"),
-			ActionSummary: "Create Jira issue",
-		}
+		return newResult(ActionTypeTicketCreate, "Create Jira issue")
 	}
 	if isJiraIssueComment(input) {
-		return Result{
-			ActionType:    "TICKET.COMMENT",
-			ActionRisk:    defaultRisk("TICKET.COMMENT"),
-			ActionSummary: "Comment on Jira issue",
-		}
+		return newResult(ActionTypeTicketComment, "Comment on Jira issue")
 	}
 	if isJiraCommentDelete(input) {
-		return Result{
-			ActionType:    "DATA.DELETE",
-			ActionRisk:    defaultRisk("DATA.DELETE"),
-			ActionSummary: "Delete Jira comment",
-		}
+		return newResult(ActionTypeDataDelete, "Delete Jira comment")
 	}
 	if isJiraIssueDelete(input) {
-		return Result{
-			ActionType:    "DATA.DELETE",
-			ActionRisk:    defaultRisk("DATA.DELETE"),
-			ActionSummary: "Delete Jira issue",
-		}
+		return newResult(ActionTypeDataDelete, "Delete Jira issue")
 	}
 	if isJiraIssueUpdate(input) {
-		return Result{
-			ActionType:    "TICKET.UPDATE",
-			ActionRisk:    defaultRisk("TICKET.UPDATE"),
-			ActionSummary: "Update Jira issue",
-		}
+		return newResult(ActionTypeTicketUpdate, "Update Jira issue")
 	}
 	if isJiraSearch(input) {
-		return Result{
-			ActionType:    "DATA.QUERY",
-			ActionRisk:    defaultRisk("DATA.QUERY"),
-			ActionSummary: "Query Jira issues",
-		}
+		return newResult(ActionTypeDataQuery, "Query Jira issues")
 	}
 	return classifyGeneric(input)
 }
 
-func classifyMockInternal(input classifyInput) Result {
+func classifyMockInternal(input *classifyInput) Result {
 	if isMockRefund(input) {
-		return Result{
-			ActionType:    "PAYMENT.REFUND",
-			ActionRisk:    defaultRisk("PAYMENT.REFUND"),
-			ActionSummary: "Refund payment",
-		}
+		return newResult(ActionTypePaymentRefund, "Refund payment")
 	}
 	if isMockExport(input) {
-		return Result{
-			ActionType:    "DATA.EXPORT",
-			ActionRisk:    defaultRisk("DATA.EXPORT"),
-			ActionSummary: "Export customer data",
-		}
+		return newResult(ActionTypeDataExport, "Export customer data")
 	}
 	if isMockRoleChange(input) {
-		return Result{
-			ActionType:    "ACCESS.ROLE_CHANGE",
-			ActionRisk:    defaultRisk("ACCESS.ROLE_CHANGE"),
-			ActionSummary: "Change user role",
-		}
+		return newResult(ActionTypeAccessRoleChange, "Change user role")
 	}
 	if isMockAccessGrant(input) {
-		return Result{
-			ActionType:    "ACCESS.GRANT",
-			ActionRisk:    defaultRisk("ACCESS.GRANT"),
-			ActionSummary: "Grant access",
-		}
+		return newResult(ActionTypeAccessGrant, "Grant access")
 	}
 	return classifyGeneric(input)
 }
 
-func requestSummary(input classifyInput) string {
+func requestSummary(input *classifyInput) string {
 	return input.method + " " + input.rawPath
 }
 
@@ -247,7 +240,7 @@ func pathSegments(normalizedPath string) []string {
 }
 
 func makeTokenSet() map[string]struct{} {
-	return make(map[string]struct{}, 8)
+	return make(map[string]struct{}, 8) //nolint:mnd // ignore the fixed map len.
 }
 
 func addTokens(set map[string]struct{}, values ...string) {
@@ -309,7 +302,7 @@ func hasAll(set map[string]struct{}, values ...string) bool {
 
 func isWriteMethod(method string) bool {
 	switch method {
-	case "POST", "PUT", "PATCH", "DELETE":
+	case methodPost, methodPut, methodPatch, methodDelete:
 		return true
 	default:
 		return false
@@ -318,15 +311,15 @@ func isWriteMethod(method string) bool {
 
 func isReadMethod(method string) bool {
 	switch method {
-	case "GET", "HEAD", "OPTIONS":
+	case methodGet, methodHead, methodOptions:
 		return true
 	default:
 		return false
 	}
 }
 
-func isDeleteIntent(input classifyInput) bool {
-	if input.method == "DELETE" {
+func isDeleteIntent(input *classifyInput) bool {
+	if input.method == methodDelete {
 		return true
 	}
 	if !isWriteMethod(input.method) {
@@ -335,7 +328,7 @@ func isDeleteIntent(input classifyInput) bool {
 	return hasAny(input.pathTokens, "delete", "remove", "revoke", "purge", "destroy", "erase")
 }
 
-func isExportIntent(input classifyInput) bool {
+func isExportIntent(input *classifyInput) bool {
 	if hasAny(input.pathTokens, "export", "exports", "download", "dump", "extract", "backup") {
 		return true
 	}
@@ -345,7 +338,7 @@ func isExportIntent(input classifyInput) bool {
 	return false
 }
 
-func isBulkExportIntent(input classifyInput) bool {
+func isBulkExportIntent(input *classifyInput) bool {
 	if !isExportIntent(input) {
 		return false
 	}
@@ -358,7 +351,7 @@ func isBulkExportIntent(input classifyInput) bool {
 	return false
 }
 
-func isAccessGrantIntent(input classifyInput) bool {
+func isAccessGrantIntent(input *classifyInput) bool {
 	if !isWriteMethod(input.method) {
 		return false
 	}
@@ -372,7 +365,7 @@ func isAccessGrantIntent(input classifyInput) bool {
 	return false
 }
 
-func isQueryIntent(input classifyInput) bool {
+func isQueryIntent(input *classifyInput) bool {
 	if hasAny(input.pathTokens, "search", "query", "filter", "lookup", "find") {
 		return true
 	}
@@ -382,7 +375,7 @@ func isQueryIntent(input classifyInput) bool {
 	return false
 }
 
-func isCRMEntity(input classifyInput) bool {
+func isCRMEntity(input *classifyInput) bool {
 	return hasAny(
 		input.pathTokens,
 		"crm",
@@ -401,15 +394,16 @@ func isCRMEntity(input classifyInput) bool {
 	)
 }
 
-func isJiraPath(input classifyInput) bool {
+//nolint:mnd // ignore this.
+func isJiraPath(input *classifyInput) bool {
 	if len(input.segments) < 4 {
 		return false
 	}
 	return input.segments[0] == "rest" && input.segments[1] == "api"
 }
 
-func isJiraIssueCreate(input classifyInput) bool {
-	if input.method != "POST" || !isJiraPath(input) {
+func isJiraIssueCreate(input *classifyInput) bool {
+	if input.method != methodPost || !isJiraPath(input) {
 		return false
 	}
 	if len(input.segments) == 4 && input.segments[3] == "issue" {
@@ -418,38 +412,38 @@ func isJiraIssueCreate(input classifyInput) bool {
 	return len(input.segments) == 5 && input.segments[3] == "issue" && input.segments[4] == "bulk"
 }
 
-func isJiraIssueComment(input classifyInput) bool {
-	if (input.method != "POST" && input.method != "PUT" && input.method != "PATCH") || !isJiraPath(input) {
+func isJiraIssueComment(input *classifyInput) bool {
+	if (input.method != methodPost && input.method != methodPut && input.method != methodPatch) || !isJiraPath(input) {
 		return false
 	}
 	return hasAny(input.pathTokens, "issue") && hasAny(input.pathTokens, "comment")
 }
 
-func isJiraIssueUpdate(input classifyInput) bool {
+func isJiraIssueUpdate(input *classifyInput) bool {
 	if !isJiraPath(input) || !hasAny(input.pathTokens, "issue") {
 		return false
 	}
-	if input.method == "PUT" || input.method == "PATCH" {
+	if input.method == methodPut || input.method == methodPatch {
 		return true
 	}
-	if input.method != "POST" {
+	if input.method != methodPost {
 		return false
 	}
 	return hasAny(input.pathTokens, "transition", "transitions", "assignee", "watcher", "watchers", "worklog")
 }
 
-func isJiraCommentDelete(input classifyInput) bool {
-	return input.method == "DELETE" &&
+func isJiraCommentDelete(input *classifyInput) bool {
+	return input.method == methodDelete &&
 		isJiraPath(input) &&
 		hasAny(input.pathTokens, "issue") &&
 		hasAny(input.pathTokens, "comment")
 }
 
-func isJiraIssueDelete(input classifyInput) bool {
-	return input.method == "DELETE" && isJiraPath(input) && hasAny(input.pathTokens, "issue")
+func isJiraIssueDelete(input *classifyInput) bool {
+	return input.method == methodDelete && isJiraPath(input) && hasAny(input.pathTokens, "issue")
 }
 
-func isJiraSearch(input classifyInput) bool {
+func isJiraSearch(input *classifyInput) bool {
 	if !isJiraPath(input) {
 		return false
 	}
@@ -459,30 +453,30 @@ func isJiraSearch(input classifyInput) bool {
 	return hasAny(input.queryTokens, "jql", "query", "search")
 }
 
-func isMockRefund(input classifyInput) bool {
-	if input.method != "POST" && input.method != "PUT" && input.method != "PATCH" {
+func isMockRefund(input *classifyInput) bool {
+	if input.method != methodPost && input.method != methodPut && input.method != methodPatch {
 		return false
 	}
 	return hasAny(input.pathTokens, "refund", "refunds")
 }
 
-func isMockExport(input classifyInput) bool {
-	if input.method == "DELETE" {
+func isMockExport(input *classifyInput) bool {
+	if input.method == methodDelete {
 		return false
 	}
 	return hasAny(input.pathTokens, "export", "exports", "download")
 }
 
-func isMockRoleChange(input classifyInput) bool {
-	if input.method != "POST" && input.method != "PUT" && input.method != "PATCH" {
+func isMockRoleChange(input *classifyInput) bool {
+	if input.method != methodPost && input.method != methodPut && input.method != methodPatch {
 		return false
 	}
 	hasRoleToken := hasAny(input.pathTokens, "role", "roles")
 	return hasRoleToken && hasAny(input.pathTokens, "change", "update", "assign", "set")
 }
 
-func isMockAccessGrant(input classifyInput) bool {
-	if input.method != "POST" && input.method != "PUT" && input.method != "PATCH" {
+func isMockAccessGrant(input *classifyInput) bool {
+	if input.method != methodPost && input.method != methodPut && input.method != methodPatch {
 		return false
 	}
 	if hasAny(input.pathTokens, "grant", "invite") && hasAny(input.pathTokens, "access", "permission", "permissions", "role", "roles") {
@@ -491,13 +485,13 @@ func isMockAccessGrant(input classifyInput) bool {
 	return hasAll(input.pathTokens, "permissions", "assign")
 }
 
-func defaultRisk(actionType string) string {
+func defaultRisk(actionType ActionType) string {
 	switch actionType {
-	case "PAYMENT.REFUND", "ACCESS.ROLE_CHANGE":
+	case ActionTypePaymentRefund, ActionTypeAccessRoleChange:
 		return RiskHigh
-	case "DATA.EXPORT", "ACCESS.GRANT", "DATA.BULK_EXPORT", "DATA.DELETE", "CRM.DELETE":
+	case ActionTypeDataExport, ActionTypeAccessGrant, ActionTypeDataBulkExport, ActionTypeDataDelete, ActionTypeCRMDelete:
 		return RiskCritical
-	case "TICKET.CREATE", "TICKET.COMMENT", "TICKET.UPDATE", "DATA.READ", "DATA.QUERY", "CRM.READ":
+	case ActionTypeTicketCreate, ActionTypeTicketComment, ActionTypeTicketUpdate, ActionTypeDataRead, ActionTypeDataQuery, ActionTypeCRMRead:
 		return RiskLow
 	default:
 		return RiskMedium

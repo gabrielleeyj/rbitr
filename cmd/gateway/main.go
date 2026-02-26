@@ -30,9 +30,13 @@ import (
 )
 
 const (
-	requestTimeout  = 15 * time.Second
-	gracefulTimeout = 10 * time.Second
-	cacheTTL        = 30 * time.Second
+	requestTimeout         = 15 * time.Second
+	gracefulTimeout        = 10 * time.Second
+	cacheTTL               = 30 * time.Second
+	secretTTL              = 5 * time.Minute
+	serviceCooldown        = 10 * time.Minute
+	approvalExpiryWindow   = 5 * time.Minute
+	auditRetentionInterval = 24 * time.Hour
 )
 
 func main() {
@@ -56,10 +60,10 @@ func main() {
 	secretResolver := notifications.NewCompositeResolver([]notifications.SecretProvider{
 		notifications.EnvProvider{},
 		notifications.FileProvider{},
-	}, 5*time.Minute)
-	notificationService := notifications.NewService(st, secretResolver, 10*time.Minute, metrics)
-	expiryScheduler := notifications.NewApprovalExpiryScheduler(st, notificationService, time.Minute, 5*time.Minute)
-	auditRetention := retention.NewAuditRetentionScheduler(st, 24*time.Hour)
+	}, secretTTL)
+	notificationService := notifications.NewService(st, secretResolver, serviceCooldown, metrics)
+	expiryScheduler := notifications.NewApprovalExpiryScheduler(st, notificationService, time.Minute, approvalExpiryWindow)
+	auditRetention := retention.NewAuditRetentionScheduler(st, auditRetentionInterval)
 
 	e := echo.New()
 	e.Use(middleware.Recover())

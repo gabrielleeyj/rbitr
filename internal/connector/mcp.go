@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,10 +19,15 @@ type MCPClient struct {
 	timeout time.Duration
 }
 
+const (
+	defaultTimeout  = 30 * time.Second
+	maxResponseSize = 10 * 1024 * 1024 // 10MB
+)
+
 // NewMCPClient creates a new MCP client with the specified timeout.
 func NewMCPClient(timeout time.Duration) *MCPClient {
 	if timeout == 0 {
-		timeout = 30 * time.Second
+		timeout = defaultTimeout
 	}
 	return &MCPClient{
 		client: &http.Client{
@@ -34,6 +40,10 @@ func NewMCPClient(timeout time.Duration) *MCPClient {
 // ForwardRequest forwards an MCP JSON-RPC request to the upstream server.
 // It preserves the request ID and returns the upstream response.
 func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req *mcp.Request) (*mcp.Response, error) {
+	if err := validateOutboundURL(upstreamURL); err != nil {
+		return nil, err
+	}
+
 	// Marshal the request to JSON
 	reqBody, err := json.Marshal(req)
 	if err != nil {
@@ -51,6 +61,7 @@ func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req 
 	httpReq.Header.Add("Accept", "text/event-stream")
 
 	// Execute request
+	//nolint:gosec // G704: upstream URL is tenant-admin configured and validated before execution.
 	httpResp, err := m.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request failed: %w", err)
@@ -58,7 +69,6 @@ func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req 
 	defer httpResp.Body.Close()
 
 	// Read response body (with size limit to prevent memory exhaustion)
-	const maxResponseSize = 10 * 1024 * 1024 // 10MB
 	limitedReader := io.LimitReader(httpResp.Body, maxResponseSize+1)
 	respBody, err := io.ReadAll(limitedReader)
 	if err != nil {
@@ -98,11 +108,11 @@ func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req 
 	// Verify response ID matches request ID (JSON-RPC protocol requirement)
 	if req.ID != nil && !req.ID.IsNull() {
 		if mcpResp.ID == nil || mcpResp.ID.IsNull() {
-			return nil, fmt.Errorf("upstream response missing ID for request with ID")
+			return nil, errors.New("upstream response missing ID for request with ID")
 		}
 		// Compare IDs
 		if !compareRequestIDs(req.ID, mcpResp.ID) {
-			return nil, fmt.Errorf("upstream response ID mismatch")
+			return nil, errors.New("upstream response ID mismatch")
 		}
 	}
 

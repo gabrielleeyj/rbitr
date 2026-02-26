@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -125,7 +126,8 @@ func TestValidateAndParseRequest(t *testing.T) {
 
 			if tt.expectErr {
 				require.Error(t, err)
-				errObj, ok := err.(*ErrorObject)
+				errObj := &ErrorObject{}
+				ok := errors.As(err, &errObj)
 				require.True(t, ok, "error should be an ErrorObject")
 				assert.Equal(t, tt.errCode, errObj.Code)
 				return
@@ -158,7 +160,8 @@ func TestValidateAndParseRequest_SizeLimit(t *testing.T) {
 	// Should fail with very small limit
 	_, err = ValidateAndParseRequest([]byte(input), 100)
 	require.Error(t, err)
-	errObj, ok := err.(*ErrorObject)
+	errObj := &ErrorObject{}
+	ok := errors.As(err, &errObj)
 	require.True(t, ok)
 	assert.Equal(t, ErrorInvalidRequest, errObj.Code)
 	assert.Contains(t, errObj.Message, "too large")
@@ -176,7 +179,8 @@ func TestValidateAndParseRequest_ExactBoundary(t *testing.T) {
 	// Should fail because total input exceeds maxSize
 	_, err := ValidateAndParseRequest([]byte(input), maxSize)
 	require.Error(t, err)
-	errObj, ok := err.(*ErrorObject)
+	errObj := &ErrorObject{}
+	ok := errors.As(err, &errObj)
 	require.True(t, ok)
 	assert.Equal(t, ErrorInvalidRequest, errObj.Code)
 	assert.Contains(t, errObj.Message, "too large")

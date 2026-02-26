@@ -621,10 +621,11 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read the request to get the ID
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
 		require.Equal(t, "tools/call", req.Method)
 		var params mcp.ToolsCallParams
-		err := json.Unmarshal(req.Params, &params)
+		err = json.Unmarshal(req.Params, &params)
 		require.NoError(t, err)
 		var args map[string]any
 		err = json.Unmarshal(params.Arguments, &args)
@@ -641,11 +642,12 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 		})
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mcp.Response{
+		err = json.NewEncoder(w).Encode(mcp.Response{
 			JSONRPC: "2.0",
 			ID:      req.ID, // Echo back the request ID
 			Result:  resultData,
 		})
+		require.NoError(t, err)
 	}))
 	defer upstreamServer.Close()
 
@@ -687,8 +689,8 @@ func TestHandleMCP_ToolsCall_ResubmitIgnoresInternalApprovalFieldsInHash(t *test
 		Return(nil)
 	mockStore.On("MarkApprovalExecuted", mock.Anything, "t_demo", "ar_123", mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
-	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(adr models.ActionDecisionRecord) bool {
-		return adr.ApprovalRequestID == "ar_123" && adr.RequestHash == expectedHash
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(adr *models.ActionDecisionRecord) bool {
+		return adr != nil && adr.ApprovalRequestID == "ar_123" && adr.RequestHash == expectedHash
 	})).Return(nil)
 
 	deps := &Dependencies{
@@ -735,20 +737,23 @@ func TestHandleMCP_ToolsCall_ResubmitReturnsErrorWhenADRPersistFails(t *testing.
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Read the request to get the ID
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
 
-		resultData, _ := json.Marshal(mcp.ToolsCallResult{
+		resultData, err := json.Marshal(mcp.ToolsCallResult{
 			Content: []mcp.Content{
 				{Type: "text", Text: "Success"},
 			},
 		})
+		require.NoError(t, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mcp.Response{
+		err = json.NewEncoder(w).Encode(mcp.Response{
 			JSONRPC: "2.0",
 			ID:      req.ID, // Echo back the request ID
 			Result:  resultData,
 		})
+		require.NoError(t, err)
 	}))
 	defer upstreamServer.Close()
 
@@ -1004,19 +1009,22 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 	// Create mock upstream MCP server that echoes back a result for resources/list
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
 		assert.Equal(t, "resources/list", req.Method)
 
-		resultData, _ := json.Marshal(map[string]any{
+		resultData, err := json.Marshal(map[string]any{
 			"resources": []any{},
 		})
+		require.NoError(t, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mcp.Response{
+		err = json.NewEncoder(w).Encode(mcp.Response{
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Result:  resultData,
 		})
+		require.NoError(t, err)
 	}))
 	defer upstreamServer.Close()
 
@@ -1069,29 +1077,34 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 func TestHandleMCP_PassThrough_UsesConfiguredUpstreamTool(t *testing.T) {
 	selectedUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
-		resultData, _ := json.Marshal(map[string]any{"source": "selected"})
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		resultData, err := json.Marshal(map[string]any{"source": "selected"})
+		require.NoError(t, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mcp.Response{
+		err = json.NewEncoder(w).Encode(mcp.Response{
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Result:  resultData,
 		})
+		require.NoError(t, err)
 	}))
 	defer selectedUpstream.Close()
 
 	fallbackUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req mcp.Request
-		json.NewDecoder(r.Body).Decode(&req)
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
 		resultData, _ := json.Marshal(map[string]any{"source": "fallback"})
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mcp.Response{
+		err = json.NewEncoder(w).Encode(mcp.Response{
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Result:  resultData,
 		})
+		require.NoError(t, err)
 	}))
 	defer fallbackUpstream.Close()
 
@@ -1153,7 +1166,8 @@ func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 	// Create mock upstream that always fails
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal server error"))
+		_, err := w.Write([]byte("internal server error"))
+		require.NoError(t, err)
 	}))
 	defer upstreamServer.Close()
 
@@ -1374,8 +1388,9 @@ func TestHandleMCP_ToolsCallRateLimitExceeded(t *testing.T) {
 		mock.Anything,
 		int64(1),
 	).Return(false, int64(0), nil)
-	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-		return record.Decision == decisionDeny &&
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		return record != nil &&
+			record.Decision == string(decisionDeny) &&
 			record.RuleID == "rate_limit_minute" &&
 			len(record.Reasons) == 1 &&
 			record.Reasons[0].Code == "RATE_LIMIT_EXCEEDED"
@@ -1434,9 +1449,12 @@ func TestHandleMCP_ToolsCallArgConstraintDenied(t *testing.T) {
 		}, nil)
 	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
 		Return("", store.ErrNotFound)
-	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		if record == nil {
+			return false
+		}
 		failures, ok := record.Constraints["arg_constraint_failures"].([]map[string]any)
-		return record.Decision == decisionDeny &&
+		return record.Decision == string(decisionDeny) &&
 			record.RuleID == "deny_prod_branch" &&
 			len(record.Reasons) == 1 &&
 			record.Reasons[0].Code == argConstraintReasonDeny &&
@@ -1654,8 +1672,8 @@ func TestHandleMCP_ToolsCallDenyShadowModeExecutes(t *testing.T) {
 	}, nil)
 	mockStore.On("GetRiskOverride", mock.Anything, "t_demo", "MCP.mock_internal").
 		Return("", store.ErrNotFound)
-	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-		return record.Decision == decisionDeny && record.RuleID == "rule_deny"
+	mockStore.On("InsertADR", mock.Anything, mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		return record != nil && record.Decision == string(decisionDeny) && record.RuleID == "rule_deny"
 	})).Return(nil)
 
 	policyMock := policy.NewMockEvaluatorAPI(t)
@@ -1663,7 +1681,7 @@ func TestHandleMCP_ToolsCallDenyShadowModeExecutes(t *testing.T) {
 		On("Evaluate", mock.Anything, "t_demo", mock.Anything).
 		Return(policy.Result{
 			Version:       "2026-01-20",
-			Decision:      decisionDeny,
+			Decision:      string(decisionDeny),
 			Risk:          "MEDIUM",
 			Rule:          models.DecisionRule{ID: "rule_deny", Priority: 100},
 			Reasons:       []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
@@ -1703,6 +1721,6 @@ func TestHandleMCP_ToolsCallDenyShadowModeExecutes(t *testing.T) {
 
 	shadowRaw, ok := result["_rbitr_shadow"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, decisionDeny, shadowRaw["original_decision"])
+	require.Equal(t, string(decisionDeny), shadowRaw["original_decision"])
 	require.Equal(t, "rule_deny", shadowRaw["rule_id"])
 }

@@ -41,7 +41,7 @@ func TestHandleStatusSuccess(t *testing.T) {
 	deps := &Dependencies{Service: service}
 	RegisterRoutes(e, deps)
 
-	req := httptest.NewRequest(http.MethodGet, "/setup/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/setup/status", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 

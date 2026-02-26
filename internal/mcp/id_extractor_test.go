@@ -123,7 +123,7 @@ func TestExtractRequestID_PreservesIDEvenWithOtherErrors(t *testing.T) {
 	testCases := []struct {
 		name  string
 		input string
-		idVal interface{}
+		idVal any
 	}{
 		{
 			name:  "wrong jsonrpc version with string id",

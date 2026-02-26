@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
+//nolint:gochecknoglobals // stream limits are package-level knobs for tests and controlled defaults.
 var (
 	mcpStreamMaxDuration             = 5 * time.Minute
 	mcpStreamHeartbeatInterval       = 15 * time.Second
@@ -114,7 +114,8 @@ func (d *Dependencies) handleMCP(c *echo.Context) error {
 	req, err := mcp.ValidateAndParseRequest(bodyBytes, mcp.MaxRequestSize)
 	if err != nil {
 		// Validation returns ErrorObject directly - use extracted ID for correlation
-		if errObj, ok := err.(*mcp.ErrorObject); ok {
+		errObj := &mcp.ErrorObject{}
+		if errors.As(err, &errObj) {
 			return writeJSONRPCError(c, extractedID, errObj)
 		}
 		// Fallback for unexpected errors
@@ -260,6 +261,8 @@ func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, age
 
 // handlePassThrough forwards unknown MCP methods to the upstream MCP server
 // without governance (no policy eval, no ADR, no approval workflow).
+//
+//nolint:nilerr // JSON-RPC errors are encoded in response payloads rather than Go errors.
 func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
@@ -270,34 +273,35 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 	configuredToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
 
 	// List tenant tools for explicit upstream selection or fallback.
-	tools, err := d.Store.ListTools(ctx, tenant.TenantID)
-	if err != nil {
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID)
+	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
 
 	var upstreamURL string
 	selectedToolID := ""
 	usedFallback := false
+	//nolint:nestif // Pass-through selection keeps configured and fallback upstream resolution in one place.
 	if configuredToolID != "" {
-		for _, tool := range tools {
-			if tool.ToolID != configuredToolID {
+		for i := range tools {
+			if tools[i].ToolID != configuredToolID {
 				continue
 			}
-			if tool.Transport != "mcp_streamable_http" || strings.TrimSpace(tool.MCPUpstreamURL) == "" {
+			if tools[i].Transport != "mcp_streamable_http" || strings.TrimSpace(tools[i].MCPUpstreamURL) == "" {
 				return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("configured pass-through upstream unavailable")), nil
 			}
-			selectedToolID = tool.ToolID
-			upstreamURL = tool.MCPUpstreamURL
+			selectedToolID = tools[i].ToolID
+			upstreamURL = tools[i].MCPUpstreamURL
 			break
 		}
 		if upstreamURL == "" {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("configured pass-through upstream unavailable")), nil
 		}
 	} else {
-		for _, tool := range tools {
-			if tool.Transport == "mcp_streamable_http" && strings.TrimSpace(tool.MCPUpstreamURL) != "" {
-				selectedToolID = tool.ToolID
-				upstreamURL = tool.MCPUpstreamURL
+		for i := range tools {
+			if tools[i].Transport == "mcp_streamable_http" && strings.TrimSpace(tools[i].MCPUpstreamURL) != "" {
+				selectedToolID = tools[i].ToolID
+				upstreamURL = tools[i].MCPUpstreamURL
 				usedFallback = true
 				break
 			}
@@ -323,16 +327,16 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 	}
 
 	// Forward request as-is to upstream
-	mcpClient := connector.NewMCPClient(30 * time.Second)
+	mcpClient := connector.NewMCPClient(mcpClientTimeout)
 	start := time.Now()
-	upstreamResp, err := mcpClient.ForwardRequest(ctx, upstreamURL, req)
+	upstreamResp, forwardErr := mcpClient.ForwardRequest(ctx, upstreamURL, req)
 	latencyMs := time.Since(start).Milliseconds()
 
 	if d.Metrics != nil {
 		d.Metrics.ToolLatencyMs.Observe(float64(latencyMs))
 	}
 
-	if err != nil {
+	if forwardErr != nil {
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorInternalError,
 			Message: "upstream request failed",
@@ -342,10 +346,11 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 	return upstreamResp, nil
 }
 
+//nolint:nilerr // JSON-RPC errors are encoded in response payloads rather than Go errors.
 func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error) {
 	var params mcp.InitializeParams
 	if len(req.Params) > 0 {
-		if err := json.Unmarshal(req.Params, &params); err != nil {
+		if unmarshalErr := json.Unmarshal(req.Params, &params); unmarshalErr != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError("invalid initialize params")), nil
 		}
 	}
@@ -364,8 +369,8 @@ func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error)
 
 	result := mcp.InitializeResult{
 		ProtocolVersion: mcp.ProtocolVersion20251125,
-		Capabilities: map[string]interface{}{
-			"tools": map[string]interface{}{
+		Capabilities: map[string]any{
+			"tools": map[string]any{
 				"listChanged": false,
 			},
 		},
@@ -377,6 +382,7 @@ func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error)
 	return mcp.NewSuccessResponse(req.ID, result)
 }
 
+//nolint:nilnil // notifications intentionally produce no JSON-RPC response.
 func (d *Dependencies) handleInitializedNotification(req *mcp.Request) (*mcp.Response, error) {
 	if req.ID != nil {
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
@@ -388,22 +394,24 @@ func (d *Dependencies) handleInitializedNotification(req *mcp.Request) (*mcp.Res
 }
 
 // handleToolsList handles the tools/list MCP method.
+//
+//nolint:nilerr // JSON-RPC errors are encoded in response payloads rather than Go errors.
 func (d *Dependencies) handleToolsList(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
 	// List all tools for the tenant
-	tools, err := d.Store.ListTools(ctx, tenant.TenantID)
-	if err != nil {
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID)
+	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
 
 	// Convert rbitr tools to MCP tool format
 	mcpTools := make([]mcp.Tool, 0, len(tools))
-	for _, tool := range tools {
+	for i := range tools {
 		mcpTool := mcp.Tool{
-			Name:        tool.ToolID, // Use tool_id as the stable MCP tool name
-			Description: tool.Description,
-			InputSchema: tool.InputSchemaJSON,
+			Name:        tools[i].ToolID, // Use tool_id as the stable MCP tool name
+			Description: tools[i].Description,
+			InputSchema: tools[i].InputSchemaJSON,
 		}
 
 		// If no description is set, provide a default
@@ -435,6 +443,8 @@ func writeJSONRPCError(c *echo.Context, id *mcp.RequestID, errObj *mcp.ErrorObje
 }
 
 // handleToolsCall handles the tools/call MCP method with full governance.
+//
+//nolint:nilerr,nilnil // JSON-RPC notifications/errors are represented via response payloads.
 func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, agentID string, req *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
@@ -453,7 +463,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	if err != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError("invalid params")), nil
 	}
-	if err := json.Unmarshal(paramsBytes, &params); err != nil {
+	if unmarshalErr := json.Unmarshal(paramsBytes, &params); unmarshalErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError("invalid params structure")), nil
 	}
 
@@ -475,7 +485,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	tool, err := d.getToolCached(ctx, tenant.TenantID, toolID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError(fmt.Sprintf("tool not found: %s", toolID))), nil
+			return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError("tool not found: "+toolID)), nil
 		}
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to lookup tool")), nil
 	}
@@ -487,13 +497,13 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	_ = tool // Will be used in Story 4 for upstream forwarding
 
 	// Parse arguments as a map to extract approval token
-	var argumentsMap map[string]interface{}
+	var argumentsMap map[string]any
 	if len(params.Arguments) > 0 {
-		if err := json.Unmarshal(params.Arguments, &argumentsMap); err != nil {
+		if parseArgsErr := json.Unmarshal(params.Arguments, &argumentsMap); parseArgsErr != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInvalidParamsError("invalid arguments format")), nil
 		}
 	} else {
-		argumentsMap = make(map[string]interface{})
+		argumentsMap = make(map[string]any)
 	}
 
 	// Extract approval token if present (for approval resubmission)
@@ -557,9 +567,9 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	// Classify the action (for MCP, we use the tool name and arguments structure)
 	// For now, use a simple classification - in future, you could inspect arguments
 	classificationResult := classification.Result{
-		ActionType:    fmt.Sprintf("MCP.%s", toolID),
+		ActionType:    "MCP." + toolID,
 		ActionRisk:    "MEDIUM", // Default risk, can be overridden by policy
-		ActionSummary: fmt.Sprintf("MCP tool call: %s", toolID),
+		ActionSummary: "MCP tool call: " + toolID,
 	}
 	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
 
@@ -609,7 +619,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorPolicyInvalid,
 				Message: "policy evaluation error",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"reason_code":    invalidReason,
 					"policy_version": policyVersion,
 				}),
@@ -620,7 +630,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 
 	// Set default decision if empty
 	if decisionResult.Decision == "" {
-		decisionResult.Decision = decisionDeny
+		decisionResult.Decision = string(decisionDeny)
 		decisionResult.Rule.ID = "rule_default_deny"
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
@@ -654,11 +664,11 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			ActionType:      classificationResult.ActionType,
 			ActionRisk:      classificationResult.ActionRisk,
 			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        decisionDeny,
+			Decision:        string(decisionDeny),
 			DecisionVersion: decisionResult.Version,
 			DecisionRisk:    decisionResult.Risk,
 			RuleID:          "rate_limit_" + rateLimitViolation.Window,
-			RulePriority:    1000,
+			RulePriority:    rulePriority,
 			Reasons:         reasons,
 			Constraints:     withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
 			Tags:            decisionResult.Tags,
@@ -667,16 +677,16 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			RequestHash:     requestHash,
 			CreatedAt:       time.Now().UTC(),
 		}
-		if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
 		}
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
 		if isShadowMode(enforcementMode) {
 			return d.executeMCPShadowDeny(
 				ctx,
-				tool,
+				&tool,
 				forwardReq,
 				buildShadowDecisionMetadata("rate_limit_"+rateLimitViolation.Window, decisionResult.Risk, decisionResult.PolicyVersion, reasons, adr.Constraints),
 			)
@@ -684,7 +694,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorRateLimitExceeded,
 			Message: "rate limit exceeded",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"window":              rateLimitViolation.Window,
 				"limit":               rateLimitViolation.Limit,
 				"remaining":           rateLimitViolation.Remaining,
@@ -712,11 +722,11 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			ActionType:      classificationResult.ActionType,
 			ActionRisk:      classificationResult.ActionRisk,
 			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        decisionDeny,
+			Decision:        string(decisionDeny),
 			DecisionVersion: decisionResult.Version,
 			DecisionRisk:    decisionResult.Risk,
 			RuleID:          argConstraintRuleID(argConstraintViolation),
-			RulePriority:    1000,
+			RulePriority:    rulePriority,
 			Reasons:         reasons,
 			Constraints:     withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
 			Tags:            decisionResult.Tags,
@@ -725,16 +735,16 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			RequestHash:     requestHash,
 			CreatedAt:       time.Now().UTC(),
 		}
-		if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
 		}
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
 		if isShadowMode(enforcementMode) {
 			return d.executeMCPShadowDeny(
 				ctx,
-				tool,
+				&tool,
 				forwardReq,
 				buildShadowDecisionMetadata(argConstraintRuleID(argConstraintViolation), decisionResult.Risk, decisionResult.PolicyVersion, reasons, adr.Constraints),
 			)
@@ -742,7 +752,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "denied by policy",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"denied":              true,
 				"policy_version":      decisionResult.PolicyVersion,
 				"rule_id":             argConstraintRuleID(argConstraintViolation),
@@ -782,24 +792,24 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 
 	// Handle different decision outcomes
 	switch decisionResult.Decision {
-	case decisionDeny:
+	case string(decisionDeny):
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
-		if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
 		}
 		if isShadowMode(enforcementMode) {
 			return d.executeMCPShadowDeny(
 				ctx,
-				tool,
+				&tool,
 				forwardReq,
 				buildShadowDecisionMetadata(decisionResult.Rule.ID, decisionResult.Risk, decisionResult.PolicyVersion, decisionResult.Reasons, decisionResult.Constraints),
 			)
 		}
 
 		// Return JSON-RPC error for DENY
-		denyData, _ := json.Marshal(map[string]interface{}{
+		denyData, _ := json.Marshal(map[string]any{
 			"denied":         true,
 			"policy_version": decisionResult.PolicyVersion,
 			"rule_id":        decisionResult.Rule.ID,
@@ -855,10 +865,10 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			d.Metrics.ApprovalsCreatedTotal.Inc()
 		}
 
-		if err := d.Store.InsertApprovalRequest(ctx, approval); err != nil {
+		if err := d.Store.InsertApprovalRequest(ctx, &approval); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist approval")), nil
 		}
-		if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
 		}
 
@@ -866,7 +876,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorApprovalRequired,
 			Message: "approval required",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"approval_required":   true,
 				"approval_request_id": approvalID,
 				"approval_token":      token,
@@ -879,7 +889,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			}),
 		}), nil
 
-	case "ALLOW":
+	case string(decisionAllow):
 		// Forward to upstream MCP server
 		if tool.MCPUpstreamURL == "" {
 			if d.Metrics != nil {
@@ -888,14 +898,14 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorInternalError,
 				Message: "tool not configured for MCP",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"tool_id": toolID,
 				}),
 			}), nil
 		}
 
 		// Create MCP client and forward request
-		mcpClient := connector.NewMCPClient(30 * time.Second)
+		mcpClient := connector.NewMCPClient(mcpClientTimeout)
 		toolStart := time.Now()
 		upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
 		toolLatencyMs := time.Since(toolStart).Milliseconds()
@@ -906,7 +916,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 
 		if err != nil {
 			// Update ADR with error (no response hash)
-			if storeErr := d.Store.InsertADR(ctx, adr); storeErr != nil {
+			if storeErr := d.Store.InsertADR(ctx, &adr); storeErr != nil {
 				c.Logger().Error("failed to persist ADR after upstream error", "error", storeErr)
 			}
 
@@ -916,7 +926,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorInternalError,
 				Message: "upstream tool execution failed",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"reason": "upstream_error",
 				}),
 			}), nil
@@ -928,13 +938,13 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		adr.ResponseHash = responseHash
 
 		// Persist ADR with response hash
-		if err := d.Store.InsertADR(ctx, adr); err != nil {
+		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			c.Logger().Error("failed to persist ADR after successful execution", "error", err)
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
 		}
 
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), classificationResult.ActionType).Inc()
 			d.Metrics.ToolExecTotal.Inc()
 		}
 
@@ -945,7 +955,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "unknown decision",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"decision": decisionResult.Decision,
 			}),
 		}), nil
@@ -953,7 +963,9 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 }
 
 // handleMCPApprovedCall handles MCP tool calls with approval tokens.
-func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tenant, agentID string, toolID string, requestID string, requestHash string, classificationResult classification.Result, approvalToken string, approvalRequestID string, forwardReq *mcp.Request) (*mcp.Response, error) {
+//
+//nolint:nilerr // JSON-RPC errors are encoded in response payloads rather than Go errors.
+func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tenant, agentID, toolID, requestID, requestHash string, classificationResult classification.Result, approvalToken, approvalRequestID string, forwardReq *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
 	if approvalRequestID == "" {
@@ -966,7 +978,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorDeniedByPolicy,
 				Message: "approval not found",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"reason":              "approval_not_found",
 					"approval_request_id": approvalRequestID,
 				}),
@@ -984,7 +996,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "approval token invalid",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              "token_invalid",
 				"approval_request_id": approval.ApprovalRequestID,
 			}),
@@ -996,7 +1008,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "approval request hash mismatch",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              "hash_mismatch",
 				"approval_request_id": approvalRequestID,
 			}),
@@ -1013,7 +1025,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "approval expired",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              "expired",
 				"approval_request_id": approval.ApprovalRequestID,
 				"expired_at":          approval.ExpiresAt.Format(time.RFC3339),
@@ -1023,31 +1035,32 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	switch approval.Status {
 	case "APPROVED":
-		if err := d.Store.ClaimApprovalExecution(ctx, tenant.TenantID, approval.ApprovalRequestID, tokenHash, requestHash, now); err != nil {
-			if errors.Is(err, store.ErrNotFound) {
+		//nolint:nestif // Approval claim flow handles race states and retries in one transactional branch.
+		if claimErr := d.Store.ClaimApprovalExecution(ctx, tenant.TenantID, approval.ApprovalRequestID, tokenHash, requestHash, now); claimErr != nil {
+			if errors.Is(claimErr, store.ErrNotFound) {
 				return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 					Code:    mcp.ErrorDeniedByPolicy,
 					Message: "approval not found",
-					Data: mustMarshalJSON(map[string]interface{}{
+					Data: mustMarshalJSON(map[string]any{
 						"reason":              "approval_not_found",
 						"approval_request_id": approvalRequestID,
 					}),
 				}), nil
 			}
-			if errors.Is(err, store.ErrInvalidState) {
+			if errors.Is(claimErr, store.ErrInvalidState) {
 				latest, stateErr := d.Store.GetApprovalForExecution(ctx, tenant.TenantID, approvalRequestID)
 				if stateErr != nil {
 					return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to refresh approval state")), nil
 				}
-				if latest.Status == "EXECUTING" {
-					if !approvalRetryAllowed(latest, now) {
+				if latest.Status == string(decisionExecuting) {
+					if !approvalRetryAllowed(&latest, now) {
 						if d.Metrics != nil {
 							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
 						}
 						return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 							Code:    mcp.ErrorDeniedByPolicy,
 							Message: "approval retry window exceeded",
-							Data: mustMarshalJSON(map[string]interface{}{
+							Data: mustMarshalJSON(map[string]any{
 								"reason":               "executing_retry_window_exceeded",
 								"approval_request_id":  latest.ApprovalRequestID,
 								"retry_window_seconds": int(approvalExecutionRetryWindow.Seconds()),
@@ -1062,7 +1075,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 					return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 						Code:    mcp.ErrorDeniedByPolicy,
 						Message: "approval already claimed",
-						Data: mustMarshalJSON(map[string]interface{}{
+						Data: mustMarshalJSON(map[string]any{
 							"reason":              "already_claimed",
 							"status":              latest.Status,
 							"approval_request_id": latest.ApprovalRequestID,
@@ -1073,35 +1086,35 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 				return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to claim approval")), nil
 			}
 		} else {
-			approval.Status = "EXECUTING"
+			approval.Status = string(decisionExecuting)
 			approval.ExecutingAt = &now
 			if approval.ExecutionID == "" {
 				approval.ExecutionID = approval.ApprovalRequestID
 			}
 		}
-	case "EXECUTING":
-		if !approvalRetryAllowed(approval, now) {
+	case string(decisionExecuting):
+		if !approvalRetryAllowed(&approval, now) {
 			if d.Metrics != nil {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
 			}
 			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorDeniedByPolicy,
 				Message: "approval retry window exceeded",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"reason":               "executing_retry_window_exceeded",
 					"approval_request_id":  approval.ApprovalRequestID,
 					"retry_window_seconds": int(approvalExecutionRetryWindow.Seconds()),
 				}),
 			}), nil
 		}
-	case "EXECUTED":
+	case string(decisionExecuted):
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "approval already claimed",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              "already_claimed",
 				"status":              approval.Status,
 				"approval_request_id": approval.ApprovalRequestID,
@@ -1114,7 +1127,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
 			Message: "approval already claimed",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              "already_claimed",
 				"status":              approval.Status,
 				"approval_request_id": approval.ApprovalRequestID,
@@ -1124,7 +1137,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	// Set context for telemetry
 	c.Set(telemetry.CtxActionType, approval.ActionType)
-	c.Set(telemetry.CtxDecision, "ALLOW")
+	c.Set(telemetry.CtxDecision, string(decisionAllow))
 
 	decisionID := "d_" + uuid.NewString()
 	ruleID := approval.RuleID
@@ -1162,7 +1175,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorInternalError,
 				Message: "tool not found",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"tool_id":             toolID,
 					"approval_request_id": approval.ApprovalRequestID,
 				}),
@@ -1180,7 +1193,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorInternalError,
 			Message: "tool not configured for MCP",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"tool_id":             tool.ToolID,
 				"approval_request_id": approval.ApprovalRequestID,
 			}),
@@ -1188,27 +1201,28 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 	}
 
 	// Execute tool call via upstream MCP server
-	mcpClient := connector.NewMCPClient(30 * time.Second)
+	mcpClient := connector.NewMCPClient(mcpClientTimeout)
 	toolStart := time.Now()
-	upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
 	toolLatencyMs := time.Since(toolStart).Milliseconds()
+	upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
 
 	if d.Metrics != nil {
 		d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
 	}
 
 	// Handle upstream execution error
+	//nolint:nestif // Upstream error mapping keeps timeout/generic handling and metrics together.
 	if err != nil {
 		errorCode := "UPSTREAM_ERROR"
 		reason := "upstream_error"
 		if isUpstreamTimeoutError(err) {
-			errorCode = "UPSTREAM_TIMEOUT"
+			errorCode = string(decisionUpstreamTimeout)
 			reason = "upstream_timeout"
 		}
 		_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, errorCode, time.Now().UTC())
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
-			if errorCode == "UPSTREAM_TIMEOUT" {
+			if errorCode == string(decisionUpstreamTimeout) {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_timeout").Inc()
 			} else {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_failed").Inc()
@@ -1217,10 +1231,10 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorInternalError,
 			Message: "upstream tool execution failed",
-			Data: mustMarshalJSON(map[string]interface{}{
+			Data: mustMarshalJSON(map[string]any{
 				"reason":              reason,
 				"approval_request_id": approval.ApprovalRequestID,
-				"execution_id":        approvalExecutionID(approval),
+				"execution_id":        approvalExecutionID(&approval),
 			}),
 		}), nil
 	}
@@ -1235,7 +1249,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorDeniedByPolicy,
 				Message: "approval already claimed",
-				Data: mustMarshalJSON(map[string]interface{}{
+				Data: mustMarshalJSON(map[string]any{
 					"reason":              "already_claimed",
 					"approval_request_id": approval.ApprovalRequestID,
 				}),
@@ -1275,7 +1289,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		ApprovalRequestID: approval.ApprovalRequestID,
 		CreatedAt:         executedAt,
 	}
-	if err := d.Store.InsertADR(ctx, adr); err != nil {
+	if err := d.Store.InsertADR(ctx, &adr); err != nil {
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("adr_failed").Inc()
@@ -1289,7 +1303,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 
 	if d.Metrics != nil {
 		d.Metrics.ApprovalsExecuteTotal.WithLabelValues("success").Inc()
-		d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", actionType).Inc()
+		d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), actionType).Inc()
 		d.Metrics.ToolExecTotal.Inc()
 	}
 
@@ -1297,14 +1311,17 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 	return upstreamResp, nil
 }
 
-func approvalExecutionID(approval models.ApprovalRequest) string {
+func approvalExecutionID(approval *models.ApprovalRequest) string {
+	if approval == nil {
+		return ""
+	}
 	if approval.ExecutionID != "" {
 		return approval.ExecutionID
 	}
 	return approval.ApprovalRequestID
 }
 
-func buildMCPApprovalRequestContext(toolID string, arguments map[string]interface{}) map[string]any {
+func buildMCPApprovalRequestContext(toolID string, arguments map[string]any) map[string]any {
 	copiedArgs := make(map[string]any, len(arguments))
 	for key, value := range arguments {
 		copiedArgs[key] = value
@@ -1336,16 +1353,16 @@ func buildForwardToolsCallRequest(req *mcp.Request, toolName string, argumentsJS
 
 // formatReasons formats decision reasons for MCP error responses.
 func formatReasons(reasons []models.DecisionReason) []string {
-	result := make([]string, len(reasons))
-	for i, r := range reasons {
-		result[i] = r.Message
+	result := make([]string, 0, len(reasons))
+	for _, r := range reasons {
+		result = append(result, r.Message)
 	}
 	return result
 }
 
 // mustMarshalJSON marshals a value to JSON, panicking on error.
 // Used for known-good data structures in error responses.
-func mustMarshalJSON(v interface{}) json.RawMessage {
+func mustMarshalJSON(v any) json.RawMessage {
 	data, err := json.Marshal(v)
 	if err != nil {
 		// This should never happen with our controlled data structures
@@ -1361,7 +1378,7 @@ func isValidToolID(toolID string) bool {
 		return false
 	}
 	for _, r := range toolID {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' && r != '.' {
 			return false
 		}
 	}

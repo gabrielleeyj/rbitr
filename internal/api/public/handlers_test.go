@@ -66,8 +66,8 @@ func TestHandleToolCall(t *testing.T) {
 				storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
 					Return("", store.ErrNotFound)
-				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-					return record.Decision == "DENY" && record.ActionType == "PAYMENT.REFUND"
+				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+					return record != nil && record.Decision == "DENY" && record.ActionType == "PAYMENT.REFUND"
 				})).Return(nil)
 			},
 			expectedCode: http.StatusForbidden,
@@ -89,7 +89,10 @@ func TestHandleToolCall(t *testing.T) {
 				storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, mock.Anything).
 					Return("", store.ErrNotFound)
 				storeMock.On("GetDefaultApprovalTTLSeconds", context.Background()).Return(900, nil)
-				storeMock.On("InsertApprovalRequest", context.Background(), mock.MatchedBy(func(req models.ApprovalRequest) bool {
+				storeMock.On("InsertApprovalRequest", context.Background(), mock.MatchedBy(func(req *models.ApprovalRequest) bool {
+					if req == nil {
+						return false
+					}
 					path, _ := req.RequestContext["path"].(string)
 					method, _ := req.RequestContext["http_method"].(string)
 					_, hasBody := req.RequestContext["body_json"]
@@ -142,8 +145,8 @@ func TestHandleToolCall(t *testing.T) {
 				storeMock.On("ClaimApprovalExecution", context.Background(), "t1", "ar1", utils.HashString("token123"), requestHash, mock.Anything).
 					Return(nil)
 				storeMock.On("GetTool", context.Background(), tenant.TenantID, "mock_internal").Return(tool, nil)
-				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-					return record.Decision == "ALLOW" && record.ApprovalRequestID == "ar1"
+				storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+					return record != nil && record.Decision == "ALLOW" && record.ApprovalRequestID == "ar1"
 				})).Return(nil)
 				storeMock.On("MarkApprovalExecuted", context.Background(), "t1", "ar1", mock.Anything, mock.Anything, mock.Anything).
 					Return(nil)
@@ -256,14 +259,14 @@ func TestHandleToolCall_DenyShadowModeExecutes(t *testing.T) {
 		ActivePolicyVersion: "p_v1",
 		EnforcementMode:     enforcementModeShadow,
 	}, nil)
-	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-		return record.Decision == decisionDeny && record.RuleID == "rule_deny"
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		return record != nil && record.Decision == string(decisionDeny) && record.RuleID == "rule_deny"
 	})).Return(nil)
 	storeMock.On("GetTool", context.Background(), "t1", "mock_internal").Return(tool, nil)
 
 	policyMock.On("Evaluate", context.Background(), "t1", mock.Anything).Return(policy.Result{
 		Version:       "2026-01-20",
-		Decision:      decisionDeny,
+		Decision:      string(decisionDeny),
 		Risk:          "HIGH",
 		Rule:          models.DecisionRule{ID: "rule_deny", Priority: 100},
 		Reasons:       []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
@@ -307,11 +310,11 @@ func TestHandleToolCall_DenyShadowModeExecutes(t *testing.T) {
 
 	var response ToolCallResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	require.Equal(t, decisionDeny, response.Decision)
+	require.Equal(t, string(decisionDeny), response.Decision)
 	require.Equal(t, "ok", response.ToolBody)
 	require.True(t, response.ShadowDenied)
 	require.NotNil(t, response.RbitrShadow)
-	require.Equal(t, decisionDeny, response.RbitrShadow["original_decision"])
+	require.Equal(t, string(decisionDeny), response.RbitrShadow["original_decision"])
 }
 
 func TestHandleToolCall_RequireApprovalStillEnforcedInShadowMode(t *testing.T) {
@@ -692,8 +695,9 @@ func TestHandleToolCallRateLimitExceeded(t *testing.T) {
 		mock.Anything,
 		int64(1),
 	).Return(false, int64(0), nil)
-	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
-		return record.Decision == decisionDeny &&
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		return record != nil &&
+			record.Decision == string(decisionDeny) &&
 			record.RuleID == "rate_limit_minute" &&
 			len(record.Reasons) == 1 &&
 			record.Reasons[0].Code == "RATE_LIMIT_EXCEEDED"
@@ -758,9 +762,12 @@ func TestHandleToolCallArgConstraintDenied(t *testing.T) {
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
 		Return("", store.ErrNotFound)
-	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		if record == nil {
+			return false
+		}
 		failures, ok := record.Constraints["arg_constraint_failures"].([]map[string]any)
-		return record.Decision == decisionDeny &&
+		return record.Decision == string(decisionDeny) &&
 			record.RuleID == "deny_prod_branch" &&
 			len(record.Reasons) == 1 &&
 			record.Reasons[0].Code == argConstraintReasonDeny &&
@@ -827,7 +834,7 @@ func TestHandleToolCallArgConstraintDenied(t *testing.T) {
 
 	var response ToolCallResponse
 	require.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
-	require.Equal(t, decisionDeny, response.Decision)
+	require.Equal(t, string(decisionDeny), response.Decision)
 	require.Equal(t, "branch blocked", response.Reason)
 
 	connectorMock.AssertNotCalled(t, "Execute", mock.Anything, mock.Anything)
@@ -840,7 +847,10 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 	storeMock.On("GetTenantByKeyHash", context.Background(), mock.Anything).Return(tenant, nil)
 	storeMock.On("GetRiskOverride", context.Background(), tenant.TenantID, "PAYMENT.REFUND").
 		Return("", store.ErrNotFound)
-	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record models.ActionDecisionRecord) bool {
+	storeMock.On("InsertADR", context.Background(), mock.MatchedBy(func(record *models.ActionDecisionRecord) bool {
+		if record == nil {
+			return false
+		}
 		rawMatched, ok := record.Constraints["matched_rules"]
 		if !ok {
 			return false
@@ -851,7 +861,7 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 		}
 		firstRuleID, _ := matched[0]["rule_id"].(string)
 		secondRuleID, _ := matched[1]["rule_id"].(string)
-		return record.Decision == decisionDeny &&
+		return record.Decision == string(decisionDeny) &&
 			firstRuleID == "rule_deny_high" &&
 			secondRuleID == "rule_allow_low"
 	})).Return(nil)
@@ -859,7 +869,7 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 	policyMock := policy.NewMockEvaluatorAPI(t)
 	policyMock.On("Evaluate", context.Background(), tenant.TenantID, mock.Anything).Return(policy.Result{
 		Version:  "2026-01-20",
-		Decision: decisionDeny,
+		Decision: string(decisionDeny),
 		Risk:     "HIGH",
 		Rule:     models.DecisionRule{ID: "rule_deny_high", Priority: 100},
 		Reasons:  []models.DecisionReason{{Code: "DENY", Message: "blocked"}},
@@ -867,7 +877,7 @@ func TestHandleToolCallPersistsMatchedRules(t *testing.T) {
 			"rate_limit": map[string]any{"per_minute": float64(60)},
 		},
 		MatchedRules: []models.DecisionMatchedRule{
-			{RuleID: "rule_deny_high", Priority: 100, Effect: decisionDeny},
+			{RuleID: "rule_deny_high", Priority: 100, Effect: string(decisionDeny)},
 			{RuleID: "rule_allow_low", Priority: 10, Effect: "ALLOW"},
 		},
 		PolicyVersion: "p_v1",

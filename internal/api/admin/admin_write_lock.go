@@ -13,7 +13,7 @@ type AdminWriteLockRequest struct {
 	Locked bool `json:"locked"`
 }
 
-func (d Dependencies) handleAdminWriteLock(c *echo.Context) error {
+func (d *Dependencies) handleAdminWriteLock(c *echo.Context) error {
 	if requestID := c.Request().Header.Get("X-Request-Id"); requestID != "" {
 		c.Set(telemetry.CtxRequestID, requestID)
 	}

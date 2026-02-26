@@ -72,16 +72,28 @@ type EvidenceResponse struct {
 	Records  []models.ActionDecisionExport `json:"records"`
 }
 
-const decisionDeny = "DENY"
-const decisionInvalidReason = "policy output invalid"
-const approvalHeaderID = "X-Approval-Request-Id"
-const approvalHeaderToken = "X-Approval-Token"
-const defaultApprovalTTL = 15 * time.Minute
-const approvalExecutionRetryWindow = 60 * time.Second
-const xTenantKeySunset = "Tue, 31 Mar 2026 00:00:00 GMT"
+type decisionStatus string
 
-var errToolNotFound = errors.New("tool not found")
-var errConnectorMissing = errors.New("connector not configured")
+const (
+	decisionDeny                 decisionStatus = "DENY"
+	decisionAllow                decisionStatus = "ALLOW"
+	decisionExecuting            decisionStatus = "EXEUCTING"
+	decisionExecuted             decisionStatus = "EXECUTED"
+	decisionExpired              decisionStatus = "EXPIRED"
+	decisionUpstreamTimeout      decisionStatus = "UPSTREAM_TIMEOUT"
+	decisionInvalidReason                       = "policy output invalid"
+	approvalHeaderID                            = "X-Approval-Request-Id"
+	approvalHeaderToken                         = "X-Approval-Token"
+	defaultApprovalTTL                          = 15 * time.Minute
+	approvalExecutionRetryWindow                = 60 * time.Second
+	xTenantKeySunset                            = "Tue, 31 Mar 2026 00:00:00 GMT"
+	rulePriority                                = 1000
+)
+
+var (
+	errToolNotFound     = errors.New("tool not found")
+	errConnectorMissing = errors.New("connector not configured")
+)
 
 func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	v1 := e.Group("/v1")
@@ -165,7 +177,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			d.Metrics.ErrorsTotal.Inc()
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "approval headers required"})
 		}
-		return d.handleApprovedToolCall(c, approvedToolCallParams{
+		return d.handleApprovedToolCall(c, &approvedToolCallParams{
 			tenantID:              tenant.TenantID,
 			agentID:               agentID,
 			toolID:                toolID,
@@ -209,6 +221,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		},
 	}
 	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
+	//nolint:nestif // Policy eval handling keeps invalid-output fallback and hard-failure paths together.
 	if err != nil {
 		if invalidReason, policyVersion, ok := policyInvalidReason(err); ok {
 			d.emitNotification(c, tenant.TenantID, notifications.EventPolicyInvalidOutput, notifications.SeverityCritical, policyVersion, map[string]string{
@@ -232,9 +245,9 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			)
 			decisionResult = policy.Result{
 				Version:       "invalid",
-				Decision:      decisionDeny,
+				Decision:      string(decisionDeny),
 				Risk:          classificationResult.ActionRisk,
-				Rule:          models.DecisionRule{ID: "policy_invalid", Priority: 1000},
+				Rule:          models.DecisionRule{ID: "policy_invalid", Priority: rulePriority},
 				Reasons:       []models.DecisionReason{{Code: "POLICY_OUTPUT_INVALID", Message: decisionInvalidReason}},
 				Constraints:   map[string]any{},
 				PolicyVersion: policyVersion,
@@ -256,7 +269,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		d.Metrics.DecisionLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 	}
 	if decisionResult.Decision == "" {
-		decisionResult.Decision = decisionDeny
+		decisionResult.Decision = string(decisionDeny)
 		decisionResult.Rule.ID = "rule_default_deny"
 		decisionResult.Reasons = []models.DecisionReason{{Code: "DEFAULT_DENY", Message: "Default deny"}}
 	}
@@ -283,6 +296,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "rate limit check failed"})
 	}
+	//nolint:nestif // Rate-limit deny flow intentionally keeps ADR, metrics, and shadow behavior in one branch.
 	if rateLimitViolation != nil {
 		c.Set(telemetry.CtxDecision, decisionDeny)
 
@@ -301,11 +315,11 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			ActionType:      classificationResult.ActionType,
 			ActionRisk:      classificationResult.ActionRisk,
 			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        decisionDeny,
+			Decision:        string(decisionDeny),
 			DecisionVersion: decisionResult.Version,
 			DecisionRisk:    decisionResult.Risk,
 			RuleID:          "rate_limit_" + rateLimitViolation.Window,
-			RulePriority:    1000,
+			RulePriority:    rulePriority,
 			Reasons:         reasons,
 			Constraints:     rateLimitConstraints,
 			Tags:            decisionResult.Tags,
@@ -314,14 +328,14 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			RequestHash:     requestHash,
 			CreatedAt:       time.Now().UTC(),
 		}
-		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
 		}
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
 		if isShadowMode(enforcementMode) {
 			return d.executeRESTShadowDeny(
@@ -346,6 +360,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 	}
 
 	argConstraintViolation := d.enforceArgumentConstraints(c.Request().Context(), decisionResult.Constraints, parseRESTArguments(bodyBytes))
+	//nolint:nestif // Constraint deny flow intentionally keeps ADR, metrics, and shadow behavior in one branch.
 	if argConstraintViolation != nil {
 		c.Set(telemetry.CtxDecision, decisionDeny)
 
@@ -364,11 +379,11 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			ActionType:      classificationResult.ActionType,
 			ActionRisk:      classificationResult.ActionRisk,
 			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        decisionDeny,
+			Decision:        string(decisionDeny),
 			DecisionVersion: decisionResult.Version,
 			DecisionRisk:    decisionResult.Risk,
 			RuleID:          argConstraintRuleID(argConstraintViolation),
-			RulePriority:    1000,
+			RulePriority:    rulePriority,
 			Reasons:         reasons,
 			Constraints:     argConstraints,
 			Tags:            decisionResult.Tags,
@@ -377,14 +392,14 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			RequestHash:     requestHash,
 			CreatedAt:       time.Now().UTC(),
 		}
-		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
 		}
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
 		if isShadowMode(enforcementMode) {
 			return d.executeRESTShadowDeny(
@@ -401,7 +416,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,
-			Decision:  decisionDeny,
+			Decision:  string(decisionDeny),
 			Reason:    firstReasonMessage(reasons),
 		})
 	}
@@ -432,11 +447,11 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 	}
 
 	switch decisionResult.Decision {
-	case decisionDeny:
+	case string(decisionDeny):
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(decisionDeny, classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionDeny), classificationResult.ActionType).Inc()
 		}
-		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
@@ -457,7 +472,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 		return c.JSON(http.StatusForbidden, ToolCallResponse{
 			RequestID: requestID,
-			Decision:  decisionDeny,
+			Decision:  string(decisionDeny),
 			Reason:    firstReasonMessage(decisionResult.Reasons),
 		})
 	case "REQUIRE_APPROVAL":
@@ -497,13 +512,13 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			d.Metrics.DecisionsTotal.WithLabelValues("REQUIRE_APPROVAL", classificationResult.ActionType).Inc()
 			d.Metrics.ApprovalsCreatedTotal.Inc()
 		}
-		if err := d.Store.InsertApprovalRequest(c.Request().Context(), approval); err != nil {
+		if err := d.Store.InsertApprovalRequest(c.Request().Context(), &approval); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist approval"})
 		}
-		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
@@ -520,7 +535,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			ActionType:        classificationResult.ActionType,
 			Risk:              actionRisk,
 		})
-	case "ALLOW":
+	case string(decisionAllow):
 		toolStart := time.Now()
 		resp, err := d.executeToolCall(c.Request().Context(), tenant.TenantID, toolID, payload, bodyBytes, filteredHeaders)
 		if err != nil {
@@ -539,7 +554,7 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			d.Metrics.ToolLatencyMs.Observe(float64(time.Since(toolStart).Milliseconds()))
 		}
 		adr.ResponseHash = resp.BodyHash
-		if err := d.Store.InsertADR(c.Request().Context(), adr); err != nil {
+		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
 				d.Metrics.ErrorsTotal.Inc()
 			}
@@ -547,13 +562,13 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", classificationResult.ActionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), classificationResult.ActionType).Inc()
 			d.Metrics.ToolExecTotal.Inc()
 		}
 
 		return c.JSON(http.StatusOK, ToolCallResponse{
 			RequestID:   requestID,
-			Decision:    "ALLOW",
+			Decision:    string(decisionAllow),
 			Reason:      firstReasonMessage(decisionResult.Reasons),
 			ToolStatus:  resp.Status,
 			ToolHeaders: resp.Headers,
@@ -583,7 +598,10 @@ type approvedToolCallParams struct {
 	approvalToken         string
 }
 
-func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedToolCallParams) error {
+func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params *approvedToolCallParams) error {
+	if params == nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "invalid approval parameters"})
+	}
 	ctx := c.Request().Context()
 	approval, err := d.Store.GetApprovalForExecution(ctx, params.tenantID, params.approvalID)
 	if err != nil {
@@ -611,7 +629,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		d.emitTokenAbuse(c, params, "approval_request_hash_mismatch")
 		return approvalError(c, http.StatusForbidden, "approval_request_hash_mismatch")
 	}
-	if approval.Status == "EXPIRED" || now.After(approval.ExpiresAt) {
+	if approval.Status == string(decisionExpired) || now.After(approval.ExpiresAt) {
 		_ = d.Store.MarkApprovalExpired(ctx, params.tenantID, params.approvalID, now)
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("expired").Inc()
@@ -621,25 +639,26 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 
 	switch approval.Status {
 	case "APPROVED":
-		if err := d.Store.ClaimApprovalExecution(ctx, params.tenantID, params.approvalID, tokenHash, params.requestHash, now); err != nil {
-			if errors.Is(err, store.ErrNotFound) {
+		//nolint:nestif // Approval claim flow handles race states and retries in one transactional branch.
+		if claimErr := d.Store.ClaimApprovalExecution(ctx, params.tenantID, params.approvalID, tokenHash, params.requestHash, now); claimErr != nil {
+			if errors.Is(claimErr, store.ErrNotFound) {
 				return approvalError(c, http.StatusForbidden, "approval_token_invalid")
 			}
-			if errors.Is(err, store.ErrInvalidState) {
+			if errors.Is(claimErr, store.ErrInvalidState) {
 				latest, stateErr := d.Store.GetApprovalForExecution(ctx, params.tenantID, params.approvalID)
 				if stateErr != nil {
 					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "approval lookup failed"})
 				}
 
 				switch latest.Status {
-				case "EXECUTING":
-					if !approvalRetryAllowed(latest, now) {
+				case string(decisionExecuting):
+					if !approvalRetryAllowed(&latest, now) {
 						if d.Metrics != nil {
 							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
 						}
 						return approvalError(c, http.StatusConflict, "approval_retry_window_exceeded")
 					}
-				case "EXECUTED":
+				case string(decisionExecuted):
 					if d.Metrics != nil {
 						d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
 					}
@@ -656,20 +675,20 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to claim approval"})
 			}
 		} else {
-			approval.Status = "EXECUTING"
+			approval.Status = string(decisionExecuting)
 			approval.ExecutingAt = &now
 			if approval.ExecutionID == "" {
 				approval.ExecutionID = approval.ApprovalRequestID
 			}
 		}
-	case "EXECUTING":
-		if !approvalRetryAllowed(approval, now) {
+	case string(decisionExecuting):
+		if !approvalRetryAllowed(&approval, now) {
 			if d.Metrics != nil {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
 			}
 			return approvalError(c, http.StatusConflict, "approval_retry_window_exceeded")
 		}
-	case "EXECUTED":
+	case string(decisionExecuted):
 		if d.Metrics != nil {
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
 		}
@@ -698,19 +717,20 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 
 	toolStart := time.Now()
 	resp, err := d.executeToolCall(ctx, params.tenantID, params.toolID, params.payload, params.bodyBytes, params.filteredHeaders)
+	//nolint:nestif // Upstream error mapping keeps timeout/generic handling and metrics together.
 	if err != nil {
 		errorCode := "UPSTREAM_ERROR"
 		httpStatus := http.StatusBadGateway
 		responseCode := "upstream_error"
 		if isUpstreamTimeoutError(err) {
-			errorCode = "UPSTREAM_TIMEOUT"
+			errorCode = string(decisionUpstreamTimeout)
 			httpStatus = http.StatusGatewayTimeout
 			responseCode = "upstream_timeout"
 		}
 		_ = d.Store.MarkApprovalExecutionFailed(ctx, params.tenantID, params.approvalID, errorCode, time.Now().UTC())
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
-			if errorCode == "UPSTREAM_TIMEOUT" {
+			if errorCode == string(decisionUpstreamTimeout) {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_timeout").Inc()
 			} else {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("upstream_failed").Inc()
@@ -741,7 +761,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		ActionType:        actionType,
 		ActionRisk:        actionRisk,
 		ActionSummary:     actionSummary,
-		Decision:          "ALLOW",
+		Decision:          string(decisionAllow),
 		DecisionVersion:   "approval_execution",
 		DecisionRisk:      actionRisk,
 		RuleID:            ruleID,
@@ -769,7 +789,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update approval"})
 	}
-	if err := d.Store.InsertADR(ctx, adr); err != nil {
+	if err := d.Store.InsertADR(ctx, &adr); err != nil {
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("adr_failed").Inc()
@@ -779,7 +799,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 
 	if d.Metrics != nil {
 		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues("ALLOW", actionType).Inc()
+			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), actionType).Inc()
 			d.Metrics.ToolExecTotal.Inc()
 			d.Metrics.ApprovalsExecuteTotal.WithLabelValues("success").Inc()
 		}
@@ -787,7 +807,7 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params approvedTo
 
 	return c.JSON(http.StatusOK, ToolCallResponse{
 		RequestID:   params.requestID,
-		Decision:    "ALLOW",
+		Decision:    string(decisionAllow),
 		Reason:      firstReasonMessage(reasons),
 		ToolStatus:  resp.Status,
 		ToolHeaders: resp.Headers,
@@ -839,11 +859,11 @@ func (d *Dependencies) tenantCacheVersion(ctx context.Context, tenantID string) 
 	if d.Store == nil {
 		return 1
 	}
-	config, err := d.Store.GetTenantConfig(ctx, tenantID)
-	if err != nil || config.Version < 1 {
+	tenantConfig, err := d.Store.GetTenantConfig(ctx, tenantID)
+	if err != nil || tenantConfig.Version < 1 {
 		return 1
 	}
-	return config.Version
+	return tenantConfig.Version
 }
 
 func (d *Dependencies) recordCacheMetric(cacheName string, hit bool) {
@@ -938,18 +958,21 @@ func defaultApprovalTTLFromStore(ctx context.Context, st store.StoreAPI) time.Du
 }
 
 func generateApprovalToken() (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
+	var buf [32]byte
+	if _, err := rand.Read(buf[:]); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
+	return base64.RawURLEncoding.EncodeToString(buf[:]), nil
 }
 
 func approvalError(c *echo.Context, status int, code string) error {
 	return c.JSON(status, map[string]string{"error": code})
 }
 
-func (d *Dependencies) emitTokenAbuse(c *echo.Context, params approvedToolCallParams, reason string) {
+func (d *Dependencies) emitTokenAbuse(c *echo.Context, params *approvedToolCallParams, reason string) {
+	if params == nil {
+		return
+	}
 	d.emitNotification(c, params.tenantID, notifications.EventTokenAbuse, notifications.SeverityCritical, params.approvalID, map[string]string{
 		"Tenant":   params.tenantID,
 		"Tool":     params.toolID,
@@ -1103,7 +1126,10 @@ func parsePositiveInt(value string) (int, error) {
 	return parsed, nil
 }
 
-func approvalRetryAllowed(approval models.ApprovalRequest, now time.Time) bool {
+func approvalRetryAllowed(approval *models.ApprovalRequest, now time.Time) bool {
+	if approval == nil {
+		return false
+	}
 	if approval.ExecutingAt == nil {
 		return false
 	}
@@ -1111,24 +1137,24 @@ func approvalRetryAllowed(approval models.ApprovalRequest, now time.Time) bool {
 }
 
 func buildApprovalRequestContext(payload ToolCallRequest) map[string]any {
-	context := map[string]any{
+	requestContext := map[string]any{
 		"http_method": payload.HTTPMethod,
 		"path":        payload.Path,
 		"query":       payload.Query,
 	}
 	if len(payload.Headers) > 0 {
-		context["headers"] = redactApprovalContextHeaders(payload.Headers)
+		requestContext["headers"] = redactApprovalContextHeaders(payload.Headers)
 	}
 	body := strings.TrimSpace(payload.Body)
 	if body != "" {
 		var bodyJSON any
 		if err := json.Unmarshal([]byte(body), &bodyJSON); err == nil {
-			context["body_json"] = bodyJSON
+			requestContext["body_json"] = bodyJSON
 		} else {
-			context["body"] = payload.Body
+			requestContext["body"] = payload.Body
 		}
 	}
-	return context
+	return requestContext
 }
 
 func redactApprovalContextHeaders(headers map[string]string) map[string]string {
@@ -1182,7 +1208,7 @@ func firstReasonMessage(reasons []models.DecisionReason) string {
 	return reasons[0].Message
 }
 
-func policyInvalidReason(err error) (string, string, bool) {
+func policyInvalidReason(err error) (reason, policyVersion string, ok bool) {
 	var outputErr policy.InvalidPolicyOutputError
 	if errors.As(err, &outputErr) {
 		return outputErr.Reason, outputErr.PolicyVersion, true

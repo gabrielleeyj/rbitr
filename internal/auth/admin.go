@@ -12,8 +12,10 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
-const AdminKeyHeader = "X-Admin-Key"
-const AuthorizationHeader = "Authorization"
+const (
+	AdminKeyHeader      = "X-Admin-Key"
+	AuthorizationHeader = "Authorization"
+)
 
 func AdminKeyFromRequest(r *http.Request) string {
 	if r == nil {
@@ -25,6 +27,7 @@ func AdminKeyFromRequest(r *http.Request) string {
 	return r.Header.Get(AdminKeyHeader)
 }
 
+//nolint:mnd // ignore spliting of token.
 func bearerToken(value string) string {
 	if value == "" {
 		return ""

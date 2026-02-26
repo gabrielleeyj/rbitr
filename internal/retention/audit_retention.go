@@ -9,6 +9,8 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
+const defaultInterval = 24 * time.Hour
+
 type AuditRetentionScheduler struct {
 	Store    store.StoreAPI
 	Interval time.Duration
@@ -25,7 +27,7 @@ func NewAuditRetentionScheduler(st store.StoreAPI, interval time.Duration) *Audi
 
 func (s *AuditRetentionScheduler) Start(ctx context.Context) {
 	if s.Interval == 0 {
-		s.Interval = 24 * time.Hour
+		s.Interval = defaultInterval
 	}
 	ticker := time.NewTicker(s.Interval)
 	defer ticker.Stop()
@@ -51,8 +53,8 @@ func (s *AuditRetentionScheduler) run(ctx context.Context) {
 		return
 	}
 	defer func() {
-		if err := s.Store.ReleaseAdvisoryLock(ctx, s.LockKey); err != nil {
-			log.Printf("audit retention unlock failed: %v", err)
+		if releaseErr := s.Store.ReleaseAdvisoryLock(ctx, s.LockKey); releaseErr != nil {
+			log.Printf("audit retention unlock failed: %v", releaseErr)
 		}
 	}()
 
@@ -67,11 +69,7 @@ func (s *AuditRetentionScheduler) run(ctx context.Context) {
 }
 
 func hashLockKey(name string) int64 {
-	hash := []byte(name)
-	if len(hash) < 8 {
-		padded := make([]byte, 8)
-		copy(padded, hash)
-		hash = padded
-	}
-	return int64(binary.BigEndian.Uint64(hash[:8]))
+	var prefix [8]byte
+	copy(prefix[:], name)
+	return int64(binary.BigEndian.Uint32(prefix[:4]))
 }

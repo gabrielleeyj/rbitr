@@ -71,7 +71,8 @@ func (d *Dependencies) enforceArgumentConstraints(ctx context.Context, constrain
 
 	var denyFailures []argConstraintFailure
 	firstDenyMessage := ""
-	for _, rule := range ruleSet.Deny {
+	for i := range ruleSet.Deny {
+		rule := &ruleSet.Deny[i]
 		matched, valid := matchArgConstraintRule(rule, arguments)
 		if !valid {
 			return invalidArgConstraintRuleViolation(rule)
@@ -106,8 +107,12 @@ func (d *Dependencies) enforceArgumentConstraints(ctx context.Context, constrain
 	firstAllowMessage := ""
 	for _, groupKey := range groupOrder {
 		rules := groupedAllowRules[groupKey]
+		if len(rules) == 0 {
+			continue
+		}
 		matched := false
-		for _, rule := range rules {
+		for i := range rules {
+			rule := &rules[i]
 			ruleMatched, valid := matchArgConstraintRule(rule, arguments)
 			if !valid {
 				return invalidArgConstraintRuleViolation(rule)
@@ -120,7 +125,7 @@ func (d *Dependencies) enforceArgumentConstraints(ctx context.Context, constrain
 		if matched {
 			continue
 		}
-		rule := rules[0]
+		rule := &rules[0]
 		allowFailures = append(allowFailures, argConstraintFailure{
 			Path:       rule.Path,
 			Op:         rule.Op,
@@ -271,20 +276,25 @@ func parseStringField(m map[string]any, key string) string {
 	return strings.TrimSpace(value)
 }
 
-func groupAllowConstraintRules(rules []argConstraintRule) (map[string][]argConstraintRule, []string) {
-	grouped := make(map[string][]argConstraintRule)
-	order := make([]string, 0, len(rules))
-	for _, rule := range rules {
+func groupAllowConstraintRules(rules []argConstraintRule) (groupedRules map[string][]argConstraintRule, order []string) {
+	groupedRules = make(map[string][]argConstraintRule)
+	order = make([]string, 0, len(rules))
+	for i := range rules {
+		rule := rules[i]
 		key := rule.Path + "\x00" + rule.Op
-		if _, ok := grouped[key]; !ok {
+		if _, ok := groupedRules[key]; !ok {
 			order = append(order, key)
 		}
-		grouped[key] = append(grouped[key], rule)
+		groupedRules[key] = append(groupedRules[key], rule)
 	}
-	return grouped, order
+	return groupedRules, order
 }
 
-func matchArgConstraintRule(rule argConstraintRule, arguments any) (bool, bool) {
+//nolint:gocritic // its not convention to return with named result.
+func matchArgConstraintRule(rule *argConstraintRule, arguments any) (bool, bool) {
+	if rule == nil {
+		return false, false
+	}
 	actual, ok := resolveArgConstraintPath(arguments, rule.Path)
 	if !ok {
 		return false, true
@@ -353,13 +363,12 @@ func matchArgConstraintRule(rule argConstraintRule, arguments any) (bool, bool) 
 	}
 }
 
-func validateArgConstraintJSONSchema(schema, value any) (bool, bool) {
+func validateArgConstraintJSONSchema(schema, value any) (matched, valid bool) {
 	return matchJSONSchema(schema, value)
 }
 
-func matchJSONSchema(schema, value any) (bool, bool) {
-	switch typed := schema.(type) {
-	case bool:
+func matchJSONSchema(schema, value any) (matched, valid bool) {
+	if typed, ok := schema.(bool); ok {
 		return typed, true
 	}
 
@@ -431,6 +440,7 @@ func matchJSONSchema(schema, value any) (bool, bool) {
 		}
 	}
 
+	//nolint:nestif // Property-level schema evaluation intentionally short-circuits on first mismatch.
 	if propertiesValue, hasProperties := schemaMap["properties"]; hasProperties {
 		properties, ok := toStringAnyMap(propertiesValue)
 		if !ok {
@@ -490,7 +500,7 @@ func parseSchemaRequiredFields(value any) ([]string, bool) {
 	return fields, true
 }
 
-func matchesJSONSchemaType(value any, typeSpec any) bool {
+func matchesJSONSchemaType(value, typeSpec any) bool {
 	var expectedTypes []string
 	switch typed := typeSpec.(type) {
 	case string:
@@ -653,14 +663,20 @@ func toAnySlice(value any) ([]any, bool) {
 	if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
 		return nil, false
 	}
-	out := make([]any, rv.Len())
-	for i := range out {
-		out[i] = rv.Index(i).Interface()
+	out := make([]any, 0, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		out = append(out, rv.Index(i).Interface())
 	}
 	return out, true
 }
 
-func invalidArgConstraintRuleViolation(rule argConstraintRule) *argConstraintViolation {
+func invalidArgConstraintRuleViolation(rule *argConstraintRule) *argConstraintViolation {
+	if rule == nil {
+		return &argConstraintViolation{
+			ReasonCode: argConstraintReasonInvalid,
+			Message:    argConstraintDefaultInvalidMessage,
+		}
+	}
 	failures := []argConstraintFailure{{
 		Path:       rule.Path,
 		Op:         rule.Op,
