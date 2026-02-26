@@ -1,5 +1,7 @@
 # rbitr - the agent governance control plane.
 
+![Unit Tests](https://github.com/gabrielleeyj/rbitr/actions/workflows/go.yml/badge.svg)
+
 ## Introduction
 
 What this does:
@@ -52,10 +54,12 @@ curl -sS -X PUT "http://localhost:8080/admin/tenants/t_demo/tools/mock_internal"
 On a fresh deployment, the UI checks bootstrap state and routes to `/setup` until setup is complete.
 
 Setup API endpoints:
+
 - `GET /setup/status`
 - `POST /setup/initialize`
 
 Wizard bootstrap sequence:
+
 1. Validate environment readiness (DB connectivity + schema presence)
 2. Create initial tenant profile
 3. Create admin key and tenant key (auto-generated or user-provided)
