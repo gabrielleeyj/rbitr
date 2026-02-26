@@ -258,7 +258,6 @@ func TestClassify(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			result := Classify(tc.toolID, tc.method, tc.path, tc.query, nil)
 			if result.ActionType != tc.expectedType {

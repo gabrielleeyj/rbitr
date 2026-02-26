@@ -91,7 +91,6 @@ func TestLoad(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			for key, value := range tc.env {
 				t.Setenv(key, value)

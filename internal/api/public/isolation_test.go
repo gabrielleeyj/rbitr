@@ -124,7 +124,8 @@ func TestCrossTenantMCPIsolation(t *testing.T) {
 
 			if tc.authTenant != tc.pathTenant {
 				var resp map[string]any
-				json.Unmarshal(rec.Body.Bytes(), &resp)
+				err := json.Unmarshal(rec.Body.Bytes(), &resp)
+				require.NoError(t, err)
 				require.NotNil(t, resp["error"], "should have error for tenant mismatch")
 			}
 		})

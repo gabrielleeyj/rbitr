@@ -387,7 +387,6 @@ func TestAdminKeyFromRequest(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			req, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -415,7 +414,6 @@ func TestBearerToken(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := bearerToken(tc.value); got != tc.expect {
@@ -464,7 +462,6 @@ func TestTenantKeyFromRequest(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			req, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -511,7 +508,6 @@ func TestHasScopeGranularCompatibilityMatrix(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tc.allowed, hasScope(tc.scopes, tc.required))
