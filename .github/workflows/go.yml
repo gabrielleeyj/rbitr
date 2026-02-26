@@ -25,8 +25,6 @@ jobs:
         with:
           version: "latest"
           args: ./... --timeout=5m
-          working-directory: api
 
       - name: Run Go Test
         run: go test ./... -v -cover
-        working-directory: api
