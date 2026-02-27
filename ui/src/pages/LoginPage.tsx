@@ -31,7 +31,7 @@ export function LoginPage() {
         <CardHeader>
           <CardTitle>Admin access</CardTitle>
           <CardDescription>
-            Enter your admin key. Stored locally for dev use.
+            Enter your admin key. This key is kept in memory only and is cleared on refresh.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -40,7 +40,7 @@ export function AppLayout() {
         <SidebarFooter className="border-t">
           <div className="flex flex-col gap-2 p-3">
             <Button variant="outline" size="sm" onClick={clearAdminKey}>
-              Clear admin key
+              End admin session
             </Button>
             <ThemeToggle />
           </div>
