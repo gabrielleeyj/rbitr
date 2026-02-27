@@ -57,9 +57,9 @@ func TestMCPClient_ForwardRequest_Success(t *testing.T) {
 
 	// Create test request
 	reqID := mcp.NewStringID("test-1")
-	params, _ := json.Marshal(map[string]interface{}{
+	params, _ := json.Marshal(map[string]any{
 		"name":      "test-tool",
-		"arguments": map[string]interface{}{"action": "test"},
+		"arguments": map[string]any{"action": "test"},
 	})
 	req := &mcp.Request{
 		JSONRPC: "2.0",
