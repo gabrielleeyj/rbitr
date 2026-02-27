@@ -18,6 +18,26 @@ This epic is intentionally shaped to close the main parity gaps with proxy-style
 
 ---
 
+## Implementation Status (2026-02-27)
+
+Implemented in codebase:
+
+- Story 1: Multi-window rate limits and budgets (tenant/agent/tool/action scope), including REST `429` and MCP `-32005` enforcement paths with metrics.
+- Story 2: First-class argument constraints (`allow`/`deny`, ops including `eq|prefix|regex|in|contains|jsonschema`), with deny reasons and ADR constraint-failure payloads.
+- Story 3: Deterministic rule resolution and explainability (`matched_rules` parsing/sorting, tie-break semantics, reason propagation).
+- Story 4: Shadow mode (`enforce|shadow`) with execute-but-log deny behavior for REST and MCP.
+- Story 5: Granular admin scope enforcement across control-plane routes, plus UI scope-aware visibility/disable behavior.
+- Story 6: Tenant key hashing upgrade to HMAC-SHA256 with multi-secret verification and legacy SHA-256 lazy-upgrade path.
+- Story 7: Cache invalidation hardening via tenant config versioning and versioned cache keys for tool/risk lookups.
+- Story 8: Explicit MCP pass-through upstream selection (`mcp_passthrough_upstream_tool_id`) with deterministic fallback + metric/log when unset.
+
+Remaining from this epic:
+
+- Stretch Story 9 (MCP SSE streaming mode) is not yet implemented.
+- Documentation cleanup is still needed to align all operator docs with the delivered behavior and defaults.
+
+---
+
 ## Goals
 
 - Add **multi-window rate limiting** per tenant/agent/tool/action.

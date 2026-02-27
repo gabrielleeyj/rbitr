@@ -6,7 +6,7 @@ This file tracks **current blockers** preventing rbitr from being GTM deployment
 - AWS Marketplace listing
 - GCP Marketplace listing
 
-Date updated: 2026-02-19
+Date updated: 2026-02-27
 
 ## P0 Blockers (Must Fix Before Any External Production GTM)
 
@@ -62,50 +62,42 @@ Date updated: 2026-02-19
 - Current state: no root `LICENSE`.
 - Blocker reason: legal/commercial packaging incomplete for GTM.
 
-12. Add CI security gates (SAST/dependency/container scans + fail policy).
-
-- Current state: no `.github/workflows` pipeline in repo.
-- Blocker reason: no enforceable release security gate for production/marketplace readiness.
-
-13. Add SBOM generation and artifact signing/attestation.
-
-- Current state: no SBOM/signature/attestation pipeline.
-- Blocker reason: procurement/security reviews increasingly require software supply-chain evidence.
-
-14. Close remaining auth hardening gap for key hashing policy consistency.
+12. Close remaining auth hardening gap for key hashing policy consistency.
 
 - Current state: tenant keys support HMAC path; admin keys still authenticate via direct SHA-256 hash lookup.
 - Blocker reason: production security baseline not fully aligned across credential types.
 
 ## P1 Blockers (Should Fix Before Broad GTM Scale, But Not Always Day-1 Hard Stop)
 
-15. Complete approval execution idempotency/in-flight ownership hardening.
+13. Complete approval execution idempotency/in-flight ownership hardening.
 
 - Current state: known follow-up notes duplicate side-effect risk during retry windows.
 - Risk: correctness and financial/control side effects under race/retry conditions.
 
-16. Add full runbooks for operations.
+14. Add full runbooks for operations.
 
 - Needed: backup/restore, incident response, key rotation, upgrade/rollback, DR.
 - Risk: production support model not complete for enterprise onboarding.
 
-17. Add standardized API contract artifacts (OpenAPI/JSON schemas for external consumers).
+15. Add standardized API contract artifacts (OpenAPI/JSON schemas for external consumers).
 
 - Risk: integration friction and higher support burden.
 
-18. Add UI/API e2e smoke tests in CI for release gates.
+16. Add UI/API e2e smoke tests in CI for release gates.
 
 - Current state: unit/integration coverage exists, but no full-path deployment smoke gate.
 - Risk: regression escape risk at release time.
 
-19. Add explicit production ingress/TLS/certificate guidance and reference configs.
+17. Add explicit production ingress/TLS/certificate guidance and reference configs.
 
 - Risk: inconsistent or insecure customer deployments.
 
-## Recently Closed (2026-02-19)
+## Recently Closed (2026-02-27)
 
 - Enforced secure DB transport default by switching fallback `DATABASE_URL` to `sslmode=require`.
 - Added DB pool/concurrency runtime tuning (`max open`, `max idle`, `connection lifetime`, `idle time`) with env-configurable defaults and gateway wiring.
+- Added CI security gates with enforced fail policy (SAST/go dependency checks/UI dependency audit/container scan) via `.github/workflows/security.yml`.
+- Added SBOM generation and keyless signing/attestation flow for pushed gateway container images (GHCR + cosign + provenance attestation).
 
 ## Exit Criteria to Mark GTM Deployment Ready
 

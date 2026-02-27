@@ -64,6 +64,10 @@ admin-api
 *.yaml
 *.yml
 !docker-compose.yml
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
 
 # Test coverage related files
 junit.xml

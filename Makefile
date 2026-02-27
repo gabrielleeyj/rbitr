@@ -4,7 +4,7 @@ MOCKERY := mockery
 
 .PHONY: mocks
 mocks:
-	GOCACHE=$$(mktemp -d) $(MOCKERY) --config mockery.yaml
+	GOCACHE=$$(mktemp -d) $(MOCKERY) --config mockery.yml
 
 .PHONY: demo
 demo:
