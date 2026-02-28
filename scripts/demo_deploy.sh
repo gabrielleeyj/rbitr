@@ -5,13 +5,18 @@ GATEWAY_URL=${GATEWAY_URL:-"http://localhost:8080"}
 TENANT_KEY=${TENANT_KEY:-"tenant_demo_key"}
 AGENT_ID=${AGENT_ID:-"agent_demo"}
 TENANT_ID=${TENANT_ID:-"t_demo"}
+TENANT_NAME=${TENANT_NAME:-"Demo Tenant"}
 ADMIN_KEY=${ADMIN_KEY:-"admin_demo_key"}
 TENANT_AUTH_MODE=${TENANT_AUTH_MODE:-"bearer"} # bearer|x-tenant-key
 AUTO_RECOVER_TENANT_KEY=${AUTO_RECOVER_TENANT_KEY:-"true"}
 
 if [ -f docker-compose.yml ] || [ -f compose.yaml ] || [ -f compose.yml ]; then
 	echo "Starting docker compose services..."
-	docker compose up -d
+	if [ -f docker-compose.dev.yml ]; then
+		docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+	else
+		docker compose up -d
+	fi
 else
 	echo "No docker compose file found; skipping compose startup."
 fi
@@ -58,6 +63,38 @@ set_tenant_auth_header() {
 }
 set_tenant_auth_header
 
+setup_required() {
+	payload="$1"
+	if command -v jq >/dev/null 2>&1; then
+		echo "$payload" | jq -r '.setup_required // "false"'
+	else
+		if echo "$payload" | tr -d '\n' | grep -q '"setup_required":[[:space:]]*true'; then
+			echo "true"
+		else
+			echo "false"
+		fi
+	fi
+}
+
+bootstrap_if_needed() {
+	status="$(curl -sS "$GATEWAY_URL/setup/status" || true)"
+	if [ -z "$status" ]; then
+		return 0
+	fi
+	if [ "$(setup_required "$status")" != "true" ]; then
+		return 0
+	fi
+	echo "Bootstrap is required. Initializing setup with demo defaults..."
+	init_payload=$(cat <<EOF
+{"tenant_name":"$TENANT_NAME","tenant_id":"$TENANT_ID","admin_key":"$ADMIN_KEY","tenant_key":"$TENANT_KEY"}
+EOF
+)
+	init_resp=$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
+		-H "Content-Type: application/json" \
+		-d "$init_payload")
+	pretty "$init_resp"
+}
+
 call_tool() {
 	curl -sS -X POST "$GATEWAY_URL/v1/tools/mock_internal/call" \
 		-H "Content-Type: application/json" \
@@ -69,6 +106,8 @@ call_tool() {
 allow_payload='{"http_method":"GET","path":"/status","query":"","headers":{"Accept":"application/json"},"body":""}'
 approval_payload='{"http_method":"POST","path":"/refund","query":"","headers":{"Content-Type":"application/json"},"body":"{\"amount\":100}"}'
 deny_payload='{"http_method":"POST","path":"/export_customer_data","query":"","headers":{"Content-Type":"application/json"},"body":"{}"}'
+
+bootstrap_if_needed
 
 printf "\n1) ALLOW (expected)\n"
 allow_resp=$(call_tool "$allow_payload")

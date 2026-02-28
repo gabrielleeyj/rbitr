@@ -19,6 +19,9 @@ type Config struct {
 	FeatureRateLimiting   bool
 	FeatureArgConstraints bool
 	FeatureShadowMode     bool
+	DevAutoTools          bool
+	DevMockInternalURL    string
+	DevJiraURL            string
 }
 
 func Load() Config {
@@ -43,6 +46,9 @@ func Load() Config {
 		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING"),
 		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS"),
 		FeatureShadowMode:     getEnvBool("RBTR_FEATURE_SHADOW_MODE"),
+		DevAutoTools:          getEnvBool("RBTR_DEV_AUTO_TOOLS"),
+		DevMockInternalURL:    getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
+		DevJiraURL:            getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),
 	}
 }
 

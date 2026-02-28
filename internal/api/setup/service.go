@@ -41,6 +41,17 @@ const (
 	defaultBooleanFalse = "false"
 
 	adminKeyPrefix      = "rbtr_admin_"
+	devToolMockInternal = "mock_internal"
+	devToolJira         = "jira"
+
+	defaultDevMockInternalURL = "http://localhost:8090"
+	defaultDevJiraURL         = "http://localhost:8081"
+
+	devMockInternalAuthType  = "api_key"
+	devMockInternalAuthValue = "mock_internal_key"
+	devJiraAuthType          = "bearer"
+	devJiraAuthValue         = "jira_token"
+
 	defaultPolicyModule = `package rbitr.policy
 
 import rego.v1
@@ -94,6 +105,19 @@ decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 10
 `
 )
 
+type Options struct {
+	DevAutoTools       bool
+	DevMockInternalURL string
+	DevJiraURL         string
+}
+
+type devToolSeed struct {
+	toolID    string
+	baseURL   string
+	authType  string
+	authValue string
+}
+
 type StatusResponse struct {
 	SetupRequired     bool `json:"setup_required"`
 	BootstrapComplete bool `json:"bootstrap_complete"`
@@ -129,11 +153,23 @@ type Service interface {
 }
 
 type dbService struct {
-	db *sql.DB
+	db                 *sql.DB
+	devAutoTools       bool
+	devMockInternalURL string
+	devJiraURL         string
 }
 
-func NewService(db *sql.DB) Service {
-	return &dbService{db: db}
+func NewService(db *sql.DB, opts ...Options) Service {
+	cfg := Options{}
+	if len(opts) > 0 {
+		cfg = opts[0]
+	}
+	return &dbService{
+		db:                 db,
+		devAutoTools:       cfg.DevAutoTools,
+		devMockInternalURL: coalesceDefault(strings.TrimSpace(cfg.DevMockInternalURL), defaultDevMockInternalURL),
+		devJiraURL:         coalesceDefault(strings.TrimSpace(cfg.DevJiraURL), defaultDevJiraURL),
+	}
 }
 
 func (s *dbService) Status(ctx context.Context) (StatusResponse, error) {
@@ -294,6 +330,12 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 		return InitializeResponse{}, err
 	}
 
+	if s.devAutoTools {
+		if err := s.insertDevTools(ctx, tx, tenantID, now); err != nil {
+			return InitializeResponse{}, err
+		}
+	}
+
 	settingWrites := []struct {
 		key   string
 		value string
@@ -336,6 +378,49 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 		AdminKeyCreated:   adminKeyCreated,
 		PolicyVersion:     defaultPolicyVersion,
 	}, nil
+}
+
+func (s *dbService) insertDevTools(ctx context.Context, tx *sql.Tx, tenantID string, createdAt time.Time) error {
+	devToolSeeds := []devToolSeed{
+		{
+			toolID:    devToolMockInternal,
+			baseURL:   s.devMockInternalURL,
+			authType:  devMockInternalAuthType,
+			authValue: devMockInternalAuthValue,
+		},
+		{
+			toolID:    devToolJira,
+			baseURL:   s.devJiraURL,
+			authType:  devJiraAuthType,
+			authValue: devJiraAuthValue,
+		},
+	}
+	for _, tool := range devToolSeeds {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6)
+			 ON CONFLICT (tool_id, tenant_id) DO UPDATE
+			 SET base_url = EXCLUDED.base_url,
+			     auth_type = EXCLUDED.auth_type,
+			     auth_value = EXCLUDED.auth_value`,
+			tool.toolID,
+			tenantID,
+			tool.baseURL,
+			tool.authType,
+			tool.authValue,
+			createdAt,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func coalesceDefault(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }
 
 type queryRowScanner interface {

@@ -31,22 +31,17 @@ What it focuses on:
 ### Option A: Docker compose (API + UI + Postgres + migrate)
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 - Gateway: http://localhost:8080
 - UI: http://localhost:5173
 - Postgres: localhost:2345
 
-Demo admin key: `admin_demo_key`
-
-If you want tool calls to hit the mock tool inside compose, update the tool base URL:
+Bootstrap first tenant/admin keys (recommended defaults match demo scripts):
 
 ```bash
-curl -sS -X PUT "http://localhost:8080/admin/tenants/t_demo/tools/mock_internal" \
--H "Content-Type: application/json" \
--H "Authorization: Bearer admin_demo_key" \
--d '{"base_url":"http://mocktool:8090","auth_type":"","auth_value":""}'
+./scripts/dev/bootstrap.sh
 ```
 
 ### First-run Setup Wizard (Epic 9)
@@ -67,6 +62,11 @@ Wizard bootstrap sequence:
 5. Mark bootstrap complete
 
 Note: the setup flow currently validates that migrations are present but does not run migrations itself; run migrations before using `/setup/initialize`.
+
+Dev note: when `RBTR_DEV_AUTO_TOOLS=true`, setup auto-seeds per-tenant dev tool wiring:
+
+- `mock_internal` -> `RBTR_DEV_MOCK_INTERNAL_URL` (default `http://localhost:8090`)
+- `jira` -> `RBTR_DEV_JIRA_URL` (default `http://localhost:8081`)
 
 ### Database runtime defaults
 
@@ -106,15 +106,11 @@ go run ./cmd/gateway
   4. `headers`,
   5. `body`
      (string) expected by `POST /v1/tools/{tool_id}/call`.
-- Seeded tenant `t_demo` with
-
-  ```
-  Authorization: Bearer tenant_demo_key;
-  admin key = `admin_demo_key`;
-  ```
-
-  - tools mock_internal (`http://localhost:8090`)
-  - jira (`http://localhost:8081`) in `migrations/00001_init.sql`.
+- Production migrations are schema-only (no seeded demo tenant/keys/tools).
+- For local demo defaults, run `./scripts/dev/bootstrap.sh`, which initializes:
+  - tenant id `t_demo`
+  - admin key `admin_demo_key`
+  - tenant key `tenant_demo_key`
 
 - Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
 - Tenant auth accepts `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback and may be disabled.
@@ -163,6 +159,12 @@ Export defaults are safe-by-default (redacted payloads, no secrets).
 ## Simulation
 
 **Quick test**: Run `./scripts/test_demo.sh` to test the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail).
+
+Before running the demo test, bootstrap setup once:
+
+```bash
+./scripts/dev/bootstrap.sh
+```
 
 1. Start services (two terminals)
 

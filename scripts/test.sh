@@ -8,8 +8,11 @@ command -v go >/dev/null 2>&1 || {
 	exit 1
 }
 
+GOTESTSUM_VERSION="${GOTESTSUM_VERSION:-v1.13.0}"
+GOCOVER_COBERTURA_VERSION="${GOCOVER_COBERTURA_VERSION:-v1.2.0}"
+
 # Install gotestsum for printing formatted test output and a summary of the test run
-go run gotest.tools/gotestsum@latest \
+go run "gotest.tools/gotestsum@${GOTESTSUM_VERSION}" \
 	--junitfile junit.xml \
 	--format testname -- \
 	-race -covermode=atomic \
@@ -24,4 +27,4 @@ grep -vE "_mock.go|_test.go" test_coverage.txt >filtered.txt && mv filtered.txt 
 go tool cover -func=test_coverage.txt | tail -n1 | awk '{print "Total test coverage: " $3}'
 
 # Convert coverage to Cobertura format for CI integration
-go run github.com/boumenot/gocover-cobertura@latest <test_coverage.txt >test_coverage.xml
+go run "github.com/boumenot/gocover-cobertura@${GOCOVER_COBERTURA_VERSION}" <test_coverage.txt >test_coverage.xml

@@ -7,6 +7,7 @@ echo ""
 # Configuration
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 TENANT_ID="${TENANT_ID:-t_demo}"
+TENANT_NAME="${TENANT_NAME:-Demo Tenant}"
 TENANT_KEY="${TENANT_KEY:-tenant_demo_key}"
 ADMIN_KEY="${ADMIN_KEY:-admin_demo_key}"
 AGENT_ID="${AGENT_ID:-agent_demo}"
@@ -57,6 +58,41 @@ set_tenant_auth_headers() {
 }
 set_tenant_auth_headers
 
+setup_required() {
+	local payload="$1"
+	if command -v jq >/dev/null 2>&1; then
+		echo "$payload" | jq -r '.setup_required // "false"'
+	else
+		if echo "$payload" | tr -d '\n' | grep -q '"setup_required":[[:space:]]*true'; then
+			echo "true"
+		else
+			echo "false"
+		fi
+	fi
+}
+
+bootstrap_if_needed() {
+	local status
+	status="$(curl -sS "$GATEWAY_URL/setup/status" || true)"
+	if [ -z "$status" ]; then
+		return 0
+	fi
+	if [ "$(setup_required "$status")" != "true" ]; then
+		return 0
+	fi
+
+	echo "Bootstrap is required. Running setup initialize for demo defaults..."
+	local init_payload init_response
+	init_payload="$(cat <<EOF
+{"tenant_name":"$TENANT_NAME","tenant_id":"$TENANT_ID","admin_key":"$ADMIN_KEY","tenant_key":"$TENANT_KEY"}
+EOF
+)"
+	init_response="$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
+		-H "Content-Type: application/json" \
+		-d "$init_payload")"
+	pretty "$init_response"
+}
+
 call_tool() {
 	curl -sS -X POST "$GATEWAY_URL/v1/tools/$TOOL_ID/call" \
 		-H "Content-Type: application/json" \
@@ -106,6 +142,8 @@ recover_tenant_key_if_needed() {
 allow_payload='{"http_method":"GET","path":"/status","query":"","headers":{"Accept":"application/json"},"body":""}'
 refund_payload='{"http_method":"POST","path":"/refund","query":"","headers":{"Content-Type":"application/json"},"body":"{\"amount\":100}"}'
 deny_payload='{"http_method":"POST","path":"/export_customer_data","query":"","headers":{"Content-Type":"application/json"},"body":"{}"}'
+
+bootstrap_if_needed
 
 echo "1. Testing DATA.READ (should ALLOW)"
 echo "-----------------------------------"

@@ -86,7 +86,11 @@ func main() {
 
 	toolCache := cache.New[models.Tool](cacheTTL)
 	riskOverrideCache := cache.New[string](cacheTTL)
-	setupService := apisetup.NewService(dbConn)
+	setupService := apisetup.NewService(dbConn, apisetup.Options{
+		DevAutoTools:       cfg.DevAutoTools,
+		DevMockInternalURL: cfg.DevMockInternalURL,
+		DevJiraURL:         cfg.DevJiraURL,
+	})
 
 	apisetup.RegisterRoutes(e, &apisetup.Dependencies{
 		Service: setupService,

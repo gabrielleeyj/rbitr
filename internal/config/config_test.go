@@ -18,6 +18,9 @@ func TestLoad(t *testing.T) {
 		expectedBody           int64
 		expectedLimit          int64
 		expectedArgConstraints bool
+		expectedDevAutoTools   bool
+		expectedMockURL        string
+		expectedJiraURL        string
 	}{
 		{
 			name: "defaults",
@@ -31,6 +34,9 @@ func TestLoad(t *testing.T) {
 				"BODY_LIMIT_BYTES":              "",
 				"RESPONSE_LIMIT_BYTES":          "",
 				"RBTR_FEATURE_ARG_CONSTRAINTS":  "",
+				"RBTR_DEV_AUTO_TOOLS":           "",
+				"RBTR_DEV_MOCK_INTERNAL_URL":    "",
+				"RBTR_DEV_JIRA_URL":             "",
 			},
 			expectedURL:            "postgres://postgres@localhost:2345/rbitr?sslmode=require",
 			expectedMaxOpen:        30,
@@ -41,6 +47,9 @@ func TestLoad(t *testing.T) {
 			expectedBody:           256 * 1024,
 			expectedLimit:          256 * 1024,
 			expectedArgConstraints: false,
+			expectedDevAutoTools:   false,
+			expectedMockURL:        "http://localhost:8090",
+			expectedJiraURL:        "http://localhost:8081",
 		},
 		{
 			name: "custom values",
@@ -54,6 +63,9 @@ func TestLoad(t *testing.T) {
 				"BODY_LIMIT_BYTES":              "1024",
 				"RESPONSE_LIMIT_BYTES":          "2048",
 				"RBTR_FEATURE_ARG_CONSTRAINTS":  "true",
+				"RBTR_DEV_AUTO_TOOLS":           "true",
+				"RBTR_DEV_MOCK_INTERNAL_URL":    "http://mocktool:8090",
+				"RBTR_DEV_JIRA_URL":             "http://jira:8081",
 			},
 			expectedURL:            "postgres://custom",
 			expectedMaxOpen:        64,
@@ -64,6 +76,9 @@ func TestLoad(t *testing.T) {
 			expectedBody:           1024,
 			expectedLimit:          2048,
 			expectedArgConstraints: true,
+			expectedDevAutoTools:   true,
+			expectedMockURL:        "http://mocktool:8090",
+			expectedJiraURL:        "http://jira:8081",
 		},
 		{
 			name: "invalid limits fallback",
@@ -77,6 +92,9 @@ func TestLoad(t *testing.T) {
 				"BODY_LIMIT_BYTES":              "nope",
 				"RESPONSE_LIMIT_BYTES":          "bad",
 				"RBTR_FEATURE_ARG_CONSTRAINTS":  "invalid",
+				"RBTR_DEV_AUTO_TOOLS":           "invalid",
+				"RBTR_DEV_MOCK_INTERNAL_URL":    "",
+				"RBTR_DEV_JIRA_URL":             "",
 			},
 			expectedURL:            "postgres://postgres@localhost:2345/rbitr?sslmode=require",
 			expectedMaxOpen:        30,
@@ -87,6 +105,9 @@ func TestLoad(t *testing.T) {
 			expectedBody:           256 * 1024,
 			expectedLimit:          256 * 1024,
 			expectedArgConstraints: false,
+			expectedDevAutoTools:   false,
+			expectedMockURL:        "http://localhost:8090",
+			expectedJiraURL:        "http://localhost:8081",
 		},
 	}
 
@@ -122,6 +143,15 @@ func TestLoad(t *testing.T) {
 			}
 			if cfg.FeatureArgConstraints != tc.expectedArgConstraints {
 				t.Fatalf("expected FeatureArgConstraints %t got %t", tc.expectedArgConstraints, cfg.FeatureArgConstraints)
+			}
+			if cfg.DevAutoTools != tc.expectedDevAutoTools {
+				t.Fatalf("expected DevAutoTools %t got %t", tc.expectedDevAutoTools, cfg.DevAutoTools)
+			}
+			if cfg.DevMockInternalURL != tc.expectedMockURL {
+				t.Fatalf("expected DevMockInternalURL %q got %q", tc.expectedMockURL, cfg.DevMockInternalURL)
+			}
+			if cfg.DevJiraURL != tc.expectedJiraURL {
+				t.Fatalf("expected DevJiraURL %q got %q", tc.expectedJiraURL, cfg.DevJiraURL)
 			}
 		})
 	}

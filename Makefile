@@ -9,3 +9,11 @@ mocks:
 .PHONY: demo
 demo:
 	./scripts/demo.sh
+
+.PHONY: dev-up
+dev-up:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+.PHONY: dev-bootstrap
+dev-bootstrap:
+	./scripts/dev/bootstrap.sh
