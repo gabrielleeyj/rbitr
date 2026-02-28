@@ -137,3 +137,29 @@ func TestHashTenantKeyUsesFirstHMACSecret(t *testing.T) {
 		t.Fatalf("HashTenantKey() = %q, want %q", got, want)
 	}
 }
+
+func TestBuildAdminKeyHashCandidates(t *testing.T) {
+	candidates := BuildAdminKeyHashCandidates("admin_demo_key", []string{"s1", "s2", "s2", "", " s3 "})
+	if candidates.Legacy != HashString("admin_demo_key") {
+		t.Fatal("legacy hash mismatch")
+	}
+	if candidates.Current == "" {
+		t.Fatal("expected current HMAC hash")
+	}
+	if len(candidates.Previous) != 2 {
+		t.Fatalf("expected 2 previous hashes, got %d", len(candidates.Previous))
+	}
+	if candidates.Previous[0] == candidates.Current {
+		t.Fatal("previous hash should differ from current")
+	}
+}
+
+func TestHashAdminKeyUsesFirstHMACSecret(t *testing.T) {
+	t.Setenv(AdminKeyHMACSecretsEnv, "current_secret,previous_secret")
+	raw := "admin_demo_key"
+	got := HashAdminKey(raw)
+	want := HashStringHMAC(raw, "current_secret")
+	if got != want {
+		t.Fatalf("HashAdminKey() = %q, want %q", got, want)
+	}
+}

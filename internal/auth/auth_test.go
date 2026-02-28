@@ -30,6 +30,21 @@ func (s *tenantStoreWithUpgrade) UpgradeTenantKeyHash(_ context.Context, oldKeyH
 	return s.upgradeErr
 }
 
+type adminStoreWithUpgrade struct {
+	store.StoreAPI
+	upgradeCalled bool
+	upgradeOld    string
+	upgradeNew    string
+	upgradeErr    error
+}
+
+func (s *adminStoreWithUpgrade) UpgradeAdminKeyHash(_ context.Context, oldKeyHash, newKeyHash string) error {
+	s.upgradeCalled = true
+	s.upgradeOld = oldKeyHash
+	s.upgradeNew = newKeyHash
+	return s.upgradeErr
+}
+
 func TestAuthenticateTenant(t *testing.T) {
 	errStoreBoom := errors.New("boom")
 	tenant := models.Tenant{TenantID: "t1", Name: "Tenant", Enabled: true}
@@ -294,6 +309,48 @@ func TestAuthenticateAdmin(t *testing.T) {
 			require.Equal(t, tc.expected, got)
 		})
 	}
+}
+
+func TestAuthenticateAdminWithHashCandidates_LegacyUpgrade(t *testing.T) {
+	rawKey := "admin_demo_key"
+	candidates := utils.BuildAdminKeyHashCandidates(rawKey, []string{"secret_current", "secret_previous"})
+	adminKey := models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}
+
+	mockStore := store.NewMockStoreAPI(t)
+	mockStore.On("GetAdminKeyByHash", t.Context(), candidates.Current).
+		Return(models.AdminKey{}, store.ErrNotFound).Once()
+	mockStore.On("GetAdminKeyByHash", t.Context(), candidates.Previous[0]).
+		Return(models.AdminKey{}, store.ErrNotFound).Once()
+	mockStore.On("GetAdminKeyByHash", t.Context(), candidates.Legacy).
+		Return(adminKey, nil).Once()
+
+	upgradeStore := &adminStoreWithUpgrade{StoreAPI: mockStore}
+
+	result, err := authenticateAdminWithHashCandidates(t.Context(), upgradeStore, candidates)
+	require.NoError(t, err)
+	require.Equal(t, adminKey, result)
+	require.True(t, upgradeStore.upgradeCalled)
+	require.Equal(t, candidates.Legacy, upgradeStore.upgradeOld)
+	require.Equal(t, candidates.Current, upgradeStore.upgradeNew)
+}
+
+func TestAuthenticateAdminWithHashCandidates_PreviousHMACMatchNoUpgrade(t *testing.T) {
+	rawKey := "admin_demo_key"
+	candidates := utils.BuildAdminKeyHashCandidates(rawKey, []string{"secret_current", "secret_previous"})
+	adminKey := models.AdminKey{AdminKeyID: "admin", Scopes: []string{"admin:read"}}
+
+	mockStore := store.NewMockStoreAPI(t)
+	mockStore.On("GetAdminKeyByHash", t.Context(), candidates.Current).
+		Return(models.AdminKey{}, store.ErrNotFound).Once()
+	mockStore.On("GetAdminKeyByHash", t.Context(), candidates.Previous[0]).
+		Return(adminKey, nil).Once()
+
+	upgradeStore := &adminStoreWithUpgrade{StoreAPI: mockStore}
+
+	result, err := authenticateAdminWithHashCandidates(t.Context(), upgradeStore, candidates)
+	require.NoError(t, err)
+	require.Equal(t, adminKey, result)
+	require.False(t, upgradeStore.upgradeCalled)
 }
 
 func TestAuthenticateAdminAny(t *testing.T) {

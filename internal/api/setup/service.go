@@ -307,7 +307,7 @@ func (s *dbService) Initialize(ctx context.Context, req InitializeRequest) (Init
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO rbitr.admin_keys (admin_key_id, key_hash, scopes, created_at)
 		 VALUES ($1, $2, $3, $4)`,
-		adminKeyID, utils.HashString(adminKey), store.StringArray{"admin:read", "admin:write"}, now,
+		adminKeyID, utils.HashAdminKey(adminKey), store.StringArray{"admin:read", "admin:write"}, now,
 	); err != nil {
 		return InitializeResponse{}, normalizeWriteError(err, "admin_key")
 	}

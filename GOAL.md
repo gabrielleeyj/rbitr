@@ -6,7 +6,7 @@ This file tracks **current blockers** preventing rbitr from being GTM deployment
 - AWS Marketplace listing
 - GCP Marketplace listing
 
-Date updated: 2026-02-27
+Date updated: 2026-02-28
 
 ## P0 Blockers (Must Fix Before Any External Production GTM)
 
@@ -54,11 +54,6 @@ Date updated: 2026-02-27
 - Current state: no root `LICENSE`.
 - Blocker reason: legal/commercial packaging incomplete for GTM.
 
-10. Close remaining auth hardening gap for key hashing policy consistency.
-
-- Current state: tenant keys support HMAC path; admin keys still authenticate via direct SHA-256 hash lookup.
-- Blocker reason: production security baseline not fully aligned across credential types.
-
 ## P1 Blockers (Should Fix Before Broad GTM Scale, But Not Always Day-1 Hard Stop)
 
 11. Complete approval execution idempotency/in-flight ownership hardening.
@@ -84,7 +79,7 @@ Date updated: 2026-02-27
 
 - Risk: inconsistent or insecure customer deployments.
 
-## Recently Closed (2026-02-27)
+## Recently Closed (2026-02-28)
 
 - Switched UI container to a production image path (build-time `vite build` + Nginx static serve) instead of `npm run dev`.
 - Removed admin key persistence from browser `localStorage`; admin session key is now in-memory only.
@@ -92,6 +87,7 @@ Date updated: 2026-02-27
 - Added DB pool/concurrency runtime tuning (`max open`, `max idle`, `connection lifetime`, `idle time`) with env-configurable defaults and gateway wiring.
 - Added CI security gates with enforced fail policy (SAST/go dependency checks/UI dependency audit/container scan) via `.github/workflows/security.yml`.
 - Added SBOM generation and keyless signing/attestation flow for pushed gateway container images (GHCR + cosign + provenance attestation).
+- Closed admin key hash hardening gap: admin auth now supports HMAC-based hashes with legacy SHA-256 fallback + lazy upgrade, and setup writes admin hashes through the HMAC path when configured.
 
 ## Exit Criteria to Mark GTM Deployment Ready
 

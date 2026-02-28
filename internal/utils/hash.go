@@ -35,6 +35,9 @@ const (
 
 	//nolint:gosec // #nosec G101 -- constant is an environment variable name, not a credential.
 	TenantKeyHMACSecretsEnv = "RBTR_TENANT_KEY_HMAC_SECRETS"
+
+	//nolint:gosec // #nosec G101 -- constant is an environment variable name, not a credential.
+	AdminKeyHMACSecretsEnv = "RBTR_ADMIN_KEY_HMAC_SECRETS"
 )
 
 // GenerateAPIKey creates a new API key with the rbtr_live_ prefix and 32 bytes of entropy.
@@ -92,6 +95,47 @@ func BuildTenantKeyHashCandidates(rawKey string, secrets []string) TenantKeyHash
 
 func TenantKeyHMACSecretsFromEnv() []string {
 	return normalizeSecrets(strings.Split(strings.TrimSpace(os.Getenv(TenantKeyHMACSecretsEnv)), ","))
+}
+
+type AdminKeyHashCandidates struct {
+	Current  string
+	Previous []string
+	Legacy   string
+}
+
+func HashAdminKey(rawKey string) string {
+	candidates := BuildAdminKeyHashCandidates(rawKey, AdminKeyHMACSecretsFromEnv())
+	if candidates.Current != "" {
+		return candidates.Current
+	}
+	return candidates.Legacy
+}
+
+func AdminKeyHashCandidatesFromEnv(rawKey string) AdminKeyHashCandidates {
+	return BuildAdminKeyHashCandidates(rawKey, AdminKeyHMACSecretsFromEnv())
+}
+
+func BuildAdminKeyHashCandidates(rawKey string, secrets []string) AdminKeyHashCandidates {
+	out := AdminKeyHashCandidates{
+		Legacy: HashString(rawKey),
+	}
+	cleanSecrets := normalizeSecrets(secrets)
+	if len(cleanSecrets) == 0 {
+		return out
+	}
+	out.Current = HashStringHMAC(rawKey, cleanSecrets[0])
+	for _, secret := range cleanSecrets[1:] {
+		hash := HashStringHMAC(rawKey, secret)
+		if hash == out.Current {
+			continue
+		}
+		out.Previous = append(out.Previous, hash)
+	}
+	return out
+}
+
+func AdminKeyHMACSecretsFromEnv() []string {
+	return normalizeSecrets(strings.Split(strings.TrimSpace(os.Getenv(AdminKeyHMACSecretsEnv)), ","))
 }
 
 func normalizeSecrets(secrets []string) []string {

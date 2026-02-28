@@ -115,6 +115,8 @@ go run ./cmd/gateway
 - Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
 - Tenant auth accepts `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback and may be disabled.
 - Admin auth accepts `Authorization: Bearer <admin_key>` (preferred) or `X-Admin-Key` (legacy).
+- Tenant key hashing supports HMAC secret rotation via `RBTR_TENANT_KEY_HMAC_SECRETS` (comma-separated: current,previous...).
+- Admin key hashing supports HMAC secret rotation via `RBTR_ADMIN_KEY_HMAC_SECRETS` (comma-separated: current,previous...).
 
 ## Structured Logging
 

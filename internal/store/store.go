@@ -2543,6 +2543,28 @@ func (s *Store) UpgradeTenantKeyHash(ctx context.Context, oldKeyHash, newKeyHash
 	return nil
 }
 
+func (s *Store) UpgradeAdminKeyHash(ctx context.Context, oldKeyHash, newKeyHash string) error {
+	if strings.TrimSpace(oldKeyHash) == "" || strings.TrimSpace(newKeyHash) == "" || oldKeyHash == newKeyHash {
+		return nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE rbitr.admin_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2`,
+		newKeyHash, oldKeyHash)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func hashKey(key string) string {
 	return utils.HashTenantKey(key)
 }

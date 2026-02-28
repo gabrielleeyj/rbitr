@@ -1971,6 +1971,44 @@ func TestStoreUpgradeTenantKeyHashNotFound(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestStoreUpgradeAdminKeyHash(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.admin_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2`)).
+		WithArgs("new_hash", "old_hash").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	st := New(db)
+	storeImpl, ok := st.(*Store)
+	require.True(t, ok)
+	err = storeImpl.UpgradeAdminKeyHash(context.Background(), "old_hash", "new_hash")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestStoreUpgradeAdminKeyHashNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.admin_keys
+		 SET key_hash = $1
+		 WHERE key_hash = $2`)).
+		WithArgs("new_hash", "old_hash").
+		WillReturnResult(sqlmock.NewResult(1, 0))
+
+	st := New(db)
+	storeImpl, ok := st.(*Store)
+	require.True(t, ok)
+	err = storeImpl.UpgradeAdminKeyHash(context.Background(), "old_hash", "new_hash")
+	require.ErrorIs(t, err, ErrNotFound)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestStoreSetTenantEnforcementMode(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

@@ -42,6 +42,10 @@ func bearerToken(value string) string {
 	return strings.TrimSpace(parts[1])
 }
 
+type adminKeyHashUpgrader interface {
+	UpgradeAdminKeyHash(ctx context.Context, oldKeyHash, newKeyHash string) error
+}
+
 func AuthenticateAdmin(ctx context.Context, st store.StoreAPI, adminKey, requiredScope string) (models.AdminKey, error) {
 	key, err := AuthenticateAdminAny(ctx, st, adminKey)
 	if err != nil {
@@ -57,14 +61,65 @@ func AuthenticateAdminAny(ctx context.Context, st store.StoreAPI, adminKey strin
 	if adminKey == "" {
 		return models.AdminKey{}, ErrUnauthorized
 	}
-	keyHash := utils.HashString(adminKey)
-	key, err := st.GetAdminKeyByHash(ctx, keyHash)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return models.AdminKey{}, ErrUnauthorized
+	candidates := utils.AdminKeyHashCandidatesFromEnv(adminKey)
+	return authenticateAdminWithHashCandidates(ctx, st, candidates)
+}
+
+func authenticateAdminWithHashCandidates(
+	ctx context.Context,
+	st store.StoreAPI,
+	candidates utils.AdminKeyHashCandidates,
+) (models.AdminKey, error) {
+	lookup := func(hash string) (models.AdminKey, error) {
+		if strings.TrimSpace(hash) == "" {
+			return models.AdminKey{}, store.ErrNotFound
 		}
+		return st.GetAdminKeyByHash(ctx, hash)
+	}
+
+	tryLookup := func(hash string) (models.AdminKey, bool, error) {
+		key, err := lookup(hash)
+		if err == nil {
+			return key, true, nil
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			return models.AdminKey{}, false, nil
+		}
+		return models.AdminKey{}, false, err
+	}
+
+	if key, matched, err := tryLookup(candidates.Current); err != nil {
+		return models.AdminKey{}, err
+	} else if matched {
+		return key, nil
+	}
+
+	for _, previousHash := range candidates.Previous {
+		key, matched, err := tryLookup(previousHash)
+		if err != nil {
+			return models.AdminKey{}, err
+		}
+		if matched {
+			return key, nil
+		}
+	}
+
+	key, matched, err := tryLookup(candidates.Legacy)
+	if err != nil {
 		return models.AdminKey{}, err
 	}
+	if !matched {
+		return models.AdminKey{}, ErrUnauthorized
+	}
+
+	if strings.TrimSpace(candidates.Current) == "" || candidates.Current == candidates.Legacy {
+		return key, nil
+	}
+	upgrader, ok := st.(adminKeyHashUpgrader)
+	if !ok {
+		return key, nil
+	}
+	_ = upgrader.UpgradeAdminKeyHash(ctx, candidates.Legacy, candidates.Current)
 	return key, nil
 }
 
