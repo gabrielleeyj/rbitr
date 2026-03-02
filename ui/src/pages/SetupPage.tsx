@@ -29,6 +29,8 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
   const [tenantID, setTenantID] = useState("");
   const [adminKey, setAdminKeyInput] = useState("");
   const [tenantKey, setTenantKeyInput] = useState("");
+  const [setupToken, setSetupToken] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(generateIdempotencyKey());
   const [result, setResult] = useState<SetupInitializeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -37,13 +39,18 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
     () => [
       { label: "Database connectivity", ok: status.database_reachable },
       { label: "Schema migrations", ok: status.schema_ready },
+      { label: "Setup initialize endpoint", ok: status.initialize_allowed },
     ],
-    [status.database_reachable, status.schema_ready]
+    [status.database_reachable, status.initialize_allowed, status.schema_ready]
   );
 
   const handleInitialize = async () => {
     if (!tenantName.trim()) {
       setError("Tenant name is required.");
+      return;
+    }
+    if (status.initialize_token_required && !setupToken.trim()) {
+      setError("Setup token is required.");
       return;
     }
     setLoading(true);
@@ -54,6 +61,9 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
         tenant_id: tenantID.trim() || undefined,
         admin_key: adminKey.trim() || undefined,
         tenant_key: tenantKey.trim() || undefined,
+      }, {
+        setup_token: setupToken.trim() || undefined,
+        idempotency_key: idempotencyKey,
       });
       setResult(response);
       setStep("complete");
@@ -114,6 +124,19 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
                 </div>
               ))}
 
+              <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                <span className="text-sm">Persisted setup state</span>
+                <Badge variant={status.setup_state === "failed" ? "destructive" : "secondary"}>
+                  {status.setup_state}
+                </Badge>
+              </div>
+
+              {status.last_error ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{status.last_error}</AlertDescription>
+                </Alert>
+              ) : null}
+
               {!status.schema_ready ? (
                 <Alert variant="destructive">
                   <AlertDescription>
@@ -146,7 +169,10 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
                   id="tenant-name"
                   placeholder="Acme Corp"
                   value={tenantName}
-                  onChange={(event) => setTenantName(event.target.value)}
+                  onChange={(event) => {
+                    setTenantName(event.target.value);
+                    setIdempotencyKey(generateIdempotencyKey());
+                  }}
                 />
               </div>
 
@@ -156,7 +182,10 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
                   id="tenant-id"
                   placeholder="t_acme"
                   value={tenantID}
-                  onChange={(event) => setTenantID(event.target.value)}
+                  onChange={(event) => {
+                    setTenantID(event.target.value);
+                    setIdempotencyKey(generateIdempotencyKey());
+                  }}
                 />
               </div>
 
@@ -166,7 +195,10 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
                   id="admin-key"
                   placeholder="Leave empty to auto-generate"
                   value={adminKey}
-                  onChange={(event) => setAdminKeyInput(event.target.value)}
+                  onChange={(event) => {
+                    setAdminKeyInput(event.target.value);
+                    setIdempotencyKey(generateIdempotencyKey());
+                  }}
                 />
               </div>
 
@@ -176,9 +208,25 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
                   id="tenant-key"
                   placeholder="Leave empty to auto-generate"
                   value={tenantKey}
-                  onChange={(event) => setTenantKeyInput(event.target.value)}
+                  onChange={(event) => {
+                    setTenantKeyInput(event.target.value);
+                    setIdempotencyKey(generateIdempotencyKey());
+                  }}
                 />
               </div>
+
+              {status.initialize_token_required ? (
+                <div className="space-y-2">
+                  <Label htmlFor="setup-token">Setup token</Label>
+                  <Input
+                    id="setup-token"
+                    type="password"
+                    placeholder="Paste setup bootstrap token"
+                    value={setupToken}
+                    onChange={(event) => setSetupToken(event.target.value)}
+                  />
+                </div>
+              ) : null}
 
               {error ? (
                 <Alert variant="destructive">
@@ -232,7 +280,13 @@ function parseErrorMessage(message: string): string {
     return "Setup initialization failed.";
   }
   try {
-    const parsed = JSON.parse(trimmed) as { error?: string };
+    const parsed = JSON.parse(trimmed) as { error?: string; fields?: Record<string, string> };
+    if (parsed.fields && Object.keys(parsed.fields).length > 0) {
+      const details = Object.entries(parsed.fields)
+        .map(([field, value]) => `${field}: ${value}`)
+        .join("; ");
+      return details || parsed.error || "Setup initialization failed.";
+    }
     if (parsed.error) {
       return parsed.error;
     }
@@ -240,4 +294,11 @@ function parseErrorMessage(message: string): string {
     // Ignore parse failures and return the raw message.
   }
   return trimmed;
+}
+
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `setup-${crypto.randomUUID()}`;
+  }
+  return `setup-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 }

@@ -4,8 +4,9 @@ set -euo pipefail
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 TENANT_NAME="${TENANT_NAME:-Demo Tenant}"
 TENANT_ID="${TENANT_ID:-t_demo}"
-ADMIN_KEY="${ADMIN_KEY:-admin_demo_key}"
-TENANT_KEY="${TENANT_KEY:-tenant_demo_key}"
+ADMIN_KEY="${ADMIN_KEY:-admin_demo_key_2026!}"
+TENANT_KEY="${TENANT_KEY:-tenant_demo_key_2026!}"
+SETUP_TOKEN="${SETUP_TOKEN:-${RBTR_SETUP_TOKEN:-}}"
 
 pretty() {
 	if command -v jq >/dev/null 2>&1; then
@@ -46,9 +47,18 @@ init_payload="$(cat <<EOF
 EOF
 )"
 
-response="$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
-	-H "Content-Type: application/json" \
-	-d "$init_payload")"
+curl_args=(
+	-sS
+	-X POST
+	"$GATEWAY_URL/setup/initialize"
+	-H "Content-Type: application/json"
+	-H "Idempotency-Key: setup-$(date +%s%N)"
+)
+if [ -n "$SETUP_TOKEN" ]; then
+	curl_args+=(-H "Authorization: Bearer $SETUP_TOKEN")
+fi
+curl_args+=(-d "$init_payload")
+response="$(curl "${curl_args[@]}")"
 
 echo "Setup response:"
 pretty "$response"

@@ -31,6 +31,9 @@ jobs:
 
       - name: Run Go Test
         run: go test ./... -v -cover
+
+      - name: Run Setup Smoke Gate
+        run: ./scripts/test_setup_smoke.sh
   scan:
     name: gitleaks
     runs-on: ubuntu-latest

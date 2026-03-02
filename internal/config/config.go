@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,17 +23,21 @@ type Config struct {
 	DevAutoTools          bool
 	DevMockInternalURL    string
 	DevJiraURL            string
+	SetupTokenRequired    bool
+	SetupToken            string
+	SetupTokenFile        string
+	SetupAllowedCIDRs     []string
 }
 
-func Load() Config {
-	const (
-		defaultLimitBytes        = 256 * 1024
-		defaultDBMaxOpenConns    = 30
-		defaultDBMaxIdleConns    = 10
-		defaultDBConnMaxLifetime = 30 * time.Minute
-		defaultDBConnMaxIdleTime = 5 * time.Minute
-	)
+const (
+	defaultLimitBytes        = 256 * 1024
+	defaultDBMaxOpenConns    = 30
+	defaultDBMaxIdleConns    = 10
+	defaultDBConnMaxLifetime = 30 * time.Minute
+	defaultDBConnMaxIdleTime = 5 * time.Minute
+)
 
+func Load() Config {
 	return Config{
 		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres@localhost:2345/rbitr?sslmode=require"),
 		DBMaxOpenConns:        getEnvInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns),
@@ -49,6 +54,10 @@ func Load() Config {
 		DevAutoTools:          getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		DevMockInternalURL:    getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:            getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),
+		SetupTokenRequired:    getEnvBool("RBTR_SETUP_TOKEN_REQUIRED"),
+		SetupToken:            getEnv("RBTR_SETUP_TOKEN", ""),
+		SetupTokenFile:        getEnv("RBTR_SETUP_TOKEN_FILE", ""),
+		SetupAllowedCIDRs:     getEnvCSV("RBTR_SETUP_ALLOWED_CIDRS"),
 	}
 }
 
@@ -93,4 +102,21 @@ func getEnvBool(key string) bool {
 		}
 	}
 	return false
+}
+
+func getEnvCSV(key string) []string {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }

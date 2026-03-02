@@ -53,6 +53,15 @@ Setup API endpoints:
 - `GET /setup/status`
 - `POST /setup/initialize`
 
+Production hardening flags:
+
+- `RBTR_SETUP_TOKEN_REQUIRED=true` enables setup token gate and idempotency enforcement.
+- `RBTR_SETUP_TOKEN` or `RBTR_SETUP_TOKEN_FILE` provides the bootstrap setup token.
+- `RBTR_SETUP_ALLOWED_CIDRS` (comma-separated CIDRs) optionally restricts initialize callers by source network.
+- In token-required mode, `POST /setup/initialize` must include:
+  - `Authorization: Bearer <setup_token>`
+  - `Idempotency-Key: <client_generated_key>`
+
 Wizard bootstrap sequence:
 
 1. Validate environment readiness (DB connectivity + schema presence)
@@ -109,8 +118,8 @@ go run ./cmd/gateway
 - Production migrations are schema-only (no seeded demo tenant/keys/tools).
 - For local demo defaults, run `./scripts/dev/bootstrap.sh`, which initializes:
   - tenant id `t_demo`
-  - admin key `admin_demo_key`
-  - tenant key `tenant_demo_key`
+  - admin key `admin_demo_key_2026!`
+  - tenant key `tenant_demo_key_2026!`
 
 - Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
 - Tenant auth accepts `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback and may be disabled.
@@ -138,6 +147,9 @@ Additional Fields (TBD):
 - `decision_latency_ms`
 - `tool_latency_ms`
 - `policy_eval_invalid_total{reason}`
+- `setup_attempts_total{result}`
+- `setup_duration_ms`
+- `setup_state{state}`
 
 ## Audit Trail (SOC-ready)
 
@@ -179,7 +191,7 @@ go run ./cmd/gateway
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "GET",
@@ -198,7 +210,7 @@ tool doesn’t implement /status), but ADR is still recorded.
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "POST",
@@ -217,7 +229,7 @@ This is an expected execution gate (not a terminal failure): clients should trea
 ```bash
 curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval_request_id>/approve" \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer admin_demo_key" \
+-H "Authorization: Bearer admin_demo_key_2026!" \
 -d '{"comment":"approved in demo"}'
 ```
 
@@ -226,7 +238,7 @@ curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo" \
 -H "X-Approval-Request-Id: <approval_request_id>" \
 -H "X-Approval-Token: <approval_token>" \
@@ -246,7 +258,7 @@ Expect: HTTP 200 with tool response and approval marked EXECUTED.
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo" \
 -d '{
 "http_method": "POST",
@@ -263,7 +275,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 ```bash
 curl -sS "http://localhost:8080/v1/tenants/t_demo/evidence?limit=50" \
--H "Authorization: Bearer tenant_demo_key" \
+-H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo"
 ```
 

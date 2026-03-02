@@ -30,6 +30,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		prometheus.Unregister(metrics.RateLimitChecksTotal)
 		prometheus.Unregister(metrics.RateLimitExceededTotal)
 		prometheus.Unregister(metrics.RateLimitLatencyMs)
+		prometheus.Unregister(metrics.SetupAttemptsTotal)
+		prometheus.Unregister(metrics.SetupDurationMs)
+		prometheus.Unregister(metrics.SetupState)
 	})
 
 	if metrics.DecisionsTotal == nil || metrics.GatewayRequests == nil {
@@ -55,6 +58,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 	metrics.RateLimitChecksTotal.WithLabelValues("allowed", "minute").Inc()
 	metrics.RateLimitExceededTotal.WithLabelValues("minute", "tenant_agent_tool").Inc()
 	metrics.RateLimitLatencyMs.Observe(2)
+	metrics.SetupAttemptsTotal.WithLabelValues("success").Inc()
+	metrics.SetupDurationMs.Observe(15)
+	metrics.SetupState.WithLabelValues("in_progress").Set(1)
 
 	families, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
@@ -81,6 +87,9 @@ func TestNewMetricsRegistersCollectors(t *testing.T) {
 		"rate_limit_checks_total":         false,
 		"rate_limit_exceeded_total":       false,
 		"rate_limit_latency_ms":           false,
+		"setup_attempts_total":            false,
+		"setup_duration_ms":               false,
+		"setup_state":                     false,
 	}
 	for _, family := range families {
 		if _, ok := expected[family.GetName()]; ok {

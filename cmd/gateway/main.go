@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -41,6 +42,18 @@ const (
 
 func main() {
 	cfg := config.Load()
+
+	setupToken, err := apisetup.ResolveSetupToken(cfg.SetupToken, cfg.SetupTokenFile)
+	if err != nil {
+		log.Fatalf("resolve setup token failed: %v", err)
+	}
+	if cfg.SetupTokenRequired && strings.TrimSpace(setupToken) == "" {
+		log.Fatal("RBTR_SETUP_TOKEN_REQUIRED=true requires RBTR_SETUP_TOKEN or RBTR_SETUP_TOKEN_FILE")
+	}
+	allowedCIDRs, err := apisetup.ParseAllowedCIDRs(cfg.SetupAllowedCIDRs)
+	if err != nil {
+		log.Fatalf("invalid RBTR_SETUP_ALLOWED_CIDRS: %v", err)
+	}
 
 	dbConn, err := db.Connect(cfg.DatabaseURL, db.PoolConfig{
 		MaxOpenConns:    cfg.DBMaxOpenConns,
@@ -77,7 +90,8 @@ func main() {
 	})
 	e.GET("/readyz", func(c *echo.Context) error {
 		ctx := c.Request().Context()
-		if err := dbConn.PingContext(ctx); err != nil {
+		pingErr := dbConn.PingContext(ctx)
+		if pingErr != nil {
 			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "not ready", "reason": "database unreachable"})
 		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "ready"})
@@ -86,14 +100,22 @@ func main() {
 
 	toolCache := cache.New[models.Tool](cacheTTL)
 	riskOverrideCache := cache.New[string](cacheTTL)
+
 	setupService := apisetup.NewService(dbConn, apisetup.Options{
-		DevAutoTools:       cfg.DevAutoTools,
-		DevMockInternalURL: cfg.DevMockInternalURL,
-		DevJiraURL:         cfg.DevJiraURL,
+		DevAutoTools:        cfg.DevAutoTools,
+		DevMockInternalURL:  cfg.DevMockInternalURL,
+		DevJiraURL:          cfg.DevJiraURL,
+		IdempotencyRequired: cfg.SetupTokenRequired,
+		Metrics:             metrics,
 	})
 
 	apisetup.RegisterRoutes(e, &apisetup.Dependencies{
 		Service: setupService,
+		AccessPolicy: apisetup.AccessPolicy{
+			TokenRequired: cfg.SetupTokenRequired,
+			Token:         setupToken,
+			AllowedCIDRs:  allowedCIDRs,
+		},
 	})
 
 	public.RegisterRoutes(e, &public.Dependencies{

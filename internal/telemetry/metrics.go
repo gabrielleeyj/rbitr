@@ -24,6 +24,9 @@ type Metrics struct {
 	RateLimitChecksTotal         *prometheus.CounterVec
 	RateLimitExceededTotal       *prometheus.CounterVec
 	RateLimitLatencyMs           prometheus.Histogram
+	SetupAttemptsTotal           *prometheus.CounterVec
+	SetupDurationMs              prometheus.Histogram
+	SetupState                   *prometheus.GaugeVec
 }
 
 func NewMetrics() *Metrics {
@@ -116,6 +119,19 @@ func NewMetrics() *Metrics {
 			Help:    "Rate limit evaluation latency in ms.",
 			Buckets: prometheus.DefBuckets,
 		}),
+		SetupAttemptsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "setup_attempts_total",
+			Help: "Total setup initialize attempts by result.",
+		}, []string{"result"}),
+		SetupDurationMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name:    "setup_duration_ms",
+			Help:    "Setup initialize duration in ms.",
+			Buckets: prometheus.DefBuckets,
+		}),
+		SetupState: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "setup_state",
+			Help: "Current setup state as a one-hot gauge by state label.",
+		}, []string{"state"}),
 	}
 	prometheus.MustRegister(
 		m.DecisionsTotal,
@@ -139,6 +155,9 @@ func NewMetrics() *Metrics {
 		m.RateLimitChecksTotal,
 		m.RateLimitExceededTotal,
 		m.RateLimitLatencyMs,
+		m.SetupAttemptsTotal,
+		m.SetupDurationMs,
+		m.SetupState,
 	)
 	return m
 }

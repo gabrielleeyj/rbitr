@@ -2,13 +2,14 @@
 set -euo pipefail
 
 GATEWAY_URL=${GATEWAY_URL:-"http://localhost:8080"}
-TENANT_KEY=${TENANT_KEY:-"tenant_demo_key"}
+TENANT_KEY=${TENANT_KEY:-"tenant_demo_key_2026!"}
 AGENT_ID=${AGENT_ID:-"agent_demo"}
 TENANT_ID=${TENANT_ID:-"t_demo"}
 TENANT_NAME=${TENANT_NAME:-"Demo Tenant"}
-ADMIN_KEY=${ADMIN_KEY:-"admin_demo_key"}
+ADMIN_KEY=${ADMIN_KEY:-"admin_demo_key_2026!"}
 TENANT_AUTH_MODE=${TENANT_AUTH_MODE:-"bearer"} # bearer|x-tenant-key
 AUTO_RECOVER_TENANT_KEY=${AUTO_RECOVER_TENANT_KEY:-"true"}
+SETUP_TOKEN=${SETUP_TOKEN:-${RBTR_SETUP_TOKEN:-}}
 
 if [ -f docker-compose.yml ] || [ -f compose.yaml ] || [ -f compose.yml ]; then
 	echo "Starting docker compose services..."
@@ -89,9 +90,19 @@ bootstrap_if_needed() {
 {"tenant_name":"$TENANT_NAME","tenant_id":"$TENANT_ID","admin_key":"$ADMIN_KEY","tenant_key":"$TENANT_KEY"}
 EOF
 )
-	init_resp=$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
-		-H "Content-Type: application/json" \
-		-d "$init_payload")
+	idempotency_key="setup-$(date +%s)-$$"
+	if [ -n "$SETUP_TOKEN" ]; then
+		init_resp=$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
+			-H "Content-Type: application/json" \
+			-H "Authorization: Bearer $SETUP_TOKEN" \
+			-H "Idempotency-Key: $idempotency_key" \
+			-d "$init_payload")
+	else
+		init_resp=$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
+			-H "Content-Type: application/json" \
+			-H "Idempotency-Key: $idempotency_key" \
+			-d "$init_payload")
+	fi
 	pretty "$init_resp"
 }
 

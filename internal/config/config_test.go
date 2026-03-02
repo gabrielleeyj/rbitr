@@ -21,6 +21,10 @@ func TestLoad(t *testing.T) {
 		expectedDevAutoTools   bool
 		expectedMockURL        string
 		expectedJiraURL        string
+		expectedSetupRequired  bool
+		expectedSetupToken     string
+		expectedSetupTokenFile string
+		expectedSetupCIDRs     []string
 	}{
 		{
 			name: "defaults",
@@ -37,6 +41,10 @@ func TestLoad(t *testing.T) {
 				"RBTR_DEV_AUTO_TOOLS":           "",
 				"RBTR_DEV_MOCK_INTERNAL_URL":    "",
 				"RBTR_DEV_JIRA_URL":             "",
+				"RBTR_SETUP_TOKEN_REQUIRED":     "",
+				"RBTR_SETUP_TOKEN":              "",
+				"RBTR_SETUP_TOKEN_FILE":         "",
+				"RBTR_SETUP_ALLOWED_CIDRS":      "",
 			},
 			expectedURL:            "postgres://postgres@localhost:2345/rbitr?sslmode=require",
 			expectedMaxOpen:        30,
@@ -50,6 +58,10 @@ func TestLoad(t *testing.T) {
 			expectedDevAutoTools:   false,
 			expectedMockURL:        "http://localhost:8090",
 			expectedJiraURL:        "http://localhost:8081",
+			expectedSetupRequired:  false,
+			expectedSetupToken:     "",
+			expectedSetupTokenFile: "",
+			expectedSetupCIDRs:     nil,
 		},
 		{
 			name: "custom values",
@@ -66,6 +78,10 @@ func TestLoad(t *testing.T) {
 				"RBTR_DEV_AUTO_TOOLS":           "true",
 				"RBTR_DEV_MOCK_INTERNAL_URL":    "http://mocktool:8090",
 				"RBTR_DEV_JIRA_URL":             "http://jira:8081",
+				"RBTR_SETUP_TOKEN_REQUIRED":     "true",
+				"RBTR_SETUP_TOKEN":              "setup-secret",
+				"RBTR_SETUP_TOKEN_FILE":         "/tmp/setup.token",
+				"RBTR_SETUP_ALLOWED_CIDRS":      "10.0.0.0/8,192.168.1.0/24",
 			},
 			expectedURL:            "postgres://custom",
 			expectedMaxOpen:        64,
@@ -79,6 +95,10 @@ func TestLoad(t *testing.T) {
 			expectedDevAutoTools:   true,
 			expectedMockURL:        "http://mocktool:8090",
 			expectedJiraURL:        "http://jira:8081",
+			expectedSetupRequired:  true,
+			expectedSetupToken:     "setup-secret",
+			expectedSetupTokenFile: "/tmp/setup.token",
+			expectedSetupCIDRs:     []string{"10.0.0.0/8", "192.168.1.0/24"},
 		},
 		{
 			name: "invalid limits fallback",
@@ -95,6 +115,10 @@ func TestLoad(t *testing.T) {
 				"RBTR_DEV_AUTO_TOOLS":           "invalid",
 				"RBTR_DEV_MOCK_INTERNAL_URL":    "",
 				"RBTR_DEV_JIRA_URL":             "",
+				"RBTR_SETUP_TOKEN_REQUIRED":     "invalid",
+				"RBTR_SETUP_TOKEN":              "",
+				"RBTR_SETUP_TOKEN_FILE":         "",
+				"RBTR_SETUP_ALLOWED_CIDRS":      " ,  ",
 			},
 			expectedURL:            "postgres://postgres@localhost:2345/rbitr?sslmode=require",
 			expectedMaxOpen:        30,
@@ -108,6 +132,10 @@ func TestLoad(t *testing.T) {
 			expectedDevAutoTools:   false,
 			expectedMockURL:        "http://localhost:8090",
 			expectedJiraURL:        "http://localhost:8081",
+			expectedSetupRequired:  false,
+			expectedSetupToken:     "",
+			expectedSetupTokenFile: "",
+			expectedSetupCIDRs:     nil,
 		},
 	}
 
@@ -152,6 +180,23 @@ func TestLoad(t *testing.T) {
 			}
 			if cfg.DevJiraURL != tc.expectedJiraURL {
 				t.Fatalf("expected DevJiraURL %q got %q", tc.expectedJiraURL, cfg.DevJiraURL)
+			}
+			if cfg.SetupTokenRequired != tc.expectedSetupRequired {
+				t.Fatalf("expected SetupTokenRequired %t got %t", tc.expectedSetupRequired, cfg.SetupTokenRequired)
+			}
+			if cfg.SetupToken != tc.expectedSetupToken {
+				t.Fatalf("expected SetupToken %q got %q", tc.expectedSetupToken, cfg.SetupToken)
+			}
+			if cfg.SetupTokenFile != tc.expectedSetupTokenFile {
+				t.Fatalf("expected SetupTokenFile %q got %q", tc.expectedSetupTokenFile, cfg.SetupTokenFile)
+			}
+			if len(cfg.SetupAllowedCIDRs) != len(tc.expectedSetupCIDRs) {
+				t.Fatalf("expected SetupAllowedCIDRs len %d got %d", len(tc.expectedSetupCIDRs), len(cfg.SetupAllowedCIDRs))
+			}
+			for i := range tc.expectedSetupCIDRs {
+				if cfg.SetupAllowedCIDRs[i] != tc.expectedSetupCIDRs[i] {
+					t.Fatalf("expected SetupAllowedCIDRs[%d] %q got %q", i, tc.expectedSetupCIDRs[i], cfg.SetupAllowedCIDRs[i])
+				}
 			}
 		})
 	}

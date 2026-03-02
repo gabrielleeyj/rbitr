@@ -15,6 +15,11 @@ export interface SetupStatus {
   schema_ready: boolean;
   admin_key_count: number;
   tenant_count: number;
+  setup_state: "not_started" | "in_progress" | "completed" | "failed";
+  last_error?: string;
+  initialize_allowed: boolean;
+  initialize_token_required: boolean;
+  idempotency_required: boolean;
 }
 
 export interface SetupInitializeRequest {
@@ -22,6 +27,11 @@ export interface SetupInitializeRequest {
   tenant_id?: string;
   admin_key?: string;
   tenant_key?: string;
+}
+
+export interface SetupInitializeOptions {
+  setup_token?: string;
+  idempotency_key?: string;
 }
 
 export interface SetupInitializeResponse {
@@ -390,12 +400,21 @@ export function getSetupStatus(baseUrl?: string): Promise<SetupStatus> {
 
 export function initializeSetup(
   payload: SetupInitializeRequest,
+  options?: SetupInitializeOptions,
   baseUrl?: string
 ): Promise<SetupInitializeResponse> {
+  const headers: Record<string, string> = {};
+  if (options?.setup_token) {
+    headers.Authorization = `Bearer ${options.setup_token}`;
+  }
+  if (options?.idempotency_key) {
+    headers["Idempotency-Key"] = options.idempotency_key;
+  }
   return requestPublic<SetupInitializeResponse>(
     "/setup/initialize",
     {
       method: "POST",
+      headers,
       body: JSON.stringify(payload),
     },
     baseUrl

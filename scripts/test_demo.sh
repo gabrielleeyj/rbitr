@@ -8,12 +8,13 @@ echo ""
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 TENANT_ID="${TENANT_ID:-t_demo}"
 TENANT_NAME="${TENANT_NAME:-Demo Tenant}"
-TENANT_KEY="${TENANT_KEY:-tenant_demo_key}"
-ADMIN_KEY="${ADMIN_KEY:-admin_demo_key}"
+TENANT_KEY="${TENANT_KEY:-tenant_demo_key_2026!}"
+ADMIN_KEY="${ADMIN_KEY:-admin_demo_key_2026!}"
 AGENT_ID="${AGENT_ID:-agent_demo}"
 TOOL_ID="${TOOL_ID:-mock_internal}"
 TENANT_AUTH_MODE="${TENANT_AUTH_MODE:-bearer}" # bearer|x-tenant-key
 AUTO_RECOVER_TENANT_KEY="${AUTO_RECOVER_TENANT_KEY:-true}"
+SETUP_TOKEN="${SETUP_TOKEN:-${RBTR_SETUP_TOKEN:-}}"
 
 pretty() {
 	if command -v jq >/dev/null 2>&1; then
@@ -87,9 +88,19 @@ bootstrap_if_needed() {
 {"tenant_name":"$TENANT_NAME","tenant_id":"$TENANT_ID","admin_key":"$ADMIN_KEY","tenant_key":"$TENANT_KEY"}
 EOF
 )"
-	init_response="$(curl -sS -X POST "$GATEWAY_URL/setup/initialize" \
-		-H "Content-Type: application/json" \
-		-d "$init_payload")"
+	local setup_args
+	setup_args=(
+		-sS
+		-X POST
+		"$GATEWAY_URL/setup/initialize"
+		-H "Content-Type: application/json"
+		-H "Idempotency-Key: setup-$(date +%s%N)"
+		-d "$init_payload"
+	)
+	if [ -n "$SETUP_TOKEN" ]; then
+		setup_args+=(-H "Authorization: Bearer $SETUP_TOKEN")
+	fi
+	init_response="$(curl "${setup_args[@]}")"
 	pretty "$init_response"
 }
 
