@@ -1,0 +1,340 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to release (example: v1.2.3)"
+        required: true
+        type: string
+      publish_images:
+        description: Push multi-arch container images to GHCR
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.vars.outputs.release_tag }}
+      release_ref: ${{ steps.vars.outputs.release_ref }}
+      release_sha: ${{ steps.vars.outputs.release_sha }}
+      publish_images: ${{ steps.vars.outputs.publish_images }}
+      is_stable: ${{ steps.vars.outputs.is_stable }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            publish_images="true"
+          else
+            tag="${{ github.event.inputs.tag }}"
+            publish_images="${{ github.event.inputs.publish_images }}"
+          fi
+
+          if [[ ! "${tag}" =~ ^v ]]; then
+            echo "release tag must start with 'v': ${tag}" >&2
+            exit 1
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "tag not found: ${tag}" >&2
+            exit 1
+          fi
+
+          sha="$(git rev-list -n 1 "refs/tags/${tag}")"
+          if [[ "${tag}" == *-* ]]; then
+            stable="false"
+          else
+            stable="true"
+          fi
+
+          echo "release_tag=${tag}" >>"${GITHUB_OUTPUT}"
+          echo "release_ref=refs/tags/${tag}" >>"${GITHUB_OUTPUT}"
+          echo "release_sha=${sha}" >>"${GITHUB_OUTPUT}"
+          echo "publish_images=${publish_images}" >>"${GITHUB_OUTPUT}"
+          echo "is_stable=${stable}" >>"${GITHUB_OUTPUT}"
+
+  quality_gates:
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9.0.0
+        with:
+          version: "latest"
+          args: ./... --timeout=5m
+
+      - name: Run Go Test
+        run: go test ./... -v -cover
+
+      - name: Run Setup Smoke Gate
+        run: ./scripts/test_setup_smoke.sh
+
+      - name: Run Marketplace Onboarding Harness
+        env:
+          COMPOSE_PROJECT_NAME: rbitr-release-${{ github.run_id }}-${{ github.run_attempt }}
+          REPORT_FILE: artifacts/marketplace_onboarding_report.json
+          SETUP_TOKEN: setup_release_token_2026
+        run: ./scripts/verify_marketplace_onboarding.sh
+
+      - name: Upload Marketplace Onboarding Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-onboarding-report
+          path: artifacts/marketplace_onboarding_report.json
+          if-no-files-found: error
+
+  build_binaries:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - quality_gates
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build Release Binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.prepare.outputs.release_tag }}"
+          mkdir -p dist/bin dist/packages
+
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            IFS=/ read -r goos goarch <<<"${target}"
+            ext=""
+            if [ "${goos}" = "windows" ]; then
+              ext=".exe"
+            fi
+
+            gateway_bin="gateway_${goos}_${goarch}${ext}"
+            mocktool_bin="mocktool_${goos}_${goarch}${ext}"
+
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "-s -w" -o "dist/bin/${gateway_bin}" ./cmd/gateway
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "-s -w" -o "dist/bin/${mocktool_bin}" ./cmd/mocktool
+
+            package_dir="dist/rbitr_${tag}_${goos}_${goarch}"
+            mkdir -p "${package_dir}"
+            cp "dist/bin/${gateway_bin}" "${package_dir}/gateway${ext}"
+            cp "dist/bin/${mocktool_bin}" "${package_dir}/mocktool${ext}"
+            cp README.md "${package_dir}/README.md"
+
+            if [ "${goos}" = "windows" ]; then
+              (cd dist && zip -q -r "packages/rbitr_${tag}_${goos}_${goarch}.zip" "rbitr_${tag}_${goos}_${goarch}")
+            else
+              tar -C dist -czf "dist/packages/rbitr_${tag}_${goos}_${goarch}.tar.gz" "rbitr_${tag}_${goos}_${goarch}"
+            fi
+            rm -rf "${package_dir}"
+          done
+
+          sha256sum dist/packages/* >dist/packages/SHA256SUMS
+
+      - name: Upload Release Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: dist/packages
+          if-no-files-found: error
+
+  docker_images:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - quality_gates
+    if: ${{ needs.prepare.outputs.publish_images == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      gateway_digest: ${{ steps.build_gateway.outputs.digest }}
+      mocktool_digest: ${{ steps.build_mocktool.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_ref }}
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Metadata (gateway)
+        id: meta_gateway
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/gateway
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.release_tag }}
+            type=sha,format=short,prefix=${{ needs.prepare.outputs.release_tag }}-
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_stable == 'true' }}
+
+      - name: Docker Metadata (mocktool)
+        id: meta_mocktool
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/mocktool
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.release_tag }}
+            type=sha,format=short,prefix=${{ needs.prepare.outputs.release_tag }}-
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_stable == 'true' }}
+
+      - name: Build and Push Gateway Image
+        id: build_gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_gateway.outputs.tags }}
+          labels: ${{ steps.meta_gateway.outputs.labels }}
+          sbom: true
+          provenance: true
+
+      - name: Build and Push Mocktool Image
+        id: build_mocktool
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.mocktool
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_mocktool.outputs.tags }}
+          labels: ${{ steps.meta_mocktool.outputs.labels }}
+          sbom: true
+          provenance: true
+
+      - name: Write Image Metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/images
+          cat >dist/images/images.json <<EOF
+          {
+            "release_tag": "${{ needs.prepare.outputs.release_tag }}",
+            "gateway_image": "ghcr.io/${{ github.repository }}/gateway:${{ needs.prepare.outputs.release_tag }}",
+            "gateway_digest": "${{ steps.build_gateway.outputs.digest }}",
+            "mocktool_image": "ghcr.io/${{ github.repository }}/mocktool:${{ needs.prepare.outputs.release_tag }}",
+            "mocktool_digest": "${{ steps.build_mocktool.outputs.digest }}"
+          }
+          EOF
+
+      - name: Upload Image Metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-image-metadata
+          path: dist/images/images.json
+          if-no-files-found: error
+
+  publish_release:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - quality_gates
+      - build_binaries
+      - docker_images
+    if: ${{ always() && needs.prepare.result == 'success' && needs.quality_gates.result == 'success' && needs.build_binaries.result == 'success' && (needs.docker_images.result == 'success' || needs.docker_images.result == 'skipped') }}
+    permissions:
+      contents: write
+    steps:
+      - name: Download Release Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: release-assets/packages
+
+      - name: Download Marketplace Onboarding Report
+        uses: actions/download-artifact@v4
+        with:
+          name: marketplace-onboarding-report
+          path: release-assets/reports
+
+      - name: Download Image Metadata
+        if: ${{ needs.prepare.outputs.publish_images == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: release-image-metadata
+          path: release-assets/images
+
+      - name: Compose Release Notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Automated Release"
+            echo
+            echo "- Tag: \`${{ needs.prepare.outputs.release_tag }}\`"
+            echo "- Commit: \`${{ needs.prepare.outputs.release_sha }}\`"
+            echo "- Quality gates: lint + tests + setup smoke + marketplace onboarding harness"
+            echo "- Release artifacts: platform binaries + SHA256SUMS + onboarding report"
+            if [ "${{ needs.prepare.outputs.publish_images }}" = "true" ]; then
+              echo "- Gateway image: \`ghcr.io/${{ github.repository }}/gateway:${{ needs.prepare.outputs.release_tag }}\`"
+              echo "- Gateway digest: \`${{ needs.docker_images.outputs.gateway_digest }}\`"
+              echo "- Mocktool image: \`ghcr.io/${{ github.repository }}/mocktool:${{ needs.prepare.outputs.release_tag }}\`"
+              echo "- Mocktool digest: \`${{ needs.docker_images.outputs.mocktool_digest }}\`"
+            else
+              echo "- Container image publish: skipped (workflow input)"
+            fi
+          } > RELEASE_BODY.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          target_commitish: ${{ needs.prepare.outputs.release_sha }}
+          body_path: RELEASE_BODY.md
+          fail_on_unmatched_files: false
+          files: |
+            release-assets/packages/*
+            release-assets/reports/marketplace_onboarding_report.json
+            release-assets/images/images.json

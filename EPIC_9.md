@@ -17,6 +17,9 @@ Date scoped: 2026-02-28
   - Local script: `scripts/verify_marketplace_onboarding.sh`
   - Manual CI workflow + artifact upload: `.github/workflows/marketplace-onboarding.yml`
   - Machine-readable report artifact: `artifacts/marketplace_onboarding_report.json`
+- Release gate depth extension:
+  - Dedicated release workflow: `.github/workflows/release.yml`
+  - Enforces lint/tests/setup smoke/marketplace onboarding before publishing release artifacts.
 
 ## Current Baseline (Implemented)
 

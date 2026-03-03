@@ -107,6 +107,31 @@ GitHub Actions manual run is available via workflow:
 - `.github/workflows/marketplace-onboarding.yml`
 - uploaded artifact name: `marketplace-onboarding-report`
 
+### Release Pipeline
+
+Release CI/CD is defined in:
+
+- `.github/workflows/release.yml`
+
+Release triggers:
+
+- push tag `v*` (for example `v1.2.3`)
+- manual `workflow_dispatch` with an existing release tag
+
+Release gates:
+
+- `golangci-lint`
+- `go test ./...`
+- setup smoke gate (`scripts/test_setup_smoke.sh`)
+- marketplace onboarding harness (`scripts/verify_marketplace_onboarding.sh`)
+
+Release outputs:
+
+- platform binary archives + `SHA256SUMS`
+- onboarding verification report artifact
+- GHCR gateway/mocktool multi-arch images (optional for manual runs)
+- published GitHub Release with attached artifacts
+
 ### Database runtime defaults
 
 - If `DATABASE_URL` is not set, the gateway defaults to:
