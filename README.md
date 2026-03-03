@@ -77,6 +77,36 @@ Dev note: when `RBTR_DEV_AUTO_TOOLS=true`, setup auto-seeds per-tenant dev tool 
 - `mock_internal` -> `RBTR_DEV_MOCK_INTERNAL_URL` (default `http://localhost:8090`)
 - `jira` -> `RBTR_DEV_JIRA_URL` (default `http://localhost:8081`)
 
+### Marketplace Onboarding Verification Harness
+
+Use the onboarding-aware harness to validate:
+
+- fresh install -> setup initialize -> operational admin/tenant API calls
+- idempotency replay semantics for setup initialize
+- upgrade/redeploy preserving bootstrap state and keys
+
+Run locally:
+
+```bash
+./scripts/verify_marketplace_onboarding.sh
+```
+
+Report artifact output (machine-readable JSON):
+
+- default: `artifacts/marketplace_onboarding_report.json`
+- override with `REPORT_FILE=/path/to/report.json`
+- optional compose migration URL override: `COMPOSE_DATABASE_URL=postgres://...`
+
+The script enforces token-required setup mode during verification (`RBTR_SETUP_TOKEN_REQUIRED=true`) and checks:
+
+- `Authorization: Bearer <setup_token>`
+- `Idempotency-Key` requirement and replay behavior
+
+GitHub Actions manual run is available via workflow:
+
+- `.github/workflows/marketplace-onboarding.yml`
+- uploaded artifact name: `marketplace-onboarding-report`
+
 ### Database runtime defaults
 
 - If `DATABASE_URL` is not set, the gateway defaults to:

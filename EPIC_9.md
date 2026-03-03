@@ -10,6 +10,14 @@ This epic closes those gaps so a fresh container deployment can be brought onlin
 
 Date scoped: 2026-02-28
 
+## Progress Update (2026-03-03)
+
+- P0-6 (initial depth): script-driven setup smoke gate is in CI via `scripts/test_setup_smoke.sh` in `.github/workflows/go.yml`.
+- P0-7: onboarding-aware install/upgrade verification harness added:
+  - Local script: `scripts/verify_marketplace_onboarding.sh`
+  - Manual CI workflow + artifact upload: `.github/workflows/marketplace-onboarding.yml`
+  - Machine-readable report artifact: `artifacts/marketplace_onboarding_report.json`
+
 ## Current Baseline (Implemented)
 
 - Setup API:

@@ -40,6 +40,7 @@ Thumbs.db
 
 # Temp files
 *.sw*
+artifacts/
 
 # Applications
 *.app
