@@ -569,6 +569,20 @@ func (s *Store) InsertADR(ctx context.Context, record *models.ActionDecisionReco
 		return errors.New("action decision record required")
 	}
 
+	// Deduplicate ADR inserts for approval executions: if an ADR already
+	// exists for the same approval_request_id, skip the insert to prevent
+	// duplicate records on retry within the execution retry window.
+	if record.ApprovalRequestID != "" {
+		var exists bool
+		err := s.db.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM rbitr.action_decisions WHERE tenant_id = $1 AND approval_request_id = $2)`,
+			record.TenantID, record.ApprovalRequestID,
+		).Scan(&exists)
+		if err == nil && exists {
+			return nil
+		}
+	}
+
 	reasonsJSON, err := json.Marshal(record.Reasons)
 	if err != nil {
 		return err
@@ -876,7 +890,7 @@ func (s *Store) ClaimApprovalExecution(ctx context.Context, tenantID, approvalRe
 func (s *Store) MarkApprovalExecuted(ctx context.Context, tenantID, approvalRequestID, requestID, decisionID string, executedAt time.Time) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE rbitr.approval_requests
 		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL
-		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'EXECUTING'`,
+		WHERE tenant_id = $4 AND approval_request_id = $5 AND status = 'EXECUTING' AND executed_at IS NULL`,
 		executedAt, requestID, decisionID, tenantID, approvalRequestID)
 	if err != nil {
 		return err

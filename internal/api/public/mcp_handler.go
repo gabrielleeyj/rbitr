@@ -1053,6 +1053,19 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 					return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to refresh approval state")), nil
 				}
 				if latest.Status == string(decisionExecuting) {
+					if latest.ExecutedAt != nil {
+						if d.Metrics != nil {
+							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+						}
+						return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+							Code:    mcp.ErrorDeniedByPolicy,
+							Message: "approval already executed",
+							Data: mustMarshalJSON(map[string]any{
+								"reason":              "approval_already_executed",
+								"approval_request_id": latest.ApprovalRequestID,
+							}),
+						}), nil
+					}
 					if !approvalRetryAllowed(&latest, now) {
 						if d.Metrics != nil {
 							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
@@ -1093,6 +1106,19 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			}
 		}
 	case string(decisionExecuting):
+		if approval.ExecutedAt != nil {
+			if d.Metrics != nil {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+			}
+			return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
+				Code:    mcp.ErrorDeniedByPolicy,
+				Message: "approval already executed",
+				Data: mustMarshalJSON(map[string]any{
+					"reason":              "approval_already_executed",
+					"approval_request_id": approval.ApprovalRequestID,
+				}),
+			}), nil
+		}
 		if !approvalRetryAllowed(&approval, now) {
 			if d.Metrics != nil {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()

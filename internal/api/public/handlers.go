@@ -77,7 +77,7 @@ type decisionStatus string
 const (
 	decisionDeny                 decisionStatus = "DENY"
 	decisionAllow                decisionStatus = "ALLOW"
-	decisionExecuting            decisionStatus = "EXEUCTING"
+	decisionExecuting            decisionStatus = "EXECUTING"
 	decisionExecuted             decisionStatus = "EXECUTED"
 	decisionExpired              decisionStatus = "EXPIRED"
 	decisionUpstreamTimeout      decisionStatus = "UPSTREAM_TIMEOUT"
@@ -652,6 +652,12 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params *approvedT
 
 				switch latest.Status {
 				case string(decisionExecuting):
+					if latest.ExecutedAt != nil {
+						if d.Metrics != nil {
+							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+						}
+						return approvalError(c, http.StatusConflict, "approval_already_executed")
+					}
 					if !approvalRetryAllowed(&latest, now) {
 						if d.Metrics != nil {
 							d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
@@ -682,6 +688,12 @@ func (d *Dependencies) handleApprovedToolCall(c *echo.Context, params *approvedT
 			}
 		}
 	case string(decisionExecuting):
+		if approval.ExecutedAt != nil {
+			if d.Metrics != nil {
+				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("already_executed").Inc()
+			}
+			return approvalError(c, http.StatusConflict, "approval_already_executed")
+		}
 		if !approvalRetryAllowed(&approval, now) {
 			if d.Metrics != nil {
 				d.Metrics.ApprovalsExecuteTotal.WithLabelValues("retry_window_exceeded").Inc()
