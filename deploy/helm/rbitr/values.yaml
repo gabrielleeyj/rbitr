@@ -1,0 +1,116 @@
+## rbitr Helm chart default values
+
+nameOverride: ""
+fullnameOverride: ""
+
+## ── Gateway ────────────────────────────────────────────────────────
+gateway:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/gabrielleeyj/rbitr/gateway
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  env: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+## ── UI ─────────────────────────────────────────────────────────────
+ui:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/gabrielleeyj/rbitr/ui
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+  env: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+## ── Bundled PostgreSQL (Bitnami subchart) ──────────────────────────
+## Enable for quick-start / evaluation only.
+## Production deployments should use externalDatabase with RDS.
+postgresql:
+  enabled: false
+  auth:
+    username: rbitr
+    password: rbitr
+    database: rbitr
+
+## ── External Database ──────────────────────────────────────────────
+externalDatabase:
+  host: ""
+  port: 5432
+  database: rbitr
+  user: rbitr
+  password: ""
+  sslmode: require
+  ## Use an existing K8s secret instead of discrete values above.
+  existingSecret: ""
+  existingSecretKey: "DATABASE_URL"
+
+## ── Setup / Bootstrap ──────────────────────────────────────────────
+setup:
+  tokenRequired: true
+  token: ""            # auto-generated if empty
+  allowedCIDRs: []
+
+## ── Secrets ────────────────────────────────────────────────────────
+secrets:
+  tenantKeyHmac: ""    # auto-generated if empty
+  adminKeyHmac: ""     # auto-generated if empty
+
+## ── Feature Flags ──────────────────────────────────────────────────
+features:
+  rateLimiting: false
+  argConstraints: false
+  shadowMode: false
+
+## ── Ingress (AWS ALB) ──────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/idle-timeout: "300"
+  hosts:
+    - host: ""
+  tls: []
+
+## ── Service Account ────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}  # for IRSA
+
+## ── Horizontal Pod Autoscaler ──────────────────────────────────────
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+## ── Migration ──────────────────────────────────────────────────────
+migration:
+  enabled: true
+  image: golang:1.25.6
+  gooseVersion: v3.25.0
+
+## ── Image Pull Secrets ─────────────────────────────────────────────
+imagePullSecrets: []

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rbitr.fullname" . }}-config
+  labels:
+    {{- include "rbitr.labels" . | nindent 4 }}
+data:
+  RBTR_SETUP_TOKEN_REQUIRED: {{ .Values.setup.tokenRequired | quote }}
+  {{- if .Values.setup.allowedCIDRs }}
+  RBTR_SETUP_ALLOWED_CIDRS: {{ join "," .Values.setup.allowedCIDRs | quote }}
+  {{- end }}
+  RBTR_FEATURE_RATE_LIMITING: {{ .Values.features.rateLimiting | quote }}
+  RBTR_FEATURE_ARG_CONSTRAINTS: {{ .Values.features.argConstraints | quote }}
+  RBTR_FEATURE_SHADOW_MODE: {{ .Values.features.shadowMode | quote }}

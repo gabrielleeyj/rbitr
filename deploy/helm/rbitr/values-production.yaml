@@ -1,0 +1,72 @@
+## Production overrides — use with:
+##   helm install rbitr ./deploy/helm/rbitr -f deploy/helm/rbitr/values-production.yaml
+
+## Scale gateway for production traffic
+gateway:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+## Keep UI lightweight
+ui:
+  replicaCount: 2
+
+## Disable bundled PostgreSQL — use external RDS
+postgresql:
+  enabled: false
+
+## External RDS connection (fill in or use existingSecret)
+externalDatabase:
+  host: ""        # e.g. rbitr.abc123.us-east-1.rds.amazonaws.com
+  port: 5432
+  database: rbitr
+  user: rbitr
+  password: ""
+  sslmode: require
+  existingSecret: ""
+  existingSecretKey: "DATABASE_URL"
+
+## Production secrets (provide or let Helm auto-generate)
+secrets:
+  tenantKeyHmac: ""
+  adminKeyHmac: ""
+
+## Enable rate limiting in production
+features:
+  rateLimiting: true
+
+## Enable HPA
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+## IRSA for AWS service access (Marketplace metering, etc.)
+serviceAccount:
+  create: true
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/rbitr-metering
+
+## Production ingress with TLS
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/idle-timeout: "300"
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+  hosts:
+    - host: ""  # set to your domain
+  tls: []

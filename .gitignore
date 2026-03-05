@@ -70,6 +70,13 @@ admin-api
 !.github/workflows/
 !.github/workflows/*.yml
 !.github/workflows/*.yaml
+!deploy/
+!deploy/**/*.yaml
+!deploy/**/*.yml
+!deploy/**/Chart.lock
+
+# Helm downloaded chart dependencies (rebuilt via helm dependency build)
+deploy/helm/*/charts/
 
 # Test coverage related files
 junit.xml

@@ -1,0 +1,22 @@
+apiVersion: v2
+name: rbitr
+description: AI Agent Governance Gateway — policy enforcement, approval workflows, and audit compliance
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - governance
+  - gateway
+  - policy
+  - audit
+home: https://github.com/gabrielleeyj/rbitr
+sources:
+  - https://github.com/gabrielleeyj/rbitr
+maintainers:
+  - name: gabrielleeyj
+dependencies:
+  - name: postgresql
+    version: "16.4.7"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

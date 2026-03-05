@@ -1,0 +1,42 @@
+rbitr has been deployed!
+
+{{- if .Values.ingress.enabled }}
+
+Access the application via your ALB Ingress:
+  {{- range .Values.ingress.hosts }}
+  {{- if .host }}
+  https://{{ .host }}
+  {{- else }}
+  Check your ALB DNS name:
+    kubectl get ingress {{ include "rbitr.fullname" $ }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+  {{- end }}
+  {{- end }}
+{{- else }}
+
+Port-forward to access locally:
+  # Gateway API
+  kubectl port-forward svc/{{ include "rbitr.fullname" . }}-gateway 8080:8080
+  {{- if .Values.ui.enabled }}
+  # UI
+  kubectl port-forward svc/{{ include "rbitr.fullname" . }}-ui 5173:5173
+  {{- end }}
+{{- end }}
+
+{{- if .Values.setup.tokenRequired }}
+
+Bootstrap the instance:
+  1. Retrieve the setup token:
+     kubectl get secret {{ include "rbitr.secretName" . }} -o jsonpath='{.data.RBTR_SETUP_TOKEN}' | base64 -d
+
+  2. Initialize via the setup API:
+     curl -X POST https://<host>/setup/initialize \
+       -H "Authorization: Bearer <setup-token>" \
+       -H "Content-Type: application/json" \
+       -H "Idempotency-Key: $(uuidgen)" \
+       -d '{"admin_email":"admin@example.com"}'
+{{- end }}
+
+Health checks:
+  curl https://<host>/healthz   # liveness
+  curl https://<host>/readyz    # readiness (includes DB check)
+  curl https://<host>/metrics   # Prometheus metrics

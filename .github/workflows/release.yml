@@ -189,6 +189,7 @@ jobs:
     outputs:
       gateway_digest: ${{ steps.build_gateway.outputs.digest }}
       mocktool_digest: ${{ steps.build_mocktool.outputs.digest }}
+      ui_digest: ${{ steps.build_ui.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -254,6 +255,29 @@ jobs:
           sbom: true
           provenance: true
 
+      - name: Docker Metadata (ui)
+        id: meta_ui
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/ui
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.release_tag }}
+            type=sha,format=short,prefix=${{ needs.prepare.outputs.release_tag }}-
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_stable == 'true' }}
+
+      - name: Build and Push UI Image
+        id: build_ui
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ui
+          file: ui/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_ui.outputs.tags }}
+          labels: ${{ steps.meta_ui.outputs.labels }}
+          sbom: true
+          provenance: true
+
       - name: Write Image Metadata
         shell: bash
         run: |
@@ -265,7 +289,9 @@ jobs:
             "gateway_image": "ghcr.io/${{ github.repository }}/gateway:${{ needs.prepare.outputs.release_tag }}",
             "gateway_digest": "${{ steps.build_gateway.outputs.digest }}",
             "mocktool_image": "ghcr.io/${{ github.repository }}/mocktool:${{ needs.prepare.outputs.release_tag }}",
-            "mocktool_digest": "${{ steps.build_mocktool.outputs.digest }}"
+            "mocktool_digest": "${{ steps.build_mocktool.outputs.digest }}",
+            "ui_image": "ghcr.io/${{ github.repository }}/ui:${{ needs.prepare.outputs.release_tag }}",
+            "ui_digest": "${{ steps.build_ui.outputs.digest }}"
           }
           EOF
 
@@ -322,6 +348,8 @@ jobs:
               echo "- Gateway digest: \`${{ needs.docker_images.outputs.gateway_digest }}\`"
               echo "- Mocktool image: \`ghcr.io/${{ github.repository }}/mocktool:${{ needs.prepare.outputs.release_tag }}\`"
               echo "- Mocktool digest: \`${{ needs.docker_images.outputs.mocktool_digest }}\`"
+              echo "- UI image: \`ghcr.io/${{ github.repository }}/ui:${{ needs.prepare.outputs.release_tag }}\`"
+              echo "- UI digest: \`${{ needs.docker_images.outputs.ui_digest }}\`"
             else
               echo "- Container image publish: skipped (workflow input)"
             fi

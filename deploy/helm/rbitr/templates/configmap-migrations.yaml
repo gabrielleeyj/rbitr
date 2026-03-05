@@ -1,0 +1,1395 @@
+{{- if .Values.migration.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rbitr.fullname" . }}-migrations
+  labels:
+    {{- include "rbitr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  00001_init.sql: |
+    -- +goose Up
+    CREATE SCHEMA IF NOT EXISTS rbitr;
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+    CREATE TABLE IF NOT EXISTS rbitr.tenants (
+        tenant_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.tenant_keys (
+        tenant_id TEXT PRIMARY KEY REFERENCES rbitr.tenants(tenant_id),
+        key_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.admin_keys (
+        admin_key_id TEXT PRIMARY KEY,
+        key_hash TEXT NOT NULL,
+        scopes TEXT[] NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.tools (
+        tool_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        base_url TEXT NOT NULL,
+        auth_type TEXT NOT NULL,
+        auth_value TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (tool_id, tenant_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.policies (
+        policy_id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        rego_module TEXT NOT NULL,
+        policy_version TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.action_decisions (
+        decision_id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        agent_id TEXT NOT NULL,
+        tool_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        action_risk TEXT NOT NULL,
+        action_summary TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        rule_id TEXT NOT NULL,
+        policy_version TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        response_hash TEXT,
+        approval_request_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.approval_requests (
+        approval_request_id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        agent_id TEXT NOT NULL,
+        tool_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        request_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    -- +goose Down
+    DROP TABLE IF EXISTS rbitr.system_settings;
+    DROP TABLE IF EXISTS rbitr.approval_requests;
+    DROP TABLE IF EXISTS rbitr.action_decisions;
+    DROP TABLE IF EXISTS rbitr.policies;
+    DROP TABLE IF EXISTS rbitr.tools;
+    DROP TABLE IF EXISTS rbitr.admin_keys;
+    DROP TABLE IF EXISTS rbitr.tenant_keys;
+    DROP TABLE IF EXISTS rbitr.tenants;
+    DROP SCHEMA IF EXISTS rbitr;
+
+  00002_update_policy_rego_v1.sql: |
+    -- +goose Up
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {}
+    }
+
+    default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+        input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+    }
+    $$
+    WHERE policy_id = 'policy_demo' AND tenant_id = 't_demo';
+
+    -- +goose Down
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {}
+    }
+
+    default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+        input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+    }
+    $$
+    WHERE policy_id = 'policy_demo' AND tenant_id = 't_demo';
+
+  00003_add_action_risk_overrides.sql: |
+    -- +goose Up
+    CREATE TABLE IF NOT EXISTS rbitr.action_risk_overrides (
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        action_type TEXT NOT NULL,
+        action_risk TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (tenant_id, action_type)
+    );
+
+    -- +goose Down
+    DROP TABLE IF EXISTS rbitr.action_risk_overrides;
+
+  00004_add_admin_write_lock.sql: |
+    -- +goose Up
+    INSERT INTO rbitr.system_settings (key, value, updated_at)
+    VALUES ('admin_write_lock', 'false', now())
+    ON CONFLICT (key) DO NOTHING;
+
+    -- +goose Down
+    DELETE FROM rbitr.system_settings WHERE key = 'admin_write_lock';
+
+  00005_decision_v2.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.action_decisions
+        ADD COLUMN decision_version TEXT NOT NULL DEFAULT 'v1',
+        ADD COLUMN decision_risk TEXT NOT NULL DEFAULT 'UNKNOWN',
+        ADD COLUMN rule_priority INT NOT NULL DEFAULT 0,
+        ADD COLUMN reasons JSONB NOT NULL DEFAULT '[]',
+        ADD COLUMN constraints JSONB NOT NULL DEFAULT '{}',
+        ADD COLUMN tags TEXT[] NOT NULL DEFAULT '{}';
+
+    UPDATE rbitr.action_decisions
+    SET decision_risk = action_risk,
+        reasons = jsonb_build_array(jsonb_build_object('code', 'LEGACY', 'message', reason)),
+        constraints = '{}'::jsonb
+    WHERE decision_risk = 'UNKNOWN';
+
+    -- +goose Down
+    ALTER TABLE rbitr.action_decisions
+        DROP COLUMN IF EXISTS decision_version,
+        DROP COLUMN IF EXISTS decision_risk,
+        DROP COLUMN IF EXISTS rule_priority,
+        DROP COLUMN IF EXISTS reasons,
+        DROP COLUMN IF EXISTS constraints,
+        DROP COLUMN IF EXISTS tags;
+
+  00006_policy_lifecycle.sql: |
+    -- +goose Up
+    CREATE TABLE IF NOT EXISTS rbitr.policy_versions (
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        policy_version TEXT NOT NULL,
+        rego_module TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        created_by TEXT NULL,
+        notes TEXT NULL,
+        PRIMARY KEY (tenant_id, policy_version)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_policy_versions_tenant_time
+    ON rbitr.policy_versions (tenant_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS rbitr.tenant_config (
+        tenant_id TEXT PRIMARY KEY REFERENCES rbitr.tenants(tenant_id),
+        active_policy_version TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.admin_audit_events (
+        audit_event_id TEXT PRIMARY KEY,
+        tenant_id TEXT NULL,
+        actor_type TEXT NOT NULL DEFAULT 'admin_key',
+        actor_id TEXT NULL,
+        actor_display TEXT NULL,
+        action TEXT NOT NULL,
+        resource_type TEXT NOT NULL,
+        resource_id TEXT NULL,
+        before JSONB NULL,
+        after JSONB NULL,
+        request_id TEXT NULL,
+        ip INET NULL,
+        user_agent TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT action_format_chk CHECK (action ~ '^[A-Z0-9]+(\\.[A-Z0-9_]+)+$'),
+        CONSTRAINT resource_type_chk CHECK (resource_type ~ '^[A-Z0-9]+(\\.[A-Z0-9_]+)*$')
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_events_tenant_time
+    ON rbitr.admin_audit_events (tenant_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_events_time
+    ON rbitr.admin_audit_events (created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_events_action
+    ON rbitr.admin_audit_events (action);
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_events_resource
+    ON rbitr.admin_audit_events (resource_type, resource_id);
+
+    INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, notes)
+    SELECT tenant_id, policy_version, rego_module, updated_at, 'migrated from rbitr.policies'
+    FROM rbitr.policies
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at)
+    SELECT tenant_id, policy_version, updated_at, updated_at
+    FROM rbitr.policies
+    ON CONFLICT DO NOTHING;
+
+    -- +goose Down
+    DROP TABLE IF EXISTS rbitr.admin_audit_events;
+    DROP TABLE IF EXISTS rbitr.tenant_config;
+    DROP TABLE IF EXISTS rbitr.policy_versions;
+
+  00007_relax_audit_constraints.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.admin_audit_events
+        DROP CONSTRAINT IF EXISTS action_format_chk,
+        DROP CONSTRAINT IF EXISTS resource_type_chk;
+
+    ALTER TABLE rbitr.admin_audit_events
+        ADD CONSTRAINT action_format_chk CHECK (action ~ '^[A-Z0-9_]+(\\.[A-Z0-9_]+)*$'),
+        ADD CONSTRAINT resource_type_chk CHECK (resource_type ~ '^[A-Z0-9_]+(\\.[A-Z0-9_]+)*$');
+
+    -- +goose Down
+    ALTER TABLE rbitr.admin_audit_events
+        DROP CONSTRAINT IF EXISTS action_format_chk,
+        DROP CONSTRAINT IF EXISTS resource_type_chk;
+
+    ALTER TABLE rbitr.admin_audit_events
+        ADD CONSTRAINT action_format_chk CHECK (action ~ '^[A-Z0-9]+(\\.[A-Z0-9_]+)+$'),
+        ADD CONSTRAINT resource_type_chk CHECK (resource_type ~ '^[A-Z0-9]+(\\.[A-Z0-9_]+)*$');
+
+  00008_drop_audit_constraints.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.admin_audit_events
+        DROP CONSTRAINT IF EXISTS action_format_chk,
+        DROP CONSTRAINT IF EXISTS resource_type_chk;
+
+    -- +goose Down
+    ALTER TABLE rbitr.admin_audit_events
+        ADD CONSTRAINT action_format_chk CHECK (action ~ '^[A-Z0-9_]+(\\.[A-Z0-9_]+)*$'),
+        ADD CONSTRAINT resource_type_chk CHECK (resource_type ~ '^[A-Z0-9_]+(\\.[A-Z0-9_]+)*$');
+
+  00009_approval_requests_epic3.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.approval_requests
+        ADD COLUMN IF NOT EXISTS approval_token_hash TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS decided_by TEXT NULL,
+        ADD COLUMN IF NOT EXISTS decision_comment TEXT NULL,
+        ADD COLUMN IF NOT EXISTS executed_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS executed_request_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS executed_decision_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS request_decision_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS action_summary TEXT NULL,
+        ADD COLUMN IF NOT EXISTS risk TEXT NULL,
+        ADD COLUMN IF NOT EXISTS rule_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS reasons JSONB NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_status_time
+        ON rbitr.approval_requests (tenant_id, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_expires
+        ON rbitr.approval_requests (tenant_id, expires_at);
+
+    -- +goose Down
+    DROP INDEX IF EXISTS idx_approval_requests_tenant_expires;
+    DROP INDEX IF EXISTS idx_approval_requests_tenant_status_time;
+
+    ALTER TABLE rbitr.approval_requests
+        DROP COLUMN IF EXISTS approval_token_hash,
+        DROP COLUMN IF EXISTS decided_at,
+        DROP COLUMN IF EXISTS decided_by,
+        DROP COLUMN IF EXISTS decision_comment,
+        DROP COLUMN IF EXISTS executed_at,
+        DROP COLUMN IF EXISTS executed_request_id,
+        DROP COLUMN IF EXISTS executed_decision_id,
+        DROP COLUMN IF EXISTS request_decision_id,
+        DROP COLUMN IF EXISTS action_summary,
+        DROP COLUMN IF EXISTS risk,
+        DROP COLUMN IF EXISTS rule_id,
+        DROP COLUMN IF EXISTS reasons;
+
+  00010_add_approval_policy_version.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.approval_requests
+        ADD COLUMN IF NOT EXISTS policy_version TEXT NULL;
+
+    -- +goose Down
+    ALTER TABLE rbitr.approval_requests
+        DROP COLUMN IF EXISTS policy_version;
+
+  00011_default_approval_ttl.sql: |
+    -- +goose Up
+    INSERT INTO rbitr.system_settings (key, value, updated_at)
+    VALUES ('default_approval_ttl_seconds', '900', NOW())
+    ON CONFLICT (key) DO NOTHING;
+
+    -- +goose Down
+    DELETE FROM rbitr.system_settings WHERE key = 'default_approval_ttl_seconds';
+
+  00012_notifications.sql: |
+    -- +goose Up
+    CREATE TABLE IF NOT EXISTS rbitr.notification_config (
+      tenant_id                     TEXT PRIMARY KEY REFERENCES rbitr.tenants(tenant_id) ON DELETE CASCADE,
+      slack_webhook_enabled          BOOLEAN NOT NULL DEFAULT FALSE,
+      slack_webhook_secret_ref       TEXT NULL,
+      slack_webhook_default_channel  TEXT NULL,
+      slack_bot_enabled              BOOLEAN NOT NULL DEFAULT FALSE,
+      slack_bot_secret_ref           TEXT NULL,
+      slack_bot_default_channel      TEXT NULL,
+      slack_bot_signing_secret_ref   TEXT NULL,
+      email_enabled                  BOOLEAN NOT NULL DEFAULT FALSE,
+      email_provider                 TEXT NULL,
+      email_secret_ref               TEXT NULL,
+      email_from                     TEXT NULL,
+      email_default_mailing_list_id  TEXT NULL,
+      notify_approval_expiring       BOOLEAN NOT NULL DEFAULT TRUE,
+      notify_token_abuse             BOOLEAN NOT NULL DEFAULT TRUE,
+      notify_policy_invalid          BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at                     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notification_config_updated_at
+      ON rbitr.notification_config(updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS rbitr.mailing_lists (
+      mailing_list_id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (tenant_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS rbitr.mailing_list_members (
+      mailing_list_id TEXT NOT NULL REFERENCES rbitr.mailing_lists(mailing_list_id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (mailing_list_id, email)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_mailing_lists_tenant
+      ON rbitr.mailing_lists(tenant_id, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS rbitr.notification_suppressions (
+      dedup_key         TEXT PRIMARY KEY,
+      tenant_id         TEXT NOT NULL,
+      channel           TEXT NOT NULL,
+      event_type        TEXT NOT NULL,
+      resource_id       TEXT NULL,
+      severity          TEXT NOT NULL,
+      first_seen_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_sent_at      TIMESTAMPTZ NULL,
+      suppressed_until  TIMESTAMPTZ NULL,
+      suppressed_count  BIGINT NOT NULL DEFAULT 0,
+      last_payload_hash TEXT NULL,
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notification_suppressions_tenant_time
+      ON rbitr.notification_suppressions(tenant_id, last_seen_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_notification_suppressions_suppressed_until
+      ON rbitr.notification_suppressions(suppressed_until);
+
+    -- +goose Down
+    DROP TABLE IF EXISTS rbitr.notification_suppressions;
+    DROP TABLE IF EXISTS rbitr.mailing_list_members;
+    DROP TABLE IF EXISTS rbitr.mailing_lists;
+    DROP TABLE IF EXISTS rbitr.notification_config;
+
+  00013_email_config_fields.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.notification_config
+      ADD COLUMN IF NOT EXISTS email_region TEXT NULL,
+      ADD COLUMN IF NOT EXISTS email_domain TEXT NULL;
+
+    -- +goose Down
+    ALTER TABLE rbitr.notification_config
+      DROP COLUMN IF EXISTS email_region,
+      DROP COLUMN IF EXISTS email_domain;
+
+  00014_audit_hash_chain.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.admin_audit_events ADD COLUMN IF NOT EXISTS stream_id TEXT;
+    ALTER TABLE rbitr.admin_audit_events ADD COLUMN IF NOT EXISTS event_hash TEXT;
+    ALTER TABLE rbitr.admin_audit_events ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+
+    UPDATE rbitr.admin_audit_events
+    SET stream_id = COALESCE(tenant_id, 'global')
+    WHERE stream_id IS NULL;
+
+    ALTER TABLE rbitr.admin_audit_events ALTER COLUMN stream_id SET NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_events_stream_time
+    ON rbitr.admin_audit_events (stream_id, created_at DESC);
+
+    -- +goose StatementBegin
+    CREATE OR REPLACE FUNCTION rbitr.block_audit_mutations()
+    RETURNS trigger AS $fn$
+    BEGIN
+      RAISE EXCEPTION 'audit events are immutable';
+    END;
+    $fn$ LANGUAGE plpgsql;
+    -- +goose StatementEnd
+
+    DROP TRIGGER IF EXISTS audit_events_immutable ON rbitr.admin_audit_events;
+    CREATE TRIGGER audit_events_immutable
+    BEFORE UPDATE OR DELETE ON rbitr.admin_audit_events
+    FOR EACH ROW EXECUTE FUNCTION rbitr.block_audit_mutations();
+
+    INSERT INTO rbitr.system_settings (key, value, updated_at)
+    VALUES ('audit_retention_days', '365', NOW())
+    ON CONFLICT (key) DO NOTHING;
+
+    -- +goose Down
+    DROP TRIGGER IF EXISTS audit_events_immutable ON rbitr.admin_audit_events;
+    DROP FUNCTION IF EXISTS rbitr.block_audit_mutations;
+    DROP INDEX IF EXISTS idx_admin_audit_events_stream_time;
+    ALTER TABLE rbitr.admin_audit_events DROP COLUMN IF EXISTS prev_hash;
+    ALTER TABLE rbitr.admin_audit_events DROP COLUMN IF EXISTS event_hash;
+    ALTER TABLE rbitr.admin_audit_events DROP COLUMN IF EXISTS stream_id;
+    DELETE FROM rbitr.system_settings WHERE key = 'audit_retention_days';
+
+  00015_fix_demo_policy_syntax.sql: |
+    -- +goose Up
+    -- Fix the demo policy to:
+    -- 1. Add import rego.v1 statement (required by OPA)
+    -- 2. Remove illegal default rule with function call
+    -- 3. Use proper else chaining to avoid rule conflicts
+    -- 4. Add missing tags field for schema compliance
+
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+    UPDATE rbitr.policy_versions
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';
+
+    -- +goose Down
+    -- Revert to the previous policy (without import rego.v1 and with broken syntax)
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {}
+    }
+
+    default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+        input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+    }
+    $$
+    WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+    UPDATE rbitr.policy_versions
+    SET rego_module = $$
+    package rbitr.policy
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {}
+    }
+
+    default decision := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny")
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high risk") if {
+        input.action_risk == "HIGH" or input.action_risk == "CRITICAL"
+    }
+    $$
+    WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';
+
+  00016_add_policy_default_fallback.sql: |
+    -- +goose Up
+    -- Add a proper default fallback that handles missing input fields
+    -- This allows policy simulation with minimal inputs
+
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    # Main decision logic with proper else chaining
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        input.action_type
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        input.action_type
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        input.action_type
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", "MEDIUM", "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule or missing required fields")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+    UPDATE rbitr.policy_versions
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    # Main decision logic with proper else chaining
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        input.action_type
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        input.action_type
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        input.action_type
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", "MEDIUM", "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule or missing required fields")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';
+
+    -- +goose Down
+    -- Revert to the version without the extra field checks
+    UPDATE rbitr.policies
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_id = 'policy_demo';
+
+    UPDATE rbitr.policy_versions
+    SET rego_module = $$
+    package rbitr.policy
+
+    import rego.v1
+
+    decision_obj(decision, risk, rule_id, priority, code, message) := {
+        "version": "2026-01-20",
+        "decision": decision,
+        "risk": risk,
+        "rule": {"id": rule_id, "priority": priority},
+        "reasons": [{"code": code, "message": message}],
+        "constraints": {},
+        "tags": []
+    }
+
+    allow_actions := {
+        "TICKET.CREATE",
+        "TICKET.COMMENT",
+        "TICKET.UPDATE",
+        "CRM.READ",
+        "DATA.READ",
+        "DATA.QUERY"
+    }
+
+    require_approval_actions := {
+        "PAYMENT.REFUND",
+        "ACCESS.ROLE_CHANGE"
+    }
+
+    deny_actions := {
+        "DATA.EXPORT",
+        "DATA.BULK_EXPORT",
+        "ACCESS.GRANT",
+        "DATA.DELETE",
+        "CRM.DELETE"
+    }
+
+    decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 100, "DENY_SENSITIVE", "Policy: deny sensitive action") if {
+        deny_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_require_approval_v1", 50, "APPROVAL_REQUIRED", "Policy: approval required") if {
+        require_approval_actions[input.action_type]
+    } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
+        allow_actions[input.action_type]
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "HIGH"
+    } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
+        input.action_risk == "CRITICAL"
+    } else := decision_obj("DENY", input.action_risk, "rule_default_deny", 100, "DEFAULT_DENY", "Default deny: no matching rule")
+    $$
+    WHERE tenant_id = 't_demo' AND policy_version = 'p_v1';
+
+  00017_mcp_tool_fields.sql: |
+    -- +goose Up
+    -- Add MCP-related fields to tools table for MCP Streamable HTTP transport support
+
+    -- Add transport enum (default 'http_api' for existing tools)
+    ALTER TABLE rbitr.tools
+    ADD COLUMN transport TEXT NOT NULL DEFAULT 'http_api'
+    CHECK (transport IN ('http_api', 'mcp_streamable_http'));
+
+    -- Add MCP upstream URL (only required when transport = 'mcp_streamable_http')
+    ALTER TABLE rbitr.tools
+    ADD COLUMN mcp_upstream_url TEXT;
+
+    -- Add description for MCP tool discovery (docstring)
+    ALTER TABLE rbitr.tools
+    ADD COLUMN description TEXT;
+
+    -- Add input schema for MCP tool discovery (JSON Schema)
+    ALTER TABLE rbitr.tools
+    ADD COLUMN input_schema_json JSONB;
+
+    -- Add constraint: mcp_upstream_url must be set when transport is 'mcp_streamable_http'
+    ALTER TABLE rbitr.tools
+    ADD CONSTRAINT tools_mcp_upstream_url_check
+    CHECK (
+        (transport = 'mcp_streamable_http' AND mcp_upstream_url IS NOT NULL)
+        OR
+        (transport != 'mcp_streamable_http')
+    );
+
+    -- Update demo tools with descriptions and schemas for testing
+    UPDATE rbitr.tools
+    SET
+        description = 'Internal demo tool for testing governed actions. Supports refund, charge, cancel, export, and other test operations.',
+        input_schema_json = '{
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "Action to perform",
+                    "enum": ["refund", "charge", "cancel", "export", "delete"]
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "Amount for financial operations"
+                },
+                "customer_id": {
+                    "type": "string",
+                    "description": "Customer identifier"
+                }
+            }
+        }'::jsonb
+    WHERE tool_id = 'mock_internal' AND tenant_id = 't_demo';
+
+    UPDATE rbitr.tools
+    SET
+        description = 'Create and manage Jira issues. Use this to create tickets, comment, transition issues, and search.',
+        input_schema_json = '{
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["issue_create", "issue_comment", "issue_transition", "issue_search"]
+                },
+                "projectKey": {"type": "string"},
+                "issueType": {"type": "string"},
+                "summary": {"type": "string"},
+                "description": {"type": "string"},
+                "issueKey": {"type": "string"},
+                "comment": {"type": "string"},
+                "transitionId": {"type": "string"},
+                "jql": {"type": "string"}
+            },
+            "required": ["action"]
+        }'::jsonb
+    WHERE tool_id = 'jira' AND tenant_id = 't_demo';
+
+    -- +goose Down
+    ALTER TABLE rbitr.tools DROP CONSTRAINT IF EXISTS tools_mcp_upstream_url_check;
+    ALTER TABLE rbitr.tools DROP COLUMN IF EXISTS input_schema_json;
+    ALTER TABLE rbitr.tools DROP COLUMN IF EXISTS description;
+    ALTER TABLE rbitr.tools DROP COLUMN IF EXISTS mcp_upstream_url;
+    ALTER TABLE rbitr.tools DROP COLUMN IF EXISTS transport;
+
+  00018_seed_demo_tool_metadata.sql: |
+    -- +goose Up
+    -- Update demo tools with descriptions and input schemas for MCP compatibility
+
+    UPDATE rbitr.tools
+    SET
+        description = 'Internal mock tool for testing governance workflows. Supports refund, export, and other demo actions.',
+        input_schema_json = '{
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "description": "The action to perform (e.g., refund, export)"
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "Amount for financial operations"
+                },
+                "customer_id": {
+                    "type": "string",
+                    "description": "Customer identifier"
+                }
+            }
+        }'::jsonb
+    WHERE tool_id = 'mock_internal' AND tenant_id = 't_demo';
+
+    UPDATE rbitr.tools
+    SET
+        description = 'Jira integration for issue management. Supports creating tickets, adding comments, and transitioning issues.',
+        input_schema_json = '{
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["issue_create", "issue_comment", "issue_transition", "issue_search"],
+                    "description": "The Jira action to perform"
+                },
+                "projectKey": {
+                    "type": "string",
+                    "description": "Jira project key (e.g., RBTR)"
+                },
+                "issueType": {
+                    "type": "string",
+                    "description": "Issue type (e.g., Task, Bug, Story)"
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "Issue summary/title"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Issue description body"
+                },
+                "issueKey": {
+                    "type": "string",
+                    "description": "Existing issue key for comments/transitions"
+                },
+                "comment": {
+                    "type": "string",
+                    "description": "Comment text to add to issue"
+                },
+                "transitionId": {
+                    "type": "string",
+                    "description": "Transition ID to move issue to new status"
+                },
+                "jql": {
+                    "type": "string",
+                    "description": "JQL query for searching issues"
+                }
+            },
+            "required": ["action"]
+        }'::jsonb
+    WHERE tool_id = 'jira' AND tenant_id = 't_demo';
+
+    -- +goose Down
+    -- Revert to empty descriptions and schemas
+    UPDATE rbitr.tools
+    SET
+        description = NULL,
+        input_schema_json = NULL
+    WHERE tool_id IN ('mock_internal', 'jira') AND tenant_id = 't_demo';
+
+  00019_tenant_auth_hardening.sql: |
+    -- +goose Up
+
+    -- Add enabled flag to tenants (default true for existing tenants)
+    ALTER TABLE rbitr.tenants ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;
+
+    -- Add revoked_at to tenant_keys for key revocation support
+    ALTER TABLE rbitr.tenant_keys ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ NULL;
+
+    -- +goose Down
+
+    ALTER TABLE rbitr.tenant_keys DROP COLUMN IF EXISTS revoked_at;
+    ALTER TABLE rbitr.tenants DROP COLUMN IF EXISTS enabled;
+
+  00020_tenant_key_lifecycle.sql: |
+    -- +goose Up
+
+    -- Restructure tenant_keys to support multiple keys per tenant
+    -- Step 1: Add new columns
+    ALTER TABLE rbitr.tenant_keys ADD COLUMN IF NOT EXISTS key_id UUID;
+    ALTER TABLE rbitr.tenant_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT NOT NULL DEFAULT '';
+    ALTER TABLE rbitr.tenant_keys ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMPTZ NULL;
+
+    -- Step 2: Populate key_id for existing rows
+    UPDATE rbitr.tenant_keys SET key_id = gen_random_uuid() WHERE key_id IS NULL;
+
+    -- Step 3: Drop the old primary key (tenant_id was PK, limiting to one key per tenant)
+    ALTER TABLE rbitr.tenant_keys DROP CONSTRAINT IF EXISTS tenant_keys_pkey;
+
+    -- Step 4: Make key_id the primary key
+    ALTER TABLE rbitr.tenant_keys ALTER COLUMN key_id SET NOT NULL;
+    ALTER TABLE rbitr.tenant_keys ADD PRIMARY KEY (key_id);
+
+    -- Step 5: Add unique constraint on key_hash for fast lookup
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_keys_key_hash ON rbitr.tenant_keys (key_hash);
+
+    -- Step 6: Add index for listing keys by tenant
+    CREATE INDEX IF NOT EXISTS idx_tenant_keys_tenant_id ON rbitr.tenant_keys (tenant_id);
+
+    -- +goose Down
+
+    DROP INDEX IF EXISTS rbitr.idx_tenant_keys_tenant_id;
+    DROP INDEX IF EXISTS rbitr.idx_tenant_keys_key_hash;
+
+    -- Restore original schema (best-effort)
+    ALTER TABLE rbitr.tenant_keys DROP CONSTRAINT IF EXISTS tenant_keys_pkey;
+    ALTER TABLE rbitr.tenant_keys DROP COLUMN IF EXISTS rotated_at;
+    ALTER TABLE rbitr.tenant_keys DROP COLUMN IF EXISTS key_prefix;
+    ALTER TABLE rbitr.tenant_keys DROP COLUMN IF EXISTS key_id;
+    ALTER TABLE rbitr.tenant_keys ADD PRIMARY KEY (tenant_id);
+
+  00021_approval_execution_state.sql: |
+    -- +goose Up
+
+    ALTER TABLE rbitr.approval_requests
+        ADD COLUMN IF NOT EXISTS executing_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ NULL,
+        ADD COLUMN IF NOT EXISTS execution_id TEXT NULL,
+        ADD COLUMN IF NOT EXISTS last_error_code TEXT NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_status_executing
+        ON rbitr.approval_requests (tenant_id, status, executing_at DESC);
+
+    -- +goose Down
+
+    DROP INDEX IF EXISTS idx_approval_requests_tenant_status_executing;
+
+    ALTER TABLE rbitr.approval_requests
+        DROP COLUMN IF EXISTS last_error_code,
+        DROP COLUMN IF EXISTS execution_id,
+        DROP COLUMN IF EXISTS failed_at,
+        DROP COLUMN IF EXISTS executing_at;
+
+  00022_approval_request_context.sql: |
+    -- +goose Up
+
+    ALTER TABLE rbitr.approval_requests
+        ADD COLUMN IF NOT EXISTS request_context JSONB NULL;
+
+    -- +goose Down
+
+    ALTER TABLE rbitr.approval_requests
+        DROP COLUMN IF EXISTS request_context;
+
+  00023_rate_limits.sql: |
+    -- +goose Up
+
+    ALTER TABLE rbitr.tenant_config
+        ADD COLUMN IF NOT EXISTS default_rate_limit_per_minute BIGINT NULL,
+        ADD COLUMN IF NOT EXISTS default_rate_limit_per_day BIGINT NULL,
+        ADD COLUMN IF NOT EXISTS default_rate_limit_scope TEXT NULL;
+
+    ALTER TABLE rbitr.tenant_config
+        DROP CONSTRAINT IF EXISTS tenant_config_rate_limit_scope_chk;
+
+    ALTER TABLE rbitr.tenant_config
+        ADD CONSTRAINT tenant_config_rate_limit_scope_chk
+        CHECK (
+            default_rate_limit_scope IS NULL OR
+            default_rate_limit_scope IN ('tenant', 'tenant_agent', 'tenant_tool', 'tenant_agent_tool')
+        );
+
+    CREATE TABLE IF NOT EXISTS rbitr.rate_limit_counters (
+        tenant_id TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+        agent_id TEXT NOT NULL DEFAULT '',
+        tool_id TEXT NOT NULL DEFAULT '',
+        action_type TEXT NOT NULL DEFAULT '',
+        window_unit TEXT NOT NULL,
+        bucket_start TIMESTAMPTZ NOT NULL,
+        count BIGINT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (tenant_id, agent_id, tool_id, action_type, window_unit, bucket_start),
+        CONSTRAINT rate_limit_window_chk CHECK (window_unit IN ('minute', 'day'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rate_limit_counters_updated_at
+        ON rbitr.rate_limit_counters (updated_at);
+
+    INSERT INTO rbitr.system_settings (key, value, updated_at)
+    VALUES
+        ('default_rate_limit_per_minute', '60', NOW()),
+        ('default_rate_limit_per_day', '10000', NOW()),
+        ('default_rate_limit_scope', 'tenant_agent_tool', NOW())
+    ON CONFLICT (key) DO NOTHING;
+
+    -- +goose Down
+
+    DELETE FROM rbitr.system_settings
+    WHERE key IN ('default_rate_limit_per_minute', 'default_rate_limit_per_day', 'default_rate_limit_scope');
+
+    DROP TABLE IF EXISTS rbitr.rate_limit_counters;
+
+    ALTER TABLE rbitr.tenant_config
+        DROP CONSTRAINT IF EXISTS tenant_config_rate_limit_scope_chk;
+
+    ALTER TABLE rbitr.tenant_config
+        DROP COLUMN IF EXISTS default_rate_limit_scope,
+        DROP COLUMN IF EXISTS default_rate_limit_per_day,
+        DROP COLUMN IF EXISTS default_rate_limit_per_minute;
+
+  00024_enforcement_mode.sql: |
+    -- +goose Up
+
+    ALTER TABLE rbitr.tenant_config
+        ADD COLUMN IF NOT EXISTS enforcement_mode TEXT NOT NULL DEFAULT 'enforce';
+
+    ALTER TABLE rbitr.tenant_config
+        DROP CONSTRAINT IF EXISTS tenant_config_enforcement_mode_chk;
+
+    ALTER TABLE rbitr.tenant_config
+        ADD CONSTRAINT tenant_config_enforcement_mode_chk
+        CHECK (enforcement_mode IN ('enforce', 'shadow'));
+
+    -- +goose Down
+
+    ALTER TABLE rbitr.tenant_config
+        DROP CONSTRAINT IF EXISTS tenant_config_enforcement_mode_chk;
+
+    ALTER TABLE rbitr.tenant_config
+        DROP COLUMN IF EXISTS enforcement_mode;
+
+  00025_tenant_config_version.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.tenant_config
+        ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 1;
+
+    -- +goose Down
+    ALTER TABLE rbitr.tenant_config
+        DROP COLUMN IF EXISTS version;
+
+  00026_mcp_passthrough_upstream.sql: |
+    -- +goose Up
+    ALTER TABLE rbitr.tenant_config
+        ADD COLUMN IF NOT EXISTS mcp_passthrough_upstream_tool_id TEXT;
+
+    -- +goose Down
+    ALTER TABLE rbitr.tenant_config
+        DROP COLUMN IF EXISTS mcp_passthrough_upstream_tool_id;
+
+  00027_soft_delete_tenants.sql: |
+    -- +goose Up
+
+    ALTER TABLE rbitr.tenants
+    	ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
+
+    CREATE INDEX IF NOT EXISTS idx_tenants_deleted_at
+    	ON rbitr.tenants (deleted_at);
+
+    -- +goose Down
+
+    DROP INDEX IF EXISTS rbitr.idx_tenants_deleted_at;
+
+    ALTER TABLE rbitr.tenants
+    	DROP COLUMN IF EXISTS deleted_at;
+
+  00028_remove_demo_seed_defaults.sql: |
+    -- +goose Up
+    -- Remove legacy demo defaults from earlier bootstrap behavior.
+    DELETE FROM rbitr.action_decisions WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.approval_requests WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.tools WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.policies WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.policy_versions WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.tenant_config WHERE tenant_id = 't_demo';
+    DELETE FROM rbitr.tenant_keys
+    WHERE tenant_id = 't_demo'
+       OR key_hash = encode(digest('tenant_demo_key', 'sha256'), 'hex');
+    DELETE FROM rbitr.admin_keys
+    WHERE admin_key_id = 'admin_demo'
+       OR key_hash = encode(digest('admin_demo_key', 'sha256'), 'hex');
+    DELETE FROM rbitr.tenants WHERE tenant_id = 't_demo';
+
+    -- +goose Down
+    -- No-op: do not recreate insecure demo defaults.
+    SELECT 1;
+
+  00029_setup_bootstrap_hardening.sql: |
+    -- +goose Up
+
+    CREATE TABLE IF NOT EXISTS rbitr.setup_state (
+        singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+        state TEXT NOT NULL,
+        last_error TEXT NULL,
+        actor_token_fingerprint TEXT NULL,
+        actor_ip TEXT NULL,
+        last_request_id TEXT NULL,
+        started_at TIMESTAMPTZ NULL,
+        completed_at TIMESTAMPTZ NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT setup_state_enum_chk CHECK (state IN ('not_started', 'in_progress', 'completed', 'failed'))
+    );
+
+    INSERT INTO rbitr.setup_state (singleton, state, updated_at)
+    VALUES (TRUE, 'not_started', NOW())
+    ON CONFLICT (singleton) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS rbitr.setup_initialize_idempotency (
+        idempotency_key TEXT PRIMARY KEY,
+        payload_hash TEXT NOT NULL,
+        response_json JSONB NOT NULL,
+        token_fingerprint TEXT NULL,
+        client_ip TEXT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_setup_initialize_idempotency_created_at
+    ON rbitr.setup_initialize_idempotency (created_at DESC);
+
+    -- +goose Down
+
+    DROP INDEX IF EXISTS rbitr.idx_setup_initialize_idempotency_created_at;
+    DROP TABLE IF EXISTS rbitr.setup_initialize_idempotency;
+    DROP TABLE IF EXISTS rbitr.setup_state;
+
+{{- end }}

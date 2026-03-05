@@ -1,0 +1,52 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rbitr.fullname" . }}-migrate
+  labels:
+    {{- include "rbitr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "rbitr.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "rbitr.serviceAccountName" . }}
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: {{ .Values.migration.image }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              go install github.com/pressly/goose/v3/cmd/goose@{{ .Values.migration.gooseVersion }}
+              goose -dir /migrations postgres "$DATABASE_URL" up
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rbitr.secretName" . }}
+                  key: {{ include "rbitr.secretDatabaseKey" . }}
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: {{ include "rbitr.fullname" . }}-migrations
+{{- end }}
