@@ -6,7 +6,7 @@ echo ""
 
 # Configuration
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
-TENANT_ID="${TENANT_ID:-t_demo}"
+TENANT_ID="${TENANT_ID:-t_acme}"
 TENANT_NAME="${TENANT_NAME:-Demo Tenant}"
 TENANT_KEY="${TENANT_KEY:-tenant_demo_key_2026!}"
 ADMIN_KEY="${ADMIN_KEY:-admin_demo_key_2026!}"
@@ -84,10 +84,11 @@ bootstrap_if_needed() {
 
 	echo "Bootstrap is required. Running setup initialize for demo defaults..."
 	local init_payload init_response
-	init_payload="$(cat <<EOF
+	init_payload="$(
+		cat <<EOF
 {"tenant_name":"$TENANT_NAME","tenant_id":"$TENANT_ID","admin_key":"$ADMIN_KEY","tenant_key":"$TENANT_KEY"}
 EOF
-)"
+	)"
 	local setup_args
 	setup_args=(
 		-sS
@@ -218,7 +219,24 @@ deny_response=$(call_tool "$deny_payload")
 pretty "$deny_response"
 echo ""
 
-echo "6. Getting evidence trail"
+echo "6. Creating a PENDING approval for manual testing"
+echo "-------------------------------------------------"
+pending_refund_payload='{"http_method":"POST","path":"/refund","query":"","headers":{"Content-Type":"application/json"},"body":"{\"amount\":250,\"reason\":\"customer_request\"}"}'
+PENDING_RESPONSE=$(call_tool "$pending_refund_payload")
+PENDING_APPROVAL_ID="$(json_field "$PENDING_RESPONSE" '.approval_request_id' 'approval_request_id')"
+pretty "$PENDING_RESPONSE"
+if [ -n "$PENDING_APPROVAL_ID" ]; then
+	echo ""
+	echo "  Pending approval ID: $PENDING_APPROVAL_ID"
+	echo "  Approve it in the UI or via:"
+	echo "    curl -X POST $GATEWAY_URL/admin/tenants/$TENANT_ID/approvals/$PENDING_APPROVAL_ID/approve \\"
+	echo "      -H 'Content-Type: application/json' \\"
+	echo "      -H 'Authorization: Bearer \$ADMIN_KEY' \\"
+	echo "      -d '{\"comment\":\"Approved manually\"}'"
+fi
+echo ""
+
+echo "7. Getting evidence trail"
 echo "------------------------"
 evidence_response=$(curl -sS "$GATEWAY_URL/v1/tenants/$TENANT_ID/evidence?limit=5" \
 	"${tenant_auth_headers[@]}" \

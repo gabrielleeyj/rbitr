@@ -35,7 +35,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/rbitr?sslmode=disable
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/rbitr?sslmode=disable"
     ports:
       - "8080:8080"
 

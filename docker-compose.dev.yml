@@ -1,6 +1,26 @@
 services:
   gateway:
+    build: .
     environment:
+      DATABASE_URL: "postgres://postgres:postgres@host.docker.internal:2345/rbitr?sslmode=disable"
       RBTR_DEV_AUTO_TOOLS: "true"
       RBTR_DEV_MOCK_INTERNAL_URL: "http://mocktool:8090"
       RBTR_DEV_JIRA_URL: "http://localhost:8081"
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
+
+  mocktool:
+    build:
+      context: .
+      dockerfile: Dockerfile.mocktool
+    ports:
+      - "8090:8090"
