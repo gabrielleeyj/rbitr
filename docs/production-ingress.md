@@ -122,6 +122,15 @@ server {
 
 **SSE/MCP note:** The `/v1/mcp/:tenant_id` GET endpoint uses Server-Sent Events with a 5-minute maximum stream duration and 15-second heartbeat interval. Ensure proxy read timeouts are set to at least 300 seconds and buffering is disabled for the `/v1` location.
 
+## Deployment Packages
+
+rbitr provides two pre-built deployment paths for AWS:
+
+- **Helm chart (EKS):** `deploy/helm/rbitr/` — includes ALB ingress, migration job, optional bundled PostgreSQL, HPA, and IRSA-ready ServiceAccount. The chart's `ingress.yaml` template implements the ALB path-based routing described in the AWS ALB section below. Use `values-production.yaml` for HA defaults.
+- **CloudFormation (ECS Fargate):** `deploy/cloudformation/rbitr-ecs.yaml` — creates a full VPC, RDS PostgreSQL, ALB with HTTPS listener, and ECS services. The ALB listener rules match the routing pattern described below.
+
+For Kubernetes deployments using the Helm chart, ingress is managed by the chart's `ingress.yaml` template and does not need to be configured separately. The examples below are reference configurations for manual Kubernetes deployments without the Helm chart, or for customization guidance.
+
 ## Kubernetes Ingress Examples
 
 ### nginx-ingress with cert-manager

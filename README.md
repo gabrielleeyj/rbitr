@@ -129,8 +129,65 @@ Release outputs:
 
 - platform binary archives + `SHA256SUMS`
 - onboarding verification report artifact
-- GHCR gateway/mocktool multi-arch images (optional for manual runs)
+- GHCR multi-arch images (gateway, mocktool, ui) with SBOM + provenance
 - published GitHub Release with attached artifacts
+
+### Production Deployment
+
+Two deployment paths are provided for AWS:
+
+#### Helm Chart (EKS)
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm dependency build deploy/helm/rbitr
+
+# Quick-start with bundled PostgreSQL (eval only)
+helm install rbitr deploy/helm/rbitr --set postgresql.enabled=true
+
+# Production with external RDS
+helm install rbitr deploy/helm/rbitr \
+  -f deploy/helm/rbitr/values-production.yaml \
+  --set externalDatabase.host=rbitr.abc123.us-east-1.rds.amazonaws.com \
+  --set externalDatabase.password=<db-password>
+```
+
+Chart features:
+
+- Gateway + UI deployments with health/readiness probes
+- ALB ingress with path-based routing
+- Migration job (pre-install/pre-upgrade Helm hook with goose)
+- Optional bundled PostgreSQL (Bitnami subchart, disabled by default)
+- Auto-generated secrets (HMAC keys, setup token) persisted across upgrades
+- HPA and IRSA-ready ServiceAccount
+- See `deploy/helm/rbitr/values.yaml` for all configuration options
+
+#### CloudFormation (ECS Fargate)
+
+Deploy via the AWS Console or CLI using `deploy/cloudformation/rbitr-ecs.yaml`:
+
+```bash
+aws cloudformation create-stack \
+  --stack-name rbitr \
+  --template-body file://deploy/cloudformation/rbitr-ecs.yaml \
+  --parameters \
+    ParameterKey=CertificateArn,ParameterValue=arn:aws:acm:us-east-1:123456789:certificate/abc \
+    ParameterKey=GatewayImageUri,ParameterValue=ghcr.io/gabrielleeyj/rbitr/gateway:v0.1.0 \
+    ParameterKey=UIImageUri,ParameterValue=ghcr.io/gabrielleeyj/rbitr/ui:v0.1.0 \
+  --capabilities CAPABILITY_IAM
+```
+
+Creates: VPC, ECS Fargate cluster, RDS PostgreSQL 16, ALB with HTTPS, Secrets Manager credentials, CloudWatch logs.
+
+#### Container Images
+
+Published to GHCR on each release:
+
+- `ghcr.io/gabrielleeyj/rbitr/gateway:<tag>`
+- `ghcr.io/gabrielleeyj/rbitr/ui:<tag>`
+- `ghcr.io/gabrielleeyj/rbitr/mocktool:<tag>`
+
+All images are multi-arch (linux/amd64, linux/arm64) with SBOM and provenance attestation.
 
 ### Database runtime defaults
 
