@@ -4,22 +4,20 @@
 
 ## Introduction
 
-What this does:
-
-Governance semantics: canonicalization + hashing + action classification
+Governance semantics for AI agents: canonicalization + hashing + action classification.
 
 - OPA/Rego policies stored in DB (policy-as-data)
 - ADR persistence (governance artifact, not access logs)
-- Approval-request persistence (the “human-in-loop” hook)
+- Approval-request persistence (the "human-in-loop" hook)
 - Evidence export with DTO whitelist + contract validation + redaction tests
 - Risk overrides
 - Metrics for decisioning and latency
 
-Demo theme: “Enterprise customer asks: prove your AI agent can’t refund/export/change permissions without controls.”
+Use case: "Enterprise customer asks: prove your AI agent can't refund/export/change permissions without controls."
 
 You respond with: action policies + approval artifacts + tenant evidence pack + policy snapshot + simulation result.
 
-What it focuses on:
+Governance domains:
 
 - Payments/refunds
 - Data export / privacy
@@ -28,7 +26,7 @@ What it focuses on:
 
 ## Getting Started (Dev)
 
-### Option A: Docker compose (API + UI + Postgres + migrate)
+### Option A: Docker Compose
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
@@ -38,13 +36,41 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 - UI: http://localhost:5173
 - Postgres: localhost:2345
 
-Bootstrap first tenant/admin keys (recommended defaults match demo scripts):
+Bootstrap first tenant/admin keys:
 
 ```bash
 ./scripts/dev/bootstrap.sh
 ```
 
-### First-run Setup Wizard (Epic 9)
+### Option B: Local Binaries
+
+1. Run migrations:
+
+```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:2345/rbitr?sslmode=disable
+goose -dir migrations postgres "$DATABASE_URL" up
+```
+
+2. Start mock tool and gateway:
+
+```bash
+go run ./cmd/mocktool
+go run ./cmd/gateway
+```
+
+3. Run tests: `go test ./...`
+
+### Database Runtime Defaults
+
+- If `DATABASE_URL` is not set, the gateway defaults to:
+  - `postgres://postgres@localhost:2345/rbitr?sslmode=require`
+- Connection pool defaults (overridable via env):
+  - `DB_MAX_OPEN_CONNS=30`
+  - `DB_MAX_IDLE_CONNS=10`
+  - `DB_CONN_MAX_LIFETIME_SECONDS=1800`
+  - `DB_CONN_MAX_IDLE_TIME_SECONDS=300`
+
+## First-run Setup
 
 On a fresh deployment, the UI checks bootstrap state and routes to `/setup` until setup is complete.
 
@@ -62,7 +88,7 @@ Production hardening flags:
   - `Authorization: Bearer <setup_token>`
   - `Idempotency-Key: <client_generated_key>`
 
-Wizard bootstrap sequence:
+Bootstrap sequence:
 
 1. Validate environment readiness (DB connectivity + schema presence)
 2. Create initial tenant profile
@@ -70,73 +96,18 @@ Wizard bootstrap sequence:
 4. Seed default policy and activate it for the tenant
 5. Mark bootstrap complete
 
-Note: the setup flow currently validates that migrations are present but does not run migrations itself; run migrations before using `/setup/initialize`.
+Note: the setup flow validates that migrations are present but does not run migrations itself; run migrations before using `/setup/initialize`.
 
 Dev note: when `RBTR_DEV_AUTO_TOOLS=true`, setup auto-seeds per-tenant dev tool wiring:
 
 - `mock_internal` -> `RBTR_DEV_MOCK_INTERNAL_URL` (default `http://localhost:8090`)
 - `jira` -> `RBTR_DEV_JIRA_URL` (default `http://localhost:8081`)
 
-### Marketplace Onboarding Verification Harness
-
-Use the onboarding-aware harness to validate:
-
-- fresh install -> setup initialize -> operational admin/tenant API calls
-- idempotency replay semantics for setup initialize
-- upgrade/redeploy preserving bootstrap state and keys
-
-Run locally:
-
-```bash
-./scripts/verify_marketplace_onboarding.sh
-```
-
-Report artifact output (machine-readable JSON):
-
-- default: `artifacts/marketplace_onboarding_report.json`
-- override with `REPORT_FILE=/path/to/report.json`
-- optional compose migration URL override: `COMPOSE_DATABASE_URL=postgres://...`
-
-The script enforces token-required setup mode during verification (`RBTR_SETUP_TOKEN_REQUIRED=true`) and checks:
-
-- `Authorization: Bearer <setup_token>`
-- `Idempotency-Key` requirement and replay behavior
-
-GitHub Actions manual run is available via workflow:
-
-- `.github/workflows/marketplace-onboarding.yml`
-- uploaded artifact name: `marketplace-onboarding-report`
-
-### Release Pipeline
-
-Release CI/CD is defined in:
-
-- `.github/workflows/release.yml`
-
-Release triggers:
-
-- push tag `v*` (for example `v1.2.3`)
-- manual `workflow_dispatch` with an existing release tag
-
-Release gates:
-
-- `golangci-lint`
-- `go test ./...`
-- setup smoke gate (`scripts/test_setup_smoke.sh`)
-- marketplace onboarding harness (`scripts/verify_marketplace_onboarding.sh`)
-
-Release outputs:
-
-- platform binary archives + `SHA256SUMS`
-- onboarding verification report artifact
-- GHCR multi-arch images (gateway, mocktool, ui) with SBOM + provenance
-- published GitHub Release with attached artifacts
-
-### Production Deployment
+## Production Deployment
 
 Two deployment paths are provided for AWS:
 
-#### Helm Chart (EKS)
+### Helm Chart (EKS)
 
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -162,7 +133,7 @@ Chart features:
 - HPA and IRSA-ready ServiceAccount
 - See `deploy/helm/rbitr/values.yaml` for all configuration options
 
-#### CloudFormation (ECS Fargate)
+### CloudFormation (ECS Fargate)
 
 Deploy via the AWS Console or CLI using `deploy/cloudformation/rbitr-ecs.yaml`:
 
@@ -179,7 +150,7 @@ aws cloudformation create-stack \
 
 Creates: VPC, ECS Fargate cluster, RDS PostgreSQL 16, ALB with HTTPS, Secrets Manager credentials, CloudWatch logs.
 
-#### Container Images
+### Container Images
 
 Published to GHCR on each release:
 
@@ -189,68 +160,64 @@ Published to GHCR on each release:
 
 All images are multi-arch (linux/amd64, linux/arm64) with SBOM and provenance attestation.
 
-### Database runtime defaults
+### TLS and Ingress
 
-- If `DATABASE_URL` is not set, the gateway defaults to:
-  - `postgres://postgres@localhost:2345/rbitr?sslmode=require`
-- Connection pool defaults (overridable via env):
-  - `DB_MAX_OPEN_CONNS=30`
-  - `DB_MAX_IDLE_CONNS=10`
-  - `DB_CONN_MAX_LIFETIME_SECONDS=1800`
-  - `DB_CONN_MAX_IDLE_TIME_SECONDS=300`
+See `docs/production-ingress.md` for reference configurations covering Nginx TLS, Kubernetes ingress (nginx-ingress, Traefik), AWS ALB, GCP HTTPS LB, cert-manager, and security headers.
 
-### Option B: Local binaries
+## Release Pipeline
 
-1. Run migrations:
+Defined in `.github/workflows/release.yml`.
+
+Triggers:
+
+- push tag `v*` (for example `v1.2.3`)
+- manual `workflow_dispatch` with an existing release tag
+
+Gates:
+
+- `golangci-lint`
+- `go test ./...`
+- setup smoke gate (`scripts/test_setup_smoke.sh`)
+- marketplace onboarding harness (`scripts/verify_marketplace_onboarding.sh`)
+
+Outputs:
+
+- platform binary archives + `SHA256SUMS`
+- onboarding verification report artifact
+- GHCR multi-arch images (gateway, mocktool, ui) with SBOM + provenance
+- published GitHub Release with attached artifacts
+
+## Marketplace Onboarding Verification
+
+Use the onboarding-aware harness to validate:
+
+- fresh install -> setup initialize -> operational admin/tenant API calls
+- idempotency replay semantics for setup initialize
+- upgrade/redeploy preserving bootstrap state and keys
 
 ```bash
-# Local dev Postgres in this repo runs without TLS, so sslmode=disable is explicit here.
-export DATABASE_URL=postgres://postgres:postgres@localhost:2345/rbitr?sslmode=disable
-goose -dir migrations postgres "$DATABASE_URL" up
+./scripts/verify_marketplace_onboarding.sh
 ```
 
-2. Start mock tool and gateway:
+Report artifact: `artifacts/marketplace_onboarding_report.json` (override with `REPORT_FILE`).
 
-```bash
-go run ./cmd/mocktool
-go run ./cmd/gateway
-```
+GitHub Actions manual run: `.github/workflows/marketplace-onboarding.yml`.
 
-3. Run tests: `go test ./...`
+## API
 
-## Information
+- Tool call payload is a JSON envelope with `http_method`, `path`, `query`, `headers`, `body` expected by `POST /v1/tools/{tool_id}/call`.
+- Production migrations are schema-only (no seeded demo data).
+- Tenant auth: `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback.
+- Admin auth: `Authorization: Bearer <admin_key>` (preferred). `X-Admin-Key` is legacy fallback.
+- HMAC secret rotation: `RBTR_TENANT_KEY_HMAC_SECRETS` and `RBTR_ADMIN_KEY_HMAC_SECRETS` accept comma-separated values (current, previous...).
 
-- Tool call payload is a JSON envelope with:
-  1. `http_method`,
-  2. `path`,
-  3. `query`,
-  4. `headers`,
-  5. `body`
-     (string) expected by `POST /v1/tools/{tool_id}/call`.
-- Production migrations are schema-only (no seeded demo tenant/keys/tools).
-- For local demo defaults, run `./scripts/dev/bootstrap.sh`, which initializes:
-  - tenant id `t_demo`
-  - admin key `admin_demo_key_2026!`
-  - tenant key `tenant_demo_key_2026!`
+## Observability
 
-- Admin writes are allowed post-bootstrap unless `admin_write_lock` is enabled.
-- Tenant auth accepts `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback and may be disabled.
-- Admin auth accepts `Authorization: Bearer <admin_key>` (preferred) or `X-Admin-Key` (legacy).
-- Tenant key hashing supports HMAC secret rotation via `RBTR_TENANT_KEY_HMAC_SECRETS` (comma-separated: current,previous...).
-- Admin key hashing supports HMAC secret rotation via `RBTR_ADMIN_KEY_HMAC_SECRETS` (comma-separated: current,previous...).
+### Structured Logging
 
-## Structured Logging
+Structured request logging via Echo/v5 with context fields: `request_id`, `tenant_id`, `agent_id`, `tool_id`, `action_type`, `decision`, `latency_ms`.
 
-Implemented structured request logging using Echo/v5 request logger and wired context fields so logs include `request_id`, `tenant_id`, `agent_id`,
-`tool_id`, `action_type`, `decision`, and `latency_ms`.
-
-Additional Fields (TBD):
-
-- policy version
-- rule_id
-- request_hash
-
-## Prometheus Metrics
+### Prometheus Metrics
 
 - `decisions_total{decision,action_type}`
 - `gateway_requests_total`
@@ -263,9 +230,9 @@ Additional Fields (TBD):
 - `setup_duration_ms`
 - `setup_state{state}`
 
-## Audit Trail (SOC-ready)
+### Audit Trail (SOC-ready)
 
-Admin audit events are append-only and immutable. Each event is chained with a per-tenant hash:
+Audit events are append-only and immutable. Each event is chained with a per-tenant hash:
 
 - `prev_hash` + canonical JSON payload -> `event_hash`
 - `stream_id` is the tenant id (or `global` for non-tenant events)
@@ -282,23 +249,30 @@ Export endpoints (tenant-scoped):
 
 Export defaults are safe-by-default (redacted payloads, no secrets).
 
-## Simulation
+## Demo
 
-**Quick test**: Run `./scripts/test_demo.sh` to test the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail).
+Run `./scripts/test_demo.sh` to test the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail).
 
-Before running the demo test, bootstrap setup once:
+Before running the demo, bootstrap setup once:
 
 ```bash
 ./scripts/dev/bootstrap.sh
 ```
 
-1. Start services (two terminals)
+Demo defaults:
 
+- tenant id: `t_demo`
+- admin key: `admin_demo_key_2026!`
+- tenant key: `tenant_demo_key_2026!`
+
+1. Start services (two terminals):
+
+```bash
 go run ./cmd/mocktool
-
 go run ./cmd/gateway
+```
 
-2. Allowed call (generic DATA.READ against mock_internal)
+2. Allowed call (DATA.READ):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -314,10 +288,9 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 }'
 ```
 
-Expect: decision: "ALLOW" and tool_status likely 404 (mock
-tool doesn’t implement /status), but ADR is still recorded.
+Expect: decision `ALLOW`.
 
-3. Approval required (PAYMENT.REFUND)
+3. Approval required (PAYMENT.REFUND):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -333,10 +306,9 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 }'
 ```
 
-Expect: HTTP 409 with approval_request_id + approval_token.
-This is an expected execution gate (not a terminal failure): clients should treat it as pending approval and replay the same request after approval with `X-Approval-Request-Id` and `X-Approval-Token`.
+Expect: HTTP 409 with `approval_request_id` + `approval_token`. Clients should treat this as pending approval and replay after approval.
 
-3b. Admin approves the request
+3b. Admin approves:
 
 ```bash
 curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval_request_id>/approve" \
@@ -345,7 +317,7 @@ curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval
 -d '{"comment":"approved in demo"}'
 ```
 
-3c. Agent resubmits with approval headers
+3c. Agent resubmits with approval headers:
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -365,7 +337,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 Expect: HTTP 200 with tool response and approval marked EXECUTED.
 
-4. Denied (DATA.EXPORT)
+4. Denied (DATA.EXPORT):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -381,16 +353,12 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 }'
 ```
 
-**Expect**: HTTP 403 with decision: "DENY".
+Expect: HTTP 403 with decision `DENY`.
 
-5. Evidence preview (should show all ADRs)
+5. Evidence trail:
 
 ```bash
 curl -sS "http://localhost:8080/v1/tenants/t_demo/evidence?limit=50" \
 -H "Authorization: Bearer tenant_demo_key_2026!" \
 -H "X-Agent-Id: agent_demo"
 ```
-
-If you want a 200 “ALLOW” response body, we can add a /status
-handler in cmd/mocktool or point the jira tool to a mock
-server.
