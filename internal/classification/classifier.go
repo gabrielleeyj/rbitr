@@ -151,6 +151,9 @@ func classifyGenericActionType(input *classifyInput) ActionType {
 }
 
 func classifyJira(input *classifyInput) Result {
+	if isJiraAgilePath(input) {
+		return classifyJiraAgile(input)
+	}
 	if isJiraIssueCreate(input) {
 		return newResult(ActionTypeTicketCreate, "Create Jira issue")
 	}
@@ -160,11 +163,17 @@ func classifyJira(input *classifyInput) Result {
 	if isJiraCommentDelete(input) {
 		return newResult(ActionTypeDataDelete, "Delete Jira comment")
 	}
+	if isJiraWatcherOrVoteRemove(input) {
+		return newResult(ActionTypeTicketUpdate, "Update Jira issue")
+	}
 	if isJiraIssueDelete(input) {
 		return newResult(ActionTypeDataDelete, "Delete Jira issue")
 	}
 	if isJiraIssueUpdate(input) {
 		return newResult(ActionTypeTicketUpdate, "Update Jira issue")
+	}
+	if isJiraIssueLink(input) {
+		return newResult(ActionTypeTicketUpdate, "Link Jira issues")
 	}
 	if isJiraSearch(input) {
 		return newResult(ActionTypeDataQuery, "Query Jira issues")
@@ -429,7 +438,7 @@ func isJiraIssueUpdate(input *classifyInput) bool {
 	if input.method != methodPost {
 		return false
 	}
-	return hasAny(input.pathTokens, "transition", "transitions", "assignee", "watcher", "watchers", "worklog")
+	return hasAny(input.pathTokens, "transition", "transitions", "assignee", "watcher", "watchers", "worklog", "attachment", "attachments", "archive", "unarchive")
 }
 
 func isJiraCommentDelete(input *classifyInput) bool {
@@ -439,8 +448,54 @@ func isJiraCommentDelete(input *classifyInput) bool {
 		hasAny(input.pathTokens, "comment")
 }
 
+func isJiraWatcherOrVoteRemove(input *classifyInput) bool {
+	return input.method == methodDelete &&
+		isJiraPath(input) &&
+		hasAny(input.pathTokens, "issue") &&
+		hasAny(input.pathTokens, "watcher", "watchers", "vote", "votes")
+}
+
+func isJiraIssueLink(input *classifyInput) bool {
+	if !isJiraPath(input) {
+		return false
+	}
+	return hasAny(input.pathTokens, "issuelink", "remotelink")
+}
+
 func isJiraIssueDelete(input *classifyInput) bool {
 	return input.method == methodDelete && isJiraPath(input) && hasAny(input.pathTokens, "issue")
+}
+
+func isJiraAgilePath(input *classifyInput) bool {
+	if len(input.segments) < 3 {
+		return false
+	}
+	return input.segments[0] == "rest" && input.segments[1] == "agile"
+}
+
+func classifyJiraAgile(input *classifyInput) Result {
+	if hasAny(input.pathTokens, "sprint") && hasAny(input.pathTokens, "issue") {
+		if input.method == methodPost {
+			return newResult(ActionTypeTicketUpdate, "Move issues to sprint")
+		}
+		return newResult(ActionTypeDataQuery, "Query sprint issues")
+	}
+	if hasAny(input.pathTokens, "sprint") {
+		switch input.method {
+		case methodPost:
+			return newResult(ActionTypeTicketCreate, "Create sprint")
+		case methodPut, methodPatch:
+			return newResult(ActionTypeTicketUpdate, "Update sprint")
+		case methodDelete:
+			return newResult(ActionTypeDataDelete, "Delete sprint")
+		default:
+			return newResult(ActionTypeDataQuery, "Query sprints")
+		}
+	}
+	if hasAny(input.pathTokens, "board") {
+		return newResult(ActionTypeDataQuery, "Query Jira board")
+	}
+	return classifyGeneric(input)
 }
 
 func isJiraSearch(input *classifyInput) bool {
