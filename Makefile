@@ -12,7 +12,11 @@ demo:
 
 .PHONY: dev-up
 dev-up:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	docker compose -f docker-compose.dev.yml up --build
+
+.PHONY: dev-down
+dev-down:
+	docker compose -f docker-compose.dev.yml down
 
 .PHONY: dev-bootstrap
 dev-bootstrap:
