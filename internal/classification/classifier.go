@@ -466,6 +466,7 @@ func isJiraIssueDelete(input *classifyInput) bool {
 	return input.method == methodDelete && isJiraPath(input) && hasAny(input.pathTokens, "issue")
 }
 
+//nolint:mnd // ignoring this segment.
 func isJiraAgilePath(input *classifyInput) bool {
 	if len(input.segments) < 3 {
 		return false
