@@ -63,7 +63,6 @@ func (n *SlackWebhookNotifier) Send(ctx context.Context, msg NotificationMessage
 	if client == nil {
 		client = http.DefaultClient
 	}
-	//nolint:gosec // G704: webhook URL is operator-provided configuration validated before execution.
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

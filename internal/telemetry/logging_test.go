@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +16,7 @@ func TestGetContextString(t *testing.T) {
 	t.Parallel()
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(),http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	ctx := e.NewContext(req, rec)
 
@@ -37,7 +38,7 @@ func TestRequestLoggerWritesLog(t *testing.T) {
 	e := echo.New()
 	e.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(),http.MethodGet, "/", http.NoBody)
 	rec := httptest.NewRecorder()
 	ctx := e.NewContext(req, rec)
 

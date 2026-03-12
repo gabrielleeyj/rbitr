@@ -58,7 +58,7 @@ func (n *emailNotifier) Send(ctx context.Context, msg NotificationMessage) error
 type sesCredentials struct {
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
-	SessionToken    string `json:"session_token"` //nolint:gosec // #nosec G117 -- AWS temporary credential field name is required for JSON unmarshalling.
+	SessionToken    string `json:"session_token"`
 	Region          string `json:"region"`
 }
 

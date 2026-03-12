@@ -61,7 +61,6 @@ func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req 
 	httpReq.Header.Add("Accept", "text/event-stream")
 
 	// Execute request
-	//nolint:gosec // G704: upstream URL is tenant-admin configured and validated before execution.
 	httpResp, err := m.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("upstream request failed: %w", err)

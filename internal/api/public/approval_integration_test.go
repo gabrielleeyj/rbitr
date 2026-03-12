@@ -3,6 +3,7 @@ package public
 import (
 	"database/sql"
 	"encoding/json"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -414,7 +415,8 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 	}
 	adminEcho := echo.New()
 	adminapi.RegisterRoutes(adminEcho, &adminDeps)
-	adminReq := httptest.NewRequest(
+	adminReq := httptest.NewRequestWithContext(
+		context.Background(),
 		http.MethodPost,
 		"/admin/tenants/t_demo/approvals/"+approvalResp.ApprovalRequestID+"/approve",
 		testhelpers.MakeBody(adminapi.ApprovalDecisionRequest{Comment: "ok"}),
