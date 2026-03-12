@@ -2,6 +2,7 @@ package testhelpers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -172,7 +173,7 @@ func MakeRequest(
 ) (*echo.Context, *http.Request, *httptest.ResponseRecorder) {
 	e := echo.New()
 
-	req := httptest.NewRequest(method, "/", body)
+	req := httptest.NewRequestWithContext(context.Background(), method, "/", body)
 
 	for k, v := range headers {
 		req.Header.Add(k, v)

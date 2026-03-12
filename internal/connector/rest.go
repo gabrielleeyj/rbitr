@@ -40,7 +40,6 @@ func (r *REST) Execute(ctx context.Context, req Request) (Response, error) {
 		httpReq.Header.Set(key, value)
 	}
 
-	//nolint:gosec // G704: request URL is tenant-admin configured and validated before execution.
 	resp, err := r.Client.Do(httpReq)
 	if err != nil {
 		return Response{}, err

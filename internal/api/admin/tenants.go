@@ -23,7 +23,7 @@ type CreateTenantRequest struct {
 type CreateTenantResponse struct {
 	TenantID string `json:"tenant_id"`
 	Name     string `json:"name"`
-	APIKey   string `json:"api_key"` //nolint:gosec // #nosec G117 -- API key is intentionally returned once during key issuance.
+	APIKey   string `json:"api_key"`
 	KeyID    string `json:"key_id"`
 }
 
@@ -32,7 +32,7 @@ type SetTenantEnabledRequest struct {
 }
 
 type TenantKeyIssueResponse struct {
-	APIKey    string `json:"api_key"` //nolint:gosec // #nosec G117 -- API key is intentionally returned once during key issuance.
+	APIKey    string `json:"api_key"`
 	KeyID     string `json:"key_id"`
 	KeyPrefix string `json:"key_prefix"`
 }
