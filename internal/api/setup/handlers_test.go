@@ -44,7 +44,7 @@ func TestHandleStatusSuccess(t *testing.T) {
 	deps := &Dependencies{Service: service}
 	RegisterRoutes(e, deps)
 
-	req := httptest.NewRequestWithContext(t.Context(),http.MethodGet, "/setup/status", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/setup/status", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -61,35 +61,35 @@ func TestHandleInitializeValidationAndErrors(t *testing.T) {
 	deps := &Dependencies{Service: service}
 	RegisterRoutes(e, deps)
 
-	req := httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewBufferString("{"))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewBufferString("{"))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
 	service.initializeErr = ErrInvalidRequest
 	body := bytes.NewBufferString(`{"tenant_name":"Acme"}`)
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", body)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", body)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
 	service.initializeErr = ErrSchemaNotReady
 	body = bytes.NewBufferString(`{"tenant_name":"Acme"}`)
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", body)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", body)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusPreconditionFailed, rec.Code)
 
 	service.initializeErr = ErrSetupComplete
 	body = bytes.NewBufferString(`{"tenant_name":"Acme"}`)
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", body)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", body)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusConflict, rec.Code)
 
 	service.initializeErr = errors.New("boom")
 	body = bytes.NewBufferString(`{"tenant_name":"Acme"}`)
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", body)
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", body)
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
@@ -110,7 +110,7 @@ func TestHandleInitializeSuccess(t *testing.T) {
 	RegisterRoutes(e, deps)
 
 	body := bytes.NewBufferString(`{"tenant_name":"Acme","tenant_id":"t_abc12345"}`)
-	req := httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", body)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", body)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -143,25 +143,25 @@ func TestHandleInitializeAccessControl(t *testing.T) {
 
 	body := []byte(`{"tenant_name":"Acme","tenant_id":"t_abc12345"}`)
 
-	req := httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewReader(body))
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer wrong")
 	req.Header.Set(idempotencyHeader, "idem-1")
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusForbidden, rec.Code)
 
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewReader(body))
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer setup-secret")
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 
-	req = httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewReader(body))
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer setup-secret")
 	req.Header.Set(idempotencyHeader, "idem-1")
 	req.Header.Set("X-Request-Id", "req-1")
@@ -192,7 +192,7 @@ func TestHandleInitializeCIDRRestriction(t *testing.T) {
 	}
 	RegisterRoutes(e, deps)
 
-	req := httptest.NewRequestWithContext(t.Context(),http.MethodPost, "/setup/initialize", bytes.NewBufferString(`{"tenant_name":"Acme"}`))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/setup/initialize", bytes.NewBufferString(`{"tenant_name":"Acme"}`))
 	req.Header.Set("X-Forwarded-For", "203.0.113.10")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
