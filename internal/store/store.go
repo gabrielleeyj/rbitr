@@ -597,8 +597,8 @@ func (s *Store) InsertADR(ctx context.Context, record *models.ActionDecisionReco
 		decision_id, request_id, tenant_id, agent_id, tool_id, action_type, action_risk,
 		action_summary, decision, decision_version, decision_risk, rule_id, rule_priority,
 		reasons, constraints, tags, policy_version, reason, request_hash,
-		response_hash, approval_request_id, created_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
+		response_hash, approval_request_id, source_decision_id, created_at
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`
 	_, err = s.db.ExecContext(ctx, query,
 		record.DecisionID,
 		record.RequestID,
@@ -621,6 +621,7 @@ func (s *Store) InsertADR(ctx context.Context, record *models.ActionDecisionReco
 		record.RequestHash,
 		record.ResponseHash,
 		record.ApprovalRequestID,
+		nullableString(record.SourceDecisionID),
 		record.CreatedAt,
 	)
 	return err

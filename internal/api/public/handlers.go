@@ -41,6 +41,7 @@ type Dependencies struct {
 	ToolCache         *cache.TTLCache[models.Tool]
 	RiskOverrideCache *cache.TTLCache[string]
 	SessionManager    *auth.SessionManager
+	ProvenanceManager *auth.ProvenanceManager
 }
 
 type ToolCallRequest struct {
@@ -229,6 +230,12 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}
 	}
 
+	// Cross-tenant provenance chain: inject source_tenant_id and chain_depth.
+	prov := d.extractProvenance(c.Request())
+	if d.featureCrossTenantChainEnabled(c.Request().Context()) {
+		policyInput = injectProvenanceInput(policyInput, prov)
+	}
+
 	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
 	//nolint:nestif // Policy eval handling keeps invalid-output fallback and hard-failure paths together.
 	if err != nil {
@@ -316,26 +323,27 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}}
 		rateLimitConstraints := withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation)
 		adr := models.ActionDecisionRecord{
-			DecisionID:      decisionID,
-			RequestID:       requestID,
-			TenantID:        tenant.TenantID,
-			AgentID:         agentID,
-			ToolID:          toolID,
-			ActionType:      classificationResult.ActionType,
-			ActionRisk:      classificationResult.ActionRisk,
-			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        string(decisionDeny),
-			DecisionVersion: decisionResult.Version,
-			DecisionRisk:    decisionResult.Risk,
-			RuleID:          "rate_limit_" + rateLimitViolation.Window,
-			RulePriority:    rulePriority,
-			Reasons:         reasons,
-			Constraints:     rateLimitConstraints,
-			Tags:            decisionResult.Tags,
-			PolicyVersion:   decisionResult.PolicyVersion,
-			Reason:          firstReasonMessage(reasons),
-			RequestHash:     requestHash,
-			CreatedAt:       time.Now().UTC(),
+			DecisionID:       decisionID,
+			RequestID:        requestID,
+			TenantID:         tenant.TenantID,
+			AgentID:          agentID,
+			ToolID:           toolID,
+			ActionType:       classificationResult.ActionType,
+			ActionRisk:       classificationResult.ActionRisk,
+			ActionSummary:    classificationResult.ActionSummary,
+			Decision:         string(decisionDeny),
+			DecisionVersion:  decisionResult.Version,
+			DecisionRisk:     decisionResult.Risk,
+			RuleID:           "rate_limit_" + rateLimitViolation.Window,
+			RulePriority:     rulePriority,
+			Reasons:          reasons,
+			Constraints:      rateLimitConstraints,
+			Tags:             decisionResult.Tags,
+			PolicyVersion:    decisionResult.PolicyVersion,
+			Reason:           firstReasonMessage(reasons),
+			RequestHash:      requestHash,
+			SourceDecisionID: prov.SourceDecisionID,
+			CreatedAt:        time.Now().UTC(),
 		}
 		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
@@ -380,26 +388,27 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 		}}
 		argConstraints := withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation)
 		adr := models.ActionDecisionRecord{
-			DecisionID:      decisionID,
-			RequestID:       requestID,
-			TenantID:        tenant.TenantID,
-			AgentID:         agentID,
-			ToolID:          toolID,
-			ActionType:      classificationResult.ActionType,
-			ActionRisk:      classificationResult.ActionRisk,
-			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        string(decisionDeny),
-			DecisionVersion: decisionResult.Version,
-			DecisionRisk:    decisionResult.Risk,
-			RuleID:          argConstraintRuleID(argConstraintViolation),
-			RulePriority:    rulePriority,
-			Reasons:         reasons,
-			Constraints:     argConstraints,
-			Tags:            decisionResult.Tags,
-			PolicyVersion:   decisionResult.PolicyVersion,
-			Reason:          firstReasonMessage(reasons),
-			RequestHash:     requestHash,
-			CreatedAt:       time.Now().UTC(),
+			DecisionID:       decisionID,
+			RequestID:        requestID,
+			TenantID:         tenant.TenantID,
+			AgentID:          agentID,
+			ToolID:           toolID,
+			ActionType:       classificationResult.ActionType,
+			ActionRisk:       classificationResult.ActionRisk,
+			ActionSummary:    classificationResult.ActionSummary,
+			Decision:         string(decisionDeny),
+			DecisionVersion:  decisionResult.Version,
+			DecisionRisk:     decisionResult.Risk,
+			RuleID:           argConstraintRuleID(argConstraintViolation),
+			RulePriority:     rulePriority,
+			Reasons:          reasons,
+			Constraints:      argConstraints,
+			Tags:             decisionResult.Tags,
+			PolicyVersion:    decisionResult.PolicyVersion,
+			Reason:           firstReasonMessage(reasons),
+			RequestHash:      requestHash,
+			SourceDecisionID: prov.SourceDecisionID,
+			CreatedAt:        time.Now().UTC(),
 		}
 		if err := d.Store.InsertADR(c.Request().Context(), &adr); err != nil {
 			if d.Metrics != nil {
@@ -433,26 +442,27 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 
 	decisionID := "d_" + uuid.NewString()
 	adr := models.ActionDecisionRecord{
-		DecisionID:      decisionID,
-		RequestID:       requestID,
-		TenantID:        tenant.TenantID,
-		AgentID:         agentID,
-		ToolID:          toolID,
-		ActionType:      classificationResult.ActionType,
-		ActionRisk:      classificationResult.ActionRisk,
-		ActionSummary:   classificationResult.ActionSummary,
-		Decision:        decisionResult.Decision,
-		DecisionVersion: decisionResult.Version,
-		DecisionRisk:    decisionResult.Risk,
-		RuleID:          decisionResult.Rule.ID,
-		RulePriority:    decisionResult.Rule.Priority,
-		Reasons:         decisionResult.Reasons,
-		Constraints:     decisionResult.Constraints,
-		Tags:            decisionResult.Tags,
-		PolicyVersion:   decisionResult.PolicyVersion,
-		Reason:          firstReasonMessage(decisionResult.Reasons),
-		RequestHash:     requestHash,
-		CreatedAt:       time.Now().UTC(),
+		DecisionID:       decisionID,
+		RequestID:        requestID,
+		TenantID:         tenant.TenantID,
+		AgentID:          agentID,
+		ToolID:           toolID,
+		ActionType:       classificationResult.ActionType,
+		ActionRisk:       classificationResult.ActionRisk,
+		ActionSummary:    classificationResult.ActionSummary,
+		Decision:         decisionResult.Decision,
+		DecisionVersion:  decisionResult.Version,
+		DecisionRisk:     decisionResult.Risk,
+		RuleID:           decisionResult.Rule.ID,
+		RulePriority:     decisionResult.Rule.Priority,
+		Reasons:          decisionResult.Reasons,
+		Constraints:      decisionResult.Constraints,
+		Tags:             decisionResult.Tags,
+		PolicyVersion:    decisionResult.PolicyVersion,
+		Reason:           firstReasonMessage(decisionResult.Reasons),
+		RequestHash:      requestHash,
+		SourceDecisionID: prov.SourceDecisionID,
+		CreatedAt:        time.Now().UTC(),
 	}
 
 	switch decisionResult.Decision {

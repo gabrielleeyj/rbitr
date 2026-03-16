@@ -1,5 +1,15 @@
 # EPIC 11 — MCP & Agent-to-Agent Security Hardening
 
+## Status
+
+| Phase | Status | Date |
+|-------|--------|------|
+| **1** Mandatory Base Policy | **DONE** | 2026-03-15 |
+| **2** Ephemeral Session Tokens | **DONE** | 2026-03-15 |
+| **3** File Access Governance | **DONE** | 2026-03-16 |
+| **4** Cross-Tenant Provenance Chain | **DONE** | 2026-03-16 |
+| **5** mTLS Client Certificates | Planned | — |
+
 ## Summary
 
 Epic 11 enhances policy defaults and security controls for MCP and agent-to-agent communications. It addresses five critical gaps: (1) no mandatory base policy for high-risk actions, (2) static tenant keys vulnerable to spoofing, (3) no cross-tenant request governance, (4) no file access sandboxing, and (5) no ephemeral session key issuance.
@@ -76,9 +86,9 @@ require_approval_bulk {
 
 ### Implementation
 
-- New file: `internal/policy/base_policy.go` — embedded base Rego module + evaluator
-- Modified: `internal/policy/evaluator.go` — two-pass evaluation (base then tenant)
-- New file: `internal/policy/base_policy_test.go` — table-driven tests
+- `internal/policy/base_policy.go` — embedded base Rego module + evaluator
+- `internal/policy/evaluator.go` — two-pass evaluation (base then tenant)
+- `internal/policy/base_policy_test.go` — table-driven tests for all action type / risk combinations
 - ADR records base policy decision in `tags` field: `["base_policy:REQUIRE_APPROVAL"]`
 
 ### Acceptance Criteria
@@ -137,10 +147,12 @@ Agent Connect Flow:
 
 ### Implementation
 
-- New file: `internal/auth/session.go` — session token issue/validate
-- Modified: `internal/api/public/mcp_handler.go` — issue token on initialize, validate on subsequent calls
-- New file: `internal/auth/session_test.go` — token lifecycle tests
-- New migration: session tracking table (optional, can use in-memory cache)
+- `internal/auth/session.go` — `SessionManager` with HMAC-SHA256 signed tokens, in-memory TTL cache for revocation
+- `internal/auth/session_test.go` — token lifecycle, IP binding, expiry, revocation tests
+- `internal/api/public/mcp_handler.go` — issues session token on `initialize`, validates on subsequent `tools/call`
+- `internal/cache/ttl_cache.go` — generic TTL cache (used for session revocation tracking)
+- Feature flag: `RBTR_FEATURE_SESSION_TOKENS=true`
+- Session TTL: `RBTR_SESSION_TOKEN_TTL_SECONDS` (default `900` / 15 minutes)
 
 ---
 
@@ -152,42 +164,37 @@ An agent could ask a tool to read arbitrary filesystem paths. The gateway govern
 
 ### Solution
 
-Three layers of defense:
+Two layers of defense:
 
 #### Layer 1 — Argument Path Detection
 
-Extend the classifier to detect file path arguments in tool call payloads. Policy can whitelist/blacklist path patterns per tenant.
+The classifier recursively walks tool call arguments (JSON objects, arrays, strings) to detect file path patterns. Detected paths are validated against the tenant's sandbox before the request reaches the policy engine.
 
-```rego
-# Deny access to system paths
-deny {
-    some arg in input.tool_arguments
-    is_file_path(arg)
-    path_matches(arg, ["/etc/*", "/var/*", "/root/*", "~/*"])
-}
-
-# Restrict to tenant upload directory
-deny {
-    some arg in input.tool_arguments
-    is_file_path(arg)
-    not startswith(arg, concat("/", ["/data/uploads", input.tenant_id]))
-}
-```
+Detection heuristics:
+- Absolute paths starting with `/`
+- Relative paths containing `/` separators
+- Windows-style paths (`C:\`, `D:\`)
+- Home directory references (`~/`)
 
 #### Layer 2 — Tenant-Scoped File Sandbox
 
-Each tenant gets a virtual filesystem root: `/data/tenants/{tenant_id}/`. Path traversal (`../`) is detected and blocked at the gateway.
+Each tenant gets a virtual filesystem root: `/data/tenants/{tenant_id}/`. Path traversal (`../`) is detected and blocked at the gateway by inspecting raw path segments (not `filepath.Clean`'d, which resolves `..` away).
 
-#### Layer 3 — File Upload API
+Enforcement:
+- Path traversal (`..` in any segment) → blocked immediately
+- Path outside tenant sandbox → blocked
+- Path within sandbox → allowed
 
-New endpoint `POST /v1/files` for governed file uploads. Files are assigned IDs; agents reference files by ID, never by path. Gateway resolves IDs to paths only when forwarding to tool servers.
+Feature flag: `RBTR_FEATURE_FILE_GOVERNANCE=true`
 
 ### Implementation
 
-- New file: `internal/classification/file_path.go` — file path detection in arguments
-- Modified: `internal/api/public/handlers.go` — inject detected paths into policy input
-- New file: `internal/api/public/file_handler.go` — file upload endpoint
-- New migration: file metadata table
+- `internal/classification/file_path.go` — `DetectFilePaths`, `IsFilePath`, `ContainsTraversal`, `ValidateSandbox`, `SandboxRoot`
+- `internal/classification/file_path_test.go` — table-driven tests
+- `internal/api/public/file_governance.go` — `checkFileAccess` helper wired into both REST and MCP handlers
+- `internal/api/public/file_governance_test.go` — handler-level tests
+- `internal/mcp/types.go` — `ErrorFileAccessDenied = -32006`
+- No migration needed (enforcement is stateless, based on argument inspection)
 
 ---
 
@@ -214,17 +221,26 @@ Introduce a signed request provenance chain:
 
 ### Key Concepts
 
-- **Correlation header** (`X-Rbitr-Request-Chain`): Signed JWT containing originating tenant, agent, and decision IDs
-- **Cross-tenant policy input**: New field `input.source_tenant_id` lets each tenant's policy allow/deny requests from other tenants. Default: **DENY** all cross-tenant calls
-- **ADR linkage**: Agent B's ADR references originating ADR from Agent A
-- **Chain depth limit**: Maximum 5 hops to prevent infinite loops
+- **Provenance header** (`X-Provenance-Chain`): HMAC-SHA256 signed token containing source tenant ID, source decision ID, chain depth, and expiry (30s TTL)
+- **Cross-tenant policy input**: New fields `input.source_tenant_id` and `input.chain_depth` let each tenant's policy allow/deny requests from other tenants
+- **ADR linkage**: Downstream ADR references the originating decision via `source_decision_id`
+- **Chain depth limit**: Configurable maximum (default 5) to prevent infinite loops
+
+Feature flag: `RBTR_FEATURE_CROSS_TENANT_CHAIN=true`
+Max chain depth: `RBTR_MAX_CHAIN_DEPTH` (default `5`)
 
 ### Implementation
 
-- New file: `internal/auth/provenance.go` — chain token creation/validation
-- Modified: `internal/policy/evaluator.go` — inject source_tenant_id into policy input
-- Modified: `internal/api/public/handlers.go` — extract and validate chain header
-- New migration: cross-tenant allowlist table
+- `internal/auth/provenance.go` — `ProvenanceManager` with HMAC-signed token issue/validate (reuses session.go pattern)
+- `internal/auth/provenance_test.go` — 8 test cases covering token lifecycle, depth limits, expiry, and signature validation
+- `internal/api/public/provenance.go` — `extractProvenance` helper and `injectProvenanceInput` for policy enrichment
+- `internal/api/public/feature_flags.go` — `featureCrossTenantChainEnabled`
+- `internal/api/public/handlers.go` — provenance extraction + policy injection in REST handler, `SourceDecisionID` in ADRs
+- `internal/api/public/mcp_handler.go` — provenance extraction + policy injection in MCP handler, `SourceDecisionID` in ADRs
+- `internal/models/models.go` — `SourceDecisionID` field on `ActionDecisionRecord` and `ActionDecisionExport`
+- `internal/store/store.go` — `InsertADR` includes `source_decision_id` column
+- `cmd/gateway/main.go` — `initProvenanceManager` wired to Dependencies
+- `migrations/00030_cross_tenant_provenance.sql` — adds `source_decision_id` column with partial index
 
 ---
 

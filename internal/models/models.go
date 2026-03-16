@@ -112,6 +112,7 @@ type ActionDecisionRecord struct {
 	RequestHash       string           `json:"request_hash,omitempty"`
 	ResponseHash      string           `json:"response_hash,omitempty"`
 	ApprovalRequestID string           `json:"approval_request_id,omitempty"`
+	SourceDecisionID  string           `json:"source_decision_id,omitempty"`
 	CreatedAt         time.Time        `json:"created_at"`
 }
 
@@ -163,6 +164,7 @@ type ActionDecisionExport struct {
 	ApprovalExecutedRequestID  string           `json:"approval_executed_request_id,omitempty"`
 	ApprovalExecutedDecisionID string           `json:"approval_executed_decision_id,omitempty"`
 	ApprovalRequestDecisionID  string           `json:"approval_request_decision_id,omitempty"`
+	SourceDecisionID           string           `json:"source_decision_id,omitempty"`
 	Timestamp                  time.Time        `json:"timestamp"`
 }
 

@@ -32,9 +32,18 @@
 ### Authentication and Secrets
 
 - HMAC-SHA256 key hashing for admin and tenant keys.
+- Ephemeral session tokens (HMAC-SHA256, 15-min TTL, IP-bound) for MCP sessions.
 - Setup token enforcement with optional CIDR network gating.
 - Key rotation support with previous-key fallback candidates.
 - No default/demo credentials in the production setup path.
+
+### Agent-to-Agent Security
+
+- Mandatory base policy layer prevents tenant policies from overriding DENY/REQUIRE_APPROVAL for critical actions.
+- File access governance detects file paths in tool arguments and enforces per-tenant sandboxing.
+- Path traversal detection blocks `../` sequences at the gateway before tool execution.
+- Cross-tenant provenance chain tracks request origin across tenant boundaries with signed tokens and ADR linkage.
+- Chain depth limiting (default 5 hops) prevents infinite cross-tenant request loops.
 
 ### Audit and Compliance
 
