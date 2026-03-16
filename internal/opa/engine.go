@@ -329,6 +329,11 @@ func parsePriority(value any) (int, bool) {
 	return 0, false
 }
 
+// IsValidDecision reports whether the given string is a valid policy decision enum.
+func IsValidDecision(decision string) bool {
+	return isDecisionAllowed(decision)
+}
+
 func isDecisionAllowed(decision string) bool {
 	switch decision {
 	case "ALLOW", "DENY", "REQUIRE_APPROVAL":

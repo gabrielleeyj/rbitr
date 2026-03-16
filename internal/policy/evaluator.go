@@ -71,6 +71,37 @@ func NewEvaluator(s store.StoreAPI) EvaluatorAPI {
 }
 
 func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[string]any) (Result, error) {
+	// Phase 1: Evaluate base policy first.
+	// Base policy DENY → short-circuit, tenant policy never runs.
+	// Base policy REQUIRE_APPROVAL → tenant cannot downgrade to ALLOW.
+	baseResult, baseErr := EvaluateBasePolicy(ctx, input)
+	if baseErr != nil {
+		// Base policy failure is non-fatal; log and continue with tenant policy.
+		baseResult = BasePolicyResult{Effect: "ALLOW", RuleID: "base_error", Reason: "base policy eval error"}
+	}
+	if baseResult.Effect == "DENY" {
+		return Result{
+			Version:     "base",
+			Decision:    "DENY",
+			Risk:        inputRisk(input),
+			Rule:        models.DecisionRule{ID: baseResult.RuleID, Priority: basePolicyPriority},
+			Reasons:     []models.DecisionReason{{Code: "BASE_POLICY_DENY", Message: baseResult.Reason}},
+			Constraints: map[string]any{},
+			Tags:        []string{"base_policy:DENY"},
+		}, nil
+	}
+
+	// Phase 2: Evaluate tenant policy.
+	tenantResult, err := e.evaluateTenantPolicy(ctx, tenantID, input)
+	if err != nil {
+		return Result{}, err
+	}
+
+	// Phase 3: Merge base policy constraint with tenant decision.
+	return MergeBasePolicyDecision(baseResult, &tenantResult), nil
+}
+
+func (e *Evaluator) evaluateTenantPolicy(ctx context.Context, tenantID string, input map[string]any) (Result, error) {
 	policy, err := e.store.GetPolicy(ctx, tenantID)
 	if err != nil {
 		return Result{}, err
@@ -134,6 +165,17 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 		MatchedRules:  toDecisionMatchedRules(result.MatchedRules),
 		PolicyVersion: policy.PolicyVersion,
 	}, nil
+}
+
+// basePolicyPriority is the priority assigned to base policy rules.
+// It is higher than any tenant policy rule to ensure base policy wins ties.
+const basePolicyPriority = 1000
+
+func inputRisk(input map[string]any) string {
+	if risk, ok := input["action_risk"].(string); ok {
+		return risk
+	}
+	return "MEDIUM"
 }
 
 func toDecisionReasons(reasons []opa.Reason) []models.DecisionReason {

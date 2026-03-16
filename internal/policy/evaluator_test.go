@@ -68,7 +68,7 @@ func TestEvaluatorEvaluate(t *testing.T) {
 				Rule:          models.DecisionRule{ID: "rule_allow", Priority: 10},
 				Reasons:       []models.DecisionReason{{Code: "ALLOW", Message: "ok"}},
 				Constraints:   map[string]any{},
-				Tags:          []string{},
+				Tags:          []string{"base_policy:ALLOW"},
 				PolicyVersion: "p_v1",
 			},
 		},
