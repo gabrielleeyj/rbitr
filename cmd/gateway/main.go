@@ -120,6 +120,7 @@ func main() {
 	})
 
 	sessionMgr := initSessionManager(&cfg)
+	provenanceMgr := initProvenanceManager(&cfg)
 
 	public.RegisterRoutes(e, &public.Dependencies{
 		Store:             st,
@@ -131,6 +132,7 @@ func main() {
 		ToolCache:         toolCache,
 		RiskOverrideCache: riskOverrideCache,
 		SessionManager:    sessionMgr,
+		ProvenanceManager: provenanceMgr,
 	})
 	admin.RegisterRoutes(e, &admin.Dependencies{
 		Store:         st,
@@ -153,6 +155,18 @@ func main() {
 	if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		e.Logger.Error("failed to start server", "error", err)
 	}
+}
+
+func initProvenanceManager(cfg *config.Config) *auth.ProvenanceManager {
+	if !cfg.FeatureCrossTenantChain {
+		return nil
+	}
+	pm, err := auth.NewProvenanceManager(cfg.MaxChainDepth)
+	if err != nil {
+		log.Fatalf("provenance manager init failed: %v", err)
+	}
+	log.Printf("cross-tenant provenance chain enabled (max_depth=%d)", cfg.MaxChainDepth)
+	return pm
 }
 
 func initSessionManager(cfg *config.Config) *auth.SessionManager {

@@ -10,6 +10,10 @@ mocks:
 demo:
 	./scripts/demo.sh
 
+.PHONY: lint
+lint:
+	golangci-lint run ./...
+
 .PHONY: dev-up
 dev-up:
 	docker compose -f docker-compose.dev.yml up --build

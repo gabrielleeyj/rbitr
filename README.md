@@ -203,6 +203,45 @@ Report artifact: `artifacts/marketplace_onboarding_report.json` (override with `
 
 GitHub Actions manual run: `.github/workflows/marketplace-onboarding.yml`.
 
+## Security Hardening (Epic 11)
+
+### Mandatory Base Policy
+
+A system-level base policy evaluates before every tenant policy. Base policy DENY/REQUIRE_APPROVAL cannot be overridden by tenant policies:
+
+- All CRITICAL risk actions require approval
+- Destructive actions (`DATA.DELETE`, `DATA.BULK_EXPORT`) at HIGH/CRITICAL require approval
+- Identity/access actions (`ACCESS.GRANT`, `ACCESS.ROLE_CHANGE`) always require approval
+
+### Ephemeral Session Tokens
+
+Short-lived HMAC-SHA256 session tokens replace static tenant keys for MCP sessions:
+
+- Issued during `initialize` handshake
+- Bound to tenant, agent, and source IP
+- 15-minute TTL (configurable via `RBTR_SESSION_TOKEN_TTL_SECONDS`)
+- Revocable per-session or per-tenant
+- Enable: `RBTR_FEATURE_SESSION_TOKENS=true`
+
+### File Access Governance
+
+File path detection in tool call arguments with tenant-scoped sandbox enforcement:
+
+- Recursive JSON argument walking detects file paths
+- Path traversal (`../`) blocked by raw segment inspection
+- Paths outside tenant sandbox (`/data/tenants/{tenant_id}/`) denied
+- Enable: `RBTR_FEATURE_FILE_GOVERNANCE=true`
+
+### Cross-Tenant Provenance Chain
+
+Signed provenance tokens track agent-to-agent request chains across tenant boundaries:
+
+- `X-Provenance-Chain` header carries HMAC-signed token (30s TTL)
+- Policy input enriched with `source_tenant_id` and `chain_depth`
+- ADR linkage via `source_decision_id` for full chain traceability
+- Configurable max chain depth (default 5) prevents infinite loops
+- Enable: `RBTR_FEATURE_CROSS_TENANT_CHAIN=true`
+
 ## API
 
 - Tool call payload is a JSON envelope with `http_method`, `path`, `query`, `headers`, `body` expected by `POST /v1/tools/{tool_id}/call`.

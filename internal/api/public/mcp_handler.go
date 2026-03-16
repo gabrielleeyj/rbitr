@@ -632,6 +632,12 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		}
 	}
 
+	// Cross-tenant provenance chain: inject source_tenant_id and chain_depth.
+	prov := d.extractProvenance(c.Request())
+	if d.featureCrossTenantChainEnabled(ctx) {
+		policyInput = injectProvenanceInput(policyInput, prov)
+	}
+
 	decisionResult, err := d.Policy.Evaluate(ctx, tenant.TenantID, policyInput)
 	if err != nil {
 		if invalidReason, policyVersion, ok := policyInvalidReason(err); ok {
@@ -683,26 +689,27 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			Message: "Rate limit exceeded",
 		}}
 		adr := models.ActionDecisionRecord{
-			DecisionID:      decisionID,
-			RequestID:       requestID,
-			TenantID:        tenant.TenantID,
-			AgentID:         agentID,
-			ToolID:          toolID,
-			ActionType:      classificationResult.ActionType,
-			ActionRisk:      classificationResult.ActionRisk,
-			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        string(decisionDeny),
-			DecisionVersion: decisionResult.Version,
-			DecisionRisk:    decisionResult.Risk,
-			RuleID:          "rate_limit_" + rateLimitViolation.Window,
-			RulePriority:    rulePriority,
-			Reasons:         reasons,
-			Constraints:     withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
-			Tags:            decisionResult.Tags,
-			PolicyVersion:   decisionResult.PolicyVersion,
-			Reason:          firstReasonMessage(reasons),
-			RequestHash:     requestHash,
-			CreatedAt:       time.Now().UTC(),
+			DecisionID:       decisionID,
+			RequestID:        requestID,
+			TenantID:         tenant.TenantID,
+			AgentID:          agentID,
+			ToolID:           toolID,
+			ActionType:       classificationResult.ActionType,
+			ActionRisk:       classificationResult.ActionRisk,
+			ActionSummary:    classificationResult.ActionSummary,
+			Decision:         string(decisionDeny),
+			DecisionVersion:  decisionResult.Version,
+			DecisionRisk:     decisionResult.Risk,
+			RuleID:           "rate_limit_" + rateLimitViolation.Window,
+			RulePriority:     rulePriority,
+			Reasons:          reasons,
+			Constraints:      withRateLimitConstraint(decisionResult.Constraints, rateLimitViolation),
+			Tags:             decisionResult.Tags,
+			PolicyVersion:    decisionResult.PolicyVersion,
+			Reason:           firstReasonMessage(reasons),
+			RequestHash:      requestHash,
+			SourceDecisionID: prov.SourceDecisionID,
+			CreatedAt:        time.Now().UTC(),
 		}
 		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
@@ -741,26 +748,27 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			Message: argConstraintViolation.Message,
 		}}
 		adr := models.ActionDecisionRecord{
-			DecisionID:      decisionID,
-			RequestID:       requestID,
-			TenantID:        tenant.TenantID,
-			AgentID:         agentID,
-			ToolID:          toolID,
-			ActionType:      classificationResult.ActionType,
-			ActionRisk:      classificationResult.ActionRisk,
-			ActionSummary:   classificationResult.ActionSummary,
-			Decision:        string(decisionDeny),
-			DecisionVersion: decisionResult.Version,
-			DecisionRisk:    decisionResult.Risk,
-			RuleID:          argConstraintRuleID(argConstraintViolation),
-			RulePriority:    rulePriority,
-			Reasons:         reasons,
-			Constraints:     withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
-			Tags:            decisionResult.Tags,
-			PolicyVersion:   decisionResult.PolicyVersion,
-			Reason:          firstReasonMessage(reasons),
-			RequestHash:     requestHash,
-			CreatedAt:       time.Now().UTC(),
+			DecisionID:       decisionID,
+			RequestID:        requestID,
+			TenantID:         tenant.TenantID,
+			AgentID:          agentID,
+			ToolID:           toolID,
+			ActionType:       classificationResult.ActionType,
+			ActionRisk:       classificationResult.ActionRisk,
+			ActionSummary:    classificationResult.ActionSummary,
+			Decision:         string(decisionDeny),
+			DecisionVersion:  decisionResult.Version,
+			DecisionRisk:     decisionResult.Risk,
+			RuleID:           argConstraintRuleID(argConstraintViolation),
+			RulePriority:     rulePriority,
+			Reasons:          reasons,
+			Constraints:      withArgConstraintFailures(decisionResult.Constraints, argConstraintViolation),
+			Tags:             decisionResult.Tags,
+			PolicyVersion:    decisionResult.PolicyVersion,
+			Reason:           firstReasonMessage(reasons),
+			RequestHash:      requestHash,
+			SourceDecisionID: prov.SourceDecisionID,
+			CreatedAt:        time.Now().UTC(),
 		}
 		if err := d.Store.InsertADR(ctx, &adr); err != nil {
 			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
@@ -795,26 +803,27 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	// Create Action Decision Record
 	decisionID := "d_" + uuid.NewString()
 	adr := models.ActionDecisionRecord{
-		DecisionID:      decisionID,
-		RequestID:       requestID,
-		TenantID:        tenant.TenantID,
-		AgentID:         agentID,
-		ToolID:          toolID,
-		ActionType:      classificationResult.ActionType,
-		ActionRisk:      classificationResult.ActionRisk,
-		ActionSummary:   classificationResult.ActionSummary,
-		Decision:        decisionResult.Decision,
-		DecisionVersion: decisionResult.Version,
-		DecisionRisk:    decisionResult.Risk,
-		RuleID:          decisionResult.Rule.ID,
-		RulePriority:    decisionResult.Rule.Priority,
-		Reasons:         decisionResult.Reasons,
-		Constraints:     decisionResult.Constraints,
-		Tags:            decisionResult.Tags,
-		PolicyVersion:   decisionResult.PolicyVersion,
-		Reason:          firstReasonMessage(decisionResult.Reasons),
-		RequestHash:     requestHash,
-		CreatedAt:       time.Now().UTC(),
+		DecisionID:       decisionID,
+		RequestID:        requestID,
+		TenantID:         tenant.TenantID,
+		AgentID:          agentID,
+		ToolID:           toolID,
+		ActionType:       classificationResult.ActionType,
+		ActionRisk:       classificationResult.ActionRisk,
+		ActionSummary:    classificationResult.ActionSummary,
+		Decision:         decisionResult.Decision,
+		DecisionVersion:  decisionResult.Version,
+		DecisionRisk:     decisionResult.Risk,
+		RuleID:           decisionResult.Rule.ID,
+		RulePriority:     decisionResult.Rule.Priority,
+		Reasons:          decisionResult.Reasons,
+		Constraints:      decisionResult.Constraints,
+		Tags:             decisionResult.Tags,
+		PolicyVersion:    decisionResult.PolicyVersion,
+		Reason:           firstReasonMessage(decisionResult.Reasons),
+		RequestHash:      requestHash,
+		SourceDecisionID: prov.SourceDecisionID,
+		CreatedAt:        time.Now().UTC(),
 	}
 
 	// Handle different decision outcomes

@@ -52,3 +52,7 @@ func (d *Dependencies) featureArgConstraintsEnabled(ctx context.Context) bool {
 func (d *Dependencies) featureFileGovernanceEnabled(_ context.Context) bool {
 	return d.Config.FeatureFileGovernance
 }
+
+func (d *Dependencies) featureCrossTenantChainEnabled(_ context.Context) bool {
+	return d.Config.FeatureCrossTenantChain
+}
