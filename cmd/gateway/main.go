@@ -18,6 +18,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/api/admin"
 	"github.com/gabrielleeyj/rbitr/internal/api/public"
 	apisetup "github.com/gabrielleeyj/rbitr/internal/api/setup"
+	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
@@ -118,6 +119,8 @@ func main() {
 		},
 	})
 
+	sessionMgr := initSessionManager(&cfg)
+
 	public.RegisterRoutes(e, &public.Dependencies{
 		Store:             st,
 		Policy:            policyEval,
@@ -127,6 +130,7 @@ func main() {
 		Notifier:          notificationService,
 		ToolCache:         toolCache,
 		RiskOverrideCache: riskOverrideCache,
+		SessionManager:    sessionMgr,
 	})
 	admin.RegisterRoutes(e, &admin.Dependencies{
 		Store:         st,
@@ -149,4 +153,16 @@ func main() {
 	if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		e.Logger.Error("failed to start server", "error", err)
 	}
+}
+
+func initSessionManager(cfg *config.Config) *auth.SessionManager {
+	if !cfg.FeatureSessionTokens {
+		return nil
+	}
+	sm, err := auth.NewSessionManager(cfg.SessionTokenTTL)
+	if err != nil {
+		log.Fatalf("session manager init failed: %v", err)
+	}
+	log.Printf("session tokens enabled (TTL=%s)", cfg.SessionTokenTTL)
+	return sm
 }

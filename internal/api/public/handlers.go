@@ -40,6 +40,7 @@ type Dependencies struct {
 	Notifier          *notifications.Service
 	ToolCache         *cache.TTLCache[models.Tool]
 	RiskOverrideCache *cache.TTLCache[string]
+	SessionManager    *auth.SessionManager
 }
 
 type ToolCallRequest struct {
@@ -220,6 +221,14 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			"path":   payload.Path,
 		},
 	}
+
+	// File access governance: detect file paths in arguments and block traversal/sandbox violations.
+	if d.featureFileGovernanceEnabled(c.Request().Context()) {
+		if violation := d.checkFileAccess(parseRESTArguments(bodyBytes), tenant.TenantID); violation != "" {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": violation})
+		}
+	}
+
 	decisionResult, err := d.Policy.Evaluate(c.Request().Context(), tenant.TenantID, policyInput)
 	//nolint:nestif // Policy eval handling keeps invalid-output fallback and hard-failure paths together.
 	if err != nil {

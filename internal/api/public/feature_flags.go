@@ -48,3 +48,7 @@ func (d *Dependencies) featureArgConstraintsEnabled(ctx context.Context) bool {
 	}
 	return d.Config.FeatureArgConstraints
 }
+
+func (d *Dependencies) featureFileGovernanceEnabled(_ context.Context) bool {
+	return d.Config.FeatureFileGovernance
+}
