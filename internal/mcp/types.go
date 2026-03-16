@@ -158,6 +158,7 @@ const (
 	ErrorDeniedByPolicy    = -32003 // Denied by policy
 	ErrorPolicyInvalid     = -32004 // Policy evaluation error
 	ErrorRateLimitExceeded = -32005 // Rate limit exceeded
+	ErrorFileAccessDenied  = -32006 // File access denied
 )
 
 // MCP method names.

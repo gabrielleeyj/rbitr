@@ -78,7 +78,7 @@ func TestHandleMCP_Authentication(t *testing.T) {
 					Return(models.Tenant{TenantID: "t_demo", Name: "Demo", Enabled: true}, nil)
 			},
 			expectedError:  true,
-			expectedErrMsg: "tenant mismatch",
+			expectedErrMsg: "authentication failed",
 		},
 	}
 

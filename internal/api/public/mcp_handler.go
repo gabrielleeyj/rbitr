@@ -65,7 +65,7 @@ func (d *Dependencies) handleMCP(c *echo.Context) error {
 	c.Set(telemetry.CtxRequestID, requestID)
 	c.Response().Header().Set("X-Request-Id", requestID)
 
-	tenant, agentID, err := d.authenticateTenantRequest(c)
+	tenant, agentID, err := d.authenticateMCPRequest(c, tenantID)
 	if err != nil {
 		code := mcp.ErrorUnauthorized
 		msg := "authentication failed"
@@ -73,16 +73,13 @@ func (d *Dependencies) handleMCP(c *echo.Context) error {
 			code = mcp.ErrorInvalidParams
 			msg = "invalid agent_id"
 		}
-		return writeJSONRPCError(c, nil, &mcp.ErrorObject{Code: code, Message: msg})
-	}
-
-	// Verify tenant_id matches authenticated tenant
-	if tenant.TenantID != tenantID {
-		errObj := &mcp.ErrorObject{
-			Code:    mcp.ErrorUnauthorized,
-			Message: "tenant mismatch",
+		if errors.Is(err, auth.ErrSessionExpired) {
+			msg = "session token expired"
 		}
-		return writeJSONRPCError(c, nil, errObj)
+		if errors.Is(err, auth.ErrSessionIPMismatch) {
+			msg = "session token IP mismatch"
+		}
+		return writeJSONRPCError(c, nil, &mcp.ErrorObject{Code: code, Message: msg})
 	}
 
 	c.Set(telemetry.CtxAgentID, agentID)
@@ -173,13 +170,11 @@ func (d *Dependencies) handleMCPStream(c *echo.Context) error {
 	c.Set(telemetry.CtxRequestID, requestID)
 	c.Response().Header().Set("X-Request-Id", requestID)
 
-	tenant, agentID, err := d.authenticateTenantRequest(c)
+	tenant, agentID, err := d.authenticateMCPRequest(c, tenantID)
 	if err != nil {
 		return c.NoContent(http.StatusUnauthorized)
 	}
-	if tenant.TenantID != tenantID {
-		return c.NoContent(http.StatusForbidden)
-	}
+	_ = tenant // used for tenant verification in authenticateMCPRequest
 	c.Set(telemetry.CtxAgentID, agentID)
 
 	streamCtx, cancel := context.WithTimeout(c.Request().Context(), mcpStreamMaxDuration)
@@ -242,7 +237,7 @@ func (d *Dependencies) handleMCPStream(c *echo.Context) error {
 func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, agentID string, req *mcp.Request) (*mcp.Response, error) {
 	switch req.Method {
 	case mcp.MethodInitialize:
-		return d.handleInitialize(req)
+		return d.handleInitialize(c, tenant, agentID, req)
 
 	case mcp.MethodNotificationsInitialized:
 		return d.handleInitializedNotification(req)
@@ -347,7 +342,7 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 }
 
 //nolint:nilerr // JSON-RPC errors are encoded in response payloads rather than Go errors.
-func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error) {
+func (d *Dependencies) handleInitialize(c *echo.Context, tenant models.Tenant, agentID string, req *mcp.Request) (*mcp.Response, error) {
 	var params mcp.InitializeParams
 	if len(req.Params) > 0 {
 		if unmarshalErr := json.Unmarshal(req.Params, &params); unmarshalErr != nil {
@@ -367,18 +362,40 @@ func (d *Dependencies) handleInitialize(req *mcp.Request) (*mcp.Response, error)
 		}), nil
 	}
 
+	capabilities := map[string]any{
+		"tools": map[string]any{
+			"listChanged": false,
+		},
+	}
+
 	result := mcp.InitializeResult{
 		ProtocolVersion: mcp.ProtocolVersion20251125,
-		Capabilities: map[string]any{
-			"tools": map[string]any{
-				"listChanged": false,
-			},
-		},
+		Capabilities:    capabilities,
 		ServerInfo: mcp.Implementation{
 			Name:    "rbitr-gateway",
 			Version: "v1",
 		},
 	}
+
+	// Issue ephemeral session token if feature is enabled.
+	if d.SessionManager != nil && d.Config.FeatureSessionTokens {
+		sourceIP := extractClientIP(c)
+		token, claims, err := d.SessionManager.IssueToken(tenant.TenantID, agentID, sourceIP)
+		if err != nil {
+			c.Logger().Error("session token issue failed",
+				"tenant_id", tenant.TenantID,
+				"agent_id", agentID,
+				"error", err,
+			)
+		} else {
+			result.Capabilities["session"] = map[string]any{
+				"token":      token,
+				"expires_at": claims.ExpiresAt,
+				"session_id": claims.SessionID,
+			}
+		}
+	}
+
 	return mcp.NewSuccessResponse(req.ID, result)
 }
 
@@ -603,6 +620,16 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		"policy_version": "",
 		"mcp":            true,
 		"arguments":      argumentsMap,
+	}
+
+	// File access governance: detect file paths in arguments and block traversal/sandbox violations.
+	if d.featureFileGovernanceEnabled(ctx) {
+		if violation := d.checkFileAccess(argumentsMap, tenant.TenantID); violation != "" {
+			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+				Code:    mcp.ErrorFileAccessDenied,
+				Message: violation,
+			}), nil
+		}
 	}
 
 	decisionResult, err := d.Policy.Evaluate(ctx, tenant.TenantID, policyInput)
@@ -1409,4 +1436,66 @@ func isValidToolID(toolID string) bool {
 		}
 	}
 	return true
+}
+
+// authenticateMCPRequest attempts session token auth first, then falls back to tenant key auth.
+// Session tokens are only accepted when the feature is enabled and a SessionManager is configured.
+func (d *Dependencies) authenticateMCPRequest(c *echo.Context, tenantID string) (models.Tenant, string, error) {
+	// Try session token auth first if feature is enabled.
+	if d.SessionManager != nil && d.Config.FeatureSessionTokens {
+		if tenant, agentID, ok, err := d.authenticateViaSession(c, tenantID); ok || err != nil {
+			return tenant, agentID, err
+		}
+	}
+
+	// Fall back to tenant key auth.
+	tenant, agentID, err := d.authenticateTenantRequest(c)
+	if err != nil {
+		return models.Tenant{}, "", err
+	}
+
+	// Verify tenant_id matches authenticated tenant.
+	if tenant.TenantID != tenantID {
+		return models.Tenant{}, "", auth.ErrUnauthorized
+	}
+
+	return tenant, agentID, nil
+}
+
+// authenticateViaSession validates a session token from the request.
+// Returns (tenant, agentID, true, nil) on success, (_, _, false, nil) if no token present,
+// or (_, _, false, err) on validation failure.
+func (d *Dependencies) authenticateViaSession(c *echo.Context, tenantID string) (tenant models.Tenant, agentID string, ok bool, err error) {
+	sessionToken := auth.SessionTokenFromRequest(c.Request())
+	if sessionToken == "" {
+		return models.Tenant{}, "", false, nil
+	}
+
+	sourceIP := extractClientIP(c)
+	claims, err := d.SessionManager.ValidateToken(sessionToken, sourceIP)
+	if err != nil {
+		return models.Tenant{}, "", false, err
+	}
+
+	// Verify the session's tenant matches the path tenant.
+	if claims.TenantID != tenantID {
+		return models.Tenant{}, "", false, auth.ErrUnauthorized
+	}
+
+	// Verify the tenant still exists.
+	summary, lookupErr := d.Store.GetTenant(c.Request().Context(), claims.TenantID)
+	if lookupErr != nil {
+		return models.Tenant{}, "", false, auth.ErrUnauthorized
+	}
+
+	return models.Tenant{
+		TenantID: summary.TenantID,
+		Name:     summary.Name,
+		Enabled:  true, // existence in store implies enabled for session scope
+	}, claims.AgentID, true, nil
+}
+
+// extractClientIP returns the client IP address from the echo context.
+func extractClientIP(c *echo.Context) string {
+	return strings.TrimSpace(c.RealIP())
 }

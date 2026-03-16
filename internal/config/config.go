@@ -20,6 +20,9 @@ type Config struct {
 	FeatureRateLimiting   bool
 	FeatureArgConstraints bool
 	FeatureShadowMode     bool
+	FeatureSessionTokens  bool
+	FeatureFileGovernance bool
+	SessionTokenTTL       time.Duration
 	DevAutoTools          bool
 	DevMockInternalURL    string
 	DevJiraURL            string
@@ -35,6 +38,7 @@ const (
 	defaultDBMaxIdleConns    = 10
 	defaultDBConnMaxLifetime = 30 * time.Minute
 	defaultDBConnMaxIdleTime = 5 * time.Minute
+	defaultSessionTokenTTL   = 15 * time.Minute
 )
 
 func Load() Config {
@@ -51,6 +55,9 @@ func Load() Config {
 		FeatureRateLimiting:   getEnvBool("RBTR_FEATURE_RATE_LIMITING"),
 		FeatureArgConstraints: getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS"),
 		FeatureShadowMode:     getEnvBool("RBTR_FEATURE_SHADOW_MODE"),
+		FeatureSessionTokens:  getEnvBool("RBTR_FEATURE_SESSION_TOKENS"),
+		FeatureFileGovernance: getEnvBool("RBTR_FEATURE_FILE_GOVERNANCE"),
+		SessionTokenTTL:       getEnvDurationFromSeconds("RBTR_SESSION_TOKEN_TTL_SECONDS", defaultSessionTokenTTL),
 		DevAutoTools:          getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		DevMockInternalURL:    getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:            getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),
