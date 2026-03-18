@@ -8,7 +8,7 @@
 | **2** Ephemeral Session Tokens | **DONE** | 2026-03-15 |
 | **3** File Access Governance | **DONE** | 2026-03-16 |
 | **4** Cross-Tenant Provenance Chain | **DONE** | 2026-03-16 |
-| **5** mTLS Client Certificates | Planned | — |
+| **5** mTLS Client Certificates | **DEFERRED** | — |
 
 ## Summary
 
@@ -244,7 +244,9 @@ Max chain depth: `RBTR_MAX_CHAIN_DEPTH` (default `5`)
 
 ---
 
-## Phase 5 — mTLS Client Certificates & Token Binding
+## Phase 5 — mTLS Client Certificates & Token Binding (DEFERRED)
+
+> **Status:** Deferred as of 2026-03-18. Current security model (session tokens + HMAC keys) is sufficient. Revisit when deployments require hardware-grade agent identity binding or when operating in zero-trust networks where LB TLS passthrough is available.
 
 ### Problem
 

@@ -853,6 +853,9 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
 			},
 			expectedCode:          http.StatusOK,
 			expectMode:            "enforce",
@@ -882,6 +885,9 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
 			},
 			expectedCode:            http.StatusOK,
 			expectMode:              "enforce",
@@ -909,6 +915,9 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureArgConstraints", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
 				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
 					TenantID:                     "t1",
 					ActivePolicyVersion:          "p1",
