@@ -2495,11 +2495,15 @@ func TestStoreGetNotificationConfig(t *testing.T) {
 				"tenant_id", "slack_webhook_enabled", "slack_webhook_secret_ref", "slack_webhook_default_channel",
 				"slack_bot_enabled", "slack_bot_secret_ref", "slack_bot_default_channel", "slack_bot_signing_secret_ref",
 				"email_enabled", "email_provider", "email_secret_ref", "email_from", "email_region", "email_domain", "email_default_mailing_list_id",
+				"telegram_enabled", "telegram_secret_ref", "telegram_chat_id",
+				"whatsapp_enabled", "whatsapp_secret_ref", "whatsapp_phone_number_id", "whatsapp_default_recipient",
 				"notify_approval_expiring", "notify_token_abuse", "notify_policy_invalid", "created_at", "updated_at",
 			}).AddRow(
 				"t1", true, "env://SLACK", "C01",
 				false, nil, nil, nil,
 				false, nil, nil, nil, nil, nil, nil,
+				false, nil, nil,
+				false, nil, nil, nil,
 				true, true, true, time.Now(), time.Now(),
 			),
 		},
@@ -2519,6 +2523,8 @@ func TestStoreGetNotificationConfig(t *testing.T) {
 			query := regexp.QuoteMeta(`SELECT tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
 		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
+		telegram_enabled, telegram_secret_ref, telegram_chat_id,
+		whatsapp_enabled, whatsapp_secret_ref, whatsapp_phone_number_id, whatsapp_default_recipient,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
 		FROM rbitr.notification_config WHERE tenant_id = $1`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
@@ -2548,8 +2554,10 @@ func TestStoreUpsertNotificationConfig(t *testing.T) {
 		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
 		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
+		telegram_enabled, telegram_secret_ref, telegram_chat_id,
+		whatsapp_enabled, whatsapp_secret_ref, whatsapp_phone_number_id, whatsapp_default_recipient,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 	ON CONFLICT (tenant_id) DO UPDATE SET
 		slack_webhook_enabled = EXCLUDED.slack_webhook_enabled,
 		slack_webhook_secret_ref = EXCLUDED.slack_webhook_secret_ref,
@@ -2565,6 +2573,13 @@ func TestStoreUpsertNotificationConfig(t *testing.T) {
 		email_region = EXCLUDED.email_region,
 		email_domain = EXCLUDED.email_domain,
 		email_default_mailing_list_id = EXCLUDED.email_default_mailing_list_id,
+		telegram_enabled = EXCLUDED.telegram_enabled,
+		telegram_secret_ref = EXCLUDED.telegram_secret_ref,
+		telegram_chat_id = EXCLUDED.telegram_chat_id,
+		whatsapp_enabled = EXCLUDED.whatsapp_enabled,
+		whatsapp_secret_ref = EXCLUDED.whatsapp_secret_ref,
+		whatsapp_phone_number_id = EXCLUDED.whatsapp_phone_number_id,
+		whatsapp_default_recipient = EXCLUDED.whatsapp_default_recipient,
 		notify_approval_expiring = EXCLUDED.notify_approval_expiring,
 		notify_token_abuse = EXCLUDED.notify_token_abuse,
 		notify_policy_invalid = EXCLUDED.notify_policy_invalid,
@@ -2583,6 +2598,13 @@ func TestStoreUpsertNotificationConfig(t *testing.T) {
 			sql.NullString{String: "", Valid: false},
 			sql.NullString{String: "", Valid: false},
 			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			false,
+			sql.NullString{String: "", Valid: false},
+			sql.NullString{String: "", Valid: false},
+			false,
 			sql.NullString{String: "", Valid: false},
 			sql.NullString{String: "", Valid: false},
 			sql.NullString{String: "", Valid: false},

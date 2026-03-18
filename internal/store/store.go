@@ -1965,6 +1965,8 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	query := `SELECT tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
 		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
+		telegram_enabled, telegram_secret_ref, telegram_chat_id,
+		whatsapp_enabled, whatsapp_secret_ref, whatsapp_phone_number_id, whatsapp_default_recipient,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
 		FROM rbitr.notification_config WHERE tenant_id = $1`
 	row := s.db.QueryRowContext(ctx, query, tenantID)
@@ -1980,6 +1982,11 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	var emailRegion sql.NullString
 	var emailDomain sql.NullString
 	var emailListID sql.NullString
+	var telegramRef sql.NullString
+	var telegramChatID sql.NullString
+	var whatsappRef sql.NullString
+	var whatsappPhoneID sql.NullString
+	var whatsappRecipient sql.NullString
 	if err := row.Scan(
 		&config.TenantID,
 		&config.SlackWebhookEnabled,
@@ -1996,6 +2003,13 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 		&emailRegion,
 		&emailDomain,
 		&emailListID,
+		&config.TelegramEnabled,
+		&telegramRef,
+		&telegramChatID,
+		&config.WhatsAppEnabled,
+		&whatsappRef,
+		&whatsappPhoneID,
+		&whatsappRecipient,
 		&config.NotifyApprovalExpiring,
 		&config.NotifyTokenAbuse,
 		&config.NotifyPolicyInvalid,
@@ -2040,6 +2054,21 @@ func (s *Store) GetNotificationConfig(ctx context.Context, tenantID string) (mod
 	if emailListID.Valid {
 		config.EmailDefaultMailingListID = emailListID.String
 	}
+	if telegramRef.Valid {
+		config.TelegramSecretRef = telegramRef.String
+	}
+	if telegramChatID.Valid {
+		config.TelegramChatID = telegramChatID.String
+	}
+	if whatsappRef.Valid {
+		config.WhatsAppSecretRef = whatsappRef.String
+	}
+	if whatsappPhoneID.Valid {
+		config.WhatsAppPhoneNumberID = whatsappPhoneID.String
+	}
+	if whatsappRecipient.Valid {
+		config.WhatsAppDefaultRecipient = whatsappRecipient.String
+	}
 	return config, nil
 }
 
@@ -2052,8 +2081,10 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config *models.Not
 		tenant_id, slack_webhook_enabled, slack_webhook_secret_ref, slack_webhook_default_channel,
 		slack_bot_enabled, slack_bot_secret_ref, slack_bot_default_channel, slack_bot_signing_secret_ref,
 		email_enabled, email_provider, email_secret_ref, email_from, email_region, email_domain, email_default_mailing_list_id,
+		telegram_enabled, telegram_secret_ref, telegram_chat_id,
+		whatsapp_enabled, whatsapp_secret_ref, whatsapp_phone_number_id, whatsapp_default_recipient,
 		notify_approval_expiring, notify_token_abuse, notify_policy_invalid, created_at, updated_at
-	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 	ON CONFLICT (tenant_id) DO UPDATE SET
 		slack_webhook_enabled = EXCLUDED.slack_webhook_enabled,
 		slack_webhook_secret_ref = EXCLUDED.slack_webhook_secret_ref,
@@ -2069,6 +2100,13 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config *models.Not
 		email_region = EXCLUDED.email_region,
 		email_domain = EXCLUDED.email_domain,
 		email_default_mailing_list_id = EXCLUDED.email_default_mailing_list_id,
+		telegram_enabled = EXCLUDED.telegram_enabled,
+		telegram_secret_ref = EXCLUDED.telegram_secret_ref,
+		telegram_chat_id = EXCLUDED.telegram_chat_id,
+		whatsapp_enabled = EXCLUDED.whatsapp_enabled,
+		whatsapp_secret_ref = EXCLUDED.whatsapp_secret_ref,
+		whatsapp_phone_number_id = EXCLUDED.whatsapp_phone_number_id,
+		whatsapp_default_recipient = EXCLUDED.whatsapp_default_recipient,
 		notify_approval_expiring = EXCLUDED.notify_approval_expiring,
 		notify_token_abuse = EXCLUDED.notify_token_abuse,
 		notify_policy_invalid = EXCLUDED.notify_policy_invalid,
@@ -2088,6 +2126,13 @@ func (s *Store) UpsertNotificationConfig(ctx context.Context, config *models.Not
 		nullableString(config.EmailRegion),
 		nullableString(config.EmailDomain),
 		nullableString(config.EmailDefaultMailingListID),
+		config.TelegramEnabled,
+		nullableString(config.TelegramSecretRef),
+		nullableString(config.TelegramChatID),
+		config.WhatsAppEnabled,
+		nullableString(config.WhatsAppSecretRef),
+		nullableString(config.WhatsAppPhoneNumberID),
+		nullableString(config.WhatsAppDefaultRecipient),
 		config.NotifyApprovalExpiring,
 		config.NotifyTokenAbuse,
 		config.NotifyPolicyInvalid,
