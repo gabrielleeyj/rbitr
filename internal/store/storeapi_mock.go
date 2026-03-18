@@ -1506,6 +1506,66 @@ func (_c *MockStoreAPI_GetFeatureArgConstraints_Call) RunAndReturn(run func(ctx 
 	return _c
 }
 
+// GetFeatureFileGovernance provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetFeatureFileGovernance(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureFileGovernance")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetFeatureFileGovernance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFeatureFileGovernance'
+type MockStoreAPI_GetFeatureFileGovernance_Call struct {
+	*mock.Call
+}
+
+// GetFeatureFileGovernance is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetFeatureFileGovernance(ctx interface{}) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	return &MockStoreAPI_GetFeatureFileGovernance_Call{Call: _e.mock.On("GetFeatureFileGovernance", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetFeatureRateLimiting provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetFeatureRateLimiting(ctx context.Context) (bool, error) {
 	ret := _mock.Called(ctx)
@@ -1562,6 +1622,66 @@ func (_c *MockStoreAPI_GetFeatureRateLimiting_Call) Return(b bool, err error) *M
 }
 
 func (_c *MockStoreAPI_GetFeatureRateLimiting_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureRateLimiting_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFeatureSessionTokens provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetFeatureSessionTokens(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureSessionTokens")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetFeatureSessionTokens_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFeatureSessionTokens'
+type MockStoreAPI_GetFeatureSessionTokens_Call struct {
+	*mock.Call
+}
+
+// GetFeatureSessionTokens is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetFeatureSessionTokens(ctx interface{}) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	return &MockStoreAPI_GetFeatureSessionTokens_Call{Call: _e.mock.On("GetFeatureSessionTokens", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureSessionTokens_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1976,6 +2096,306 @@ func (_c *MockStoreAPI_GetRiskOverride_Call) Return(s string, err error) *MockSt
 }
 
 func (_c *MockStoreAPI_GetRiskOverride_Call) RunAndReturn(run func(ctx context.Context, tenantID string, actionType string) (string, error)) *MockStoreAPI_GetRiskOverride_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSecretProviderAWS provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSecretProviderAWS(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecretProviderAWS")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSecretProviderAWS_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecretProviderAWS'
+type MockStoreAPI_GetSecretProviderAWS_Call struct {
+	*mock.Call
+}
+
+// GetSecretProviderAWS is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSecretProviderAWS(ctx interface{}) *MockStoreAPI_GetSecretProviderAWS_Call {
+	return &MockStoreAPI_GetSecretProviderAWS_Call{Call: _e.mock.On("GetSecretProviderAWS", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAWS_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSecretProviderAWS_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAWS_Call) Return(b bool, err error) *MockStoreAPI_GetSecretProviderAWS_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAWS_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetSecretProviderAWS_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSecretProviderAzure provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSecretProviderAzure(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecretProviderAzure")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSecretProviderAzure_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecretProviderAzure'
+type MockStoreAPI_GetSecretProviderAzure_Call struct {
+	*mock.Call
+}
+
+// GetSecretProviderAzure is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSecretProviderAzure(ctx interface{}) *MockStoreAPI_GetSecretProviderAzure_Call {
+	return &MockStoreAPI_GetSecretProviderAzure_Call{Call: _e.mock.On("GetSecretProviderAzure", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAzure_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSecretProviderAzure_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAzure_Call) Return(b bool, err error) *MockStoreAPI_GetSecretProviderAzure_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderAzure_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetSecretProviderAzure_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSecretProviderGCP provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSecretProviderGCP(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecretProviderGCP")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSecretProviderGCP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecretProviderGCP'
+type MockStoreAPI_GetSecretProviderGCP_Call struct {
+	*mock.Call
+}
+
+// GetSecretProviderGCP is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSecretProviderGCP(ctx interface{}) *MockStoreAPI_GetSecretProviderGCP_Call {
+	return &MockStoreAPI_GetSecretProviderGCP_Call{Call: _e.mock.On("GetSecretProviderGCP", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSecretProviderGCP_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSecretProviderGCP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderGCP_Call) Return(b bool, err error) *MockStoreAPI_GetSecretProviderGCP_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderGCP_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetSecretProviderGCP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSecretProviderVault provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSecretProviderVault(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecretProviderVault")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSecretProviderVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecretProviderVault'
+type MockStoreAPI_GetSecretProviderVault_Call struct {
+	*mock.Call
+}
+
+// GetSecretProviderVault is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSecretProviderVault(ctx interface{}) *MockStoreAPI_GetSecretProviderVault_Call {
+	return &MockStoreAPI_GetSecretProviderVault_Call{Call: _e.mock.On("GetSecretProviderVault", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSecretProviderVault_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSecretProviderVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderVault_Call) Return(b bool, err error) *MockStoreAPI_GetSecretProviderVault_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSecretProviderVault_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetSecretProviderVault_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSessionTokenTTLSeconds provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSessionTokenTTLSeconds(ctx context.Context) (int, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSessionTokenTTLSeconds")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSessionTokenTTLSeconds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSessionTokenTTLSeconds'
+type MockStoreAPI_GetSessionTokenTTLSeconds_Call struct {
+	*mock.Call
+}
+
+// GetSessionTokenTTLSeconds is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSessionTokenTTLSeconds(ctx interface{}) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	return &MockStoreAPI_GetSessionTokenTTLSeconds_Call{Call: _e.mock.On("GetSessionTokenTTLSeconds", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Return(n int, err error) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4820,6 +5240,63 @@ func (_c *MockStoreAPI_SetFeatureArgConstraints_Call) RunAndReturn(run func(ctx 
 	return _c
 }
 
+// SetFeatureFileGovernance provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetFeatureFileGovernance(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetFeatureFileGovernance")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetFeatureFileGovernance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetFeatureFileGovernance'
+type MockStoreAPI_SetFeatureFileGovernance_Call struct {
+	*mock.Call
+}
+
+// SetFeatureFileGovernance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetFeatureFileGovernance(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	return &MockStoreAPI_SetFeatureFileGovernance_Call{Call: _e.mock.On("SetFeatureFileGovernance", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Return(err error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetFeatureRateLimiting provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) SetFeatureRateLimiting(ctx context.Context, enabled bool) error {
 	ret := _mock.Called(ctx, enabled)
@@ -4877,63 +5354,14 @@ func (_c *MockStoreAPI_SetFeatureRateLimiting_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
-func (_mock *MockStoreAPI) GetFeatureSessionTokens(ctx context.Context) (bool, error) {
-	ret := _mock.Called(ctx)
-	if len(ret) == 0 {
-		panic("no return value specified for GetFeatureSessionTokens")
-	}
-	var r0 bool
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
-		return returnFunc(ctx)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
-		r0 = returnFunc(ctx)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-type MockStoreAPI_GetFeatureSessionTokens_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStoreAPI_Expecter) GetFeatureSessionTokens(ctx interface{}) *MockStoreAPI_GetFeatureSessionTokens_Call {
-	return &MockStoreAPI_GetFeatureSessionTokens_Call{Call: _e.mock.On("GetFeatureSessionTokens", ctx)}
-}
-
-func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureSessionTokens_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		run(arg0)
-	})
-	return _c
-}
-
-func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureSessionTokens_Call {
-	_c.Call.Return(b, err)
-	return _c
-}
-
-func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureSessionTokens_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
+// SetFeatureSessionTokens provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) SetFeatureSessionTokens(ctx context.Context, enabled bool) error {
 	ret := _mock.Called(ctx, enabled)
+
 	if len(ret) == 0 {
 		panic("no return value specified for SetFeatureSessionTokens")
 	}
+
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
 		r0 = returnFunc(ctx, enabled)
@@ -4943,10 +5371,14 @@ func (_mock *MockStoreAPI) SetFeatureSessionTokens(ctx context.Context, enabled 
 	return r0
 }
 
+// MockStoreAPI_SetFeatureSessionTokens_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetFeatureSessionTokens'
 type MockStoreAPI_SetFeatureSessionTokens_Call struct {
 	*mock.Call
 }
 
+// SetFeatureSessionTokens is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
 func (_e *MockStoreAPI_Expecter) SetFeatureSessionTokens(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureSessionTokens_Call {
 	return &MockStoreAPI_SetFeatureSessionTokens_Call{Call: _e.mock.On("SetFeatureSessionTokens", ctx, enabled)}
 }
@@ -4961,7 +5393,10 @@ func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) Run(run func(ctx context.Co
 		if args[1] != nil {
 			arg1 = args[1].(bool)
 		}
-		run(arg0, arg1)
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -4976,63 +5411,14 @@ func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) RunAndReturn(run func(ctx c
 	return _c
 }
 
-func (_mock *MockStoreAPI) GetFeatureFileGovernance(ctx context.Context) (bool, error) {
-	ret := _mock.Called(ctx)
-	if len(ret) == 0 {
-		panic("no return value specified for GetFeatureFileGovernance")
-	}
-	var r0 bool
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
-		return returnFunc(ctx)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
-		r0 = returnFunc(ctx)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-type MockStoreAPI_GetFeatureFileGovernance_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStoreAPI_Expecter) GetFeatureFileGovernance(ctx interface{}) *MockStoreAPI_GetFeatureFileGovernance_Call {
-	return &MockStoreAPI_GetFeatureFileGovernance_Call{Call: _e.mock.On("GetFeatureFileGovernance", ctx)}
-}
-
-func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureFileGovernance_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		run(arg0)
-	})
-	return _c
-}
-
-func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureFileGovernance_Call {
-	_c.Call.Return(b, err)
-	return _c
-}
-
-func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureFileGovernance_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-func (_mock *MockStoreAPI) SetFeatureFileGovernance(ctx context.Context, enabled bool) error {
+// SetSecretProviderAWS provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSecretProviderAWS(ctx context.Context, enabled bool) error {
 	ret := _mock.Called(ctx, enabled)
+
 	if len(ret) == 0 {
-		panic("no return value specified for SetFeatureFileGovernance")
+		panic("no return value specified for SetSecretProviderAWS")
 	}
+
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
 		r0 = returnFunc(ctx, enabled)
@@ -5042,15 +5428,19 @@ func (_mock *MockStoreAPI) SetFeatureFileGovernance(ctx context.Context, enabled
 	return r0
 }
 
-type MockStoreAPI_SetFeatureFileGovernance_Call struct {
+// MockStoreAPI_SetSecretProviderAWS_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSecretProviderAWS'
+type MockStoreAPI_SetSecretProviderAWS_Call struct {
 	*mock.Call
 }
 
-func (_e *MockStoreAPI_Expecter) SetFeatureFileGovernance(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureFileGovernance_Call {
-	return &MockStoreAPI_SetFeatureFileGovernance_Call{Call: _e.mock.On("SetFeatureFileGovernance", ctx, enabled)}
+// SetSecretProviderAWS is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetSecretProviderAWS(ctx interface{}, enabled interface{}) *MockStoreAPI_SetSecretProviderAWS_Call {
+	return &MockStoreAPI_SetSecretProviderAWS_Call{Call: _e.mock.On("SetSecretProviderAWS", ctx, enabled)}
 }
 
-func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureFileGovernance_Call {
+func (_c *MockStoreAPI_SetSecretProviderAWS_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetSecretProviderAWS_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -5060,78 +5450,203 @@ func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Run(run func(ctx context.C
 		if args[1] != nil {
 			arg1 = args[1].(bool)
 		}
-		run(arg0, arg1)
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
 
-func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Return(err error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+func (_c *MockStoreAPI_SetSecretProviderAWS_Call) Return(err error) *MockStoreAPI_SetSecretProviderAWS_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+func (_c *MockStoreAPI_SetSecretProviderAWS_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetSecretProviderAWS_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-func (_mock *MockStoreAPI) GetSessionTokenTTLSeconds(ctx context.Context) (int, error) {
-	ret := _mock.Called(ctx)
+// SetSecretProviderAzure provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSecretProviderAzure(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
 	if len(ret) == 0 {
-		panic("no return value specified for GetSessionTokenTTLSeconds")
+		panic("no return value specified for SetSecretProviderAzure")
 	}
-	var r0 int
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
-		return returnFunc(ctx)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
-		r0 = returnFunc(ctx)
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
 	} else {
-		r0 = ret.Get(0).(int)
+		r0 = ret.Error(0)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
+	return r0
 }
 
-type MockStoreAPI_GetSessionTokenTTLSeconds_Call struct {
+// MockStoreAPI_SetSecretProviderAzure_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSecretProviderAzure'
+type MockStoreAPI_SetSecretProviderAzure_Call struct {
 	*mock.Call
 }
 
-func (_e *MockStoreAPI_Expecter) GetSessionTokenTTLSeconds(ctx interface{}) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
-	return &MockStoreAPI_GetSessionTokenTTLSeconds_Call{Call: _e.mock.On("GetSessionTokenTTLSeconds", ctx)}
+// SetSecretProviderAzure is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetSecretProviderAzure(ctx interface{}, enabled interface{}) *MockStoreAPI_SetSecretProviderAzure_Call {
+	return &MockStoreAPI_SetSecretProviderAzure_Call{Call: _e.mock.On("SetSecretProviderAzure", ctx, enabled)}
 }
 
-func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+func (_c *MockStoreAPI_SetSecretProviderAzure_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetSecretProviderAzure_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		run(arg0)
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
 
-func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Return(n int, err error) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
-	_c.Call.Return(n, err)
+func (_c *MockStoreAPI_SetSecretProviderAzure_Call) Return(err error) *MockStoreAPI_SetSecretProviderAzure_Call {
+	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+func (_c *MockStoreAPI_SetSecretProviderAzure_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetSecretProviderAzure_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
+// SetSecretProviderGCP provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSecretProviderGCP(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetSecretProviderGCP")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetSecretProviderGCP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSecretProviderGCP'
+type MockStoreAPI_SetSecretProviderGCP_Call struct {
+	*mock.Call
+}
+
+// SetSecretProviderGCP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetSecretProviderGCP(ctx interface{}, enabled interface{}) *MockStoreAPI_SetSecretProviderGCP_Call {
+	return &MockStoreAPI_SetSecretProviderGCP_Call{Call: _e.mock.On("SetSecretProviderGCP", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetSecretProviderGCP_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetSecretProviderGCP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSecretProviderGCP_Call) Return(err error) *MockStoreAPI_SetSecretProviderGCP_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSecretProviderGCP_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetSecretProviderGCP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetSecretProviderVault provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSecretProviderVault(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetSecretProviderVault")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetSecretProviderVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSecretProviderVault'
+type MockStoreAPI_SetSecretProviderVault_Call struct {
+	*mock.Call
+}
+
+// SetSecretProviderVault is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetSecretProviderVault(ctx interface{}, enabled interface{}) *MockStoreAPI_SetSecretProviderVault_Call {
+	return &MockStoreAPI_SetSecretProviderVault_Call{Call: _e.mock.On("SetSecretProviderVault", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetSecretProviderVault_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetSecretProviderVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSecretProviderVault_Call) Return(err error) *MockStoreAPI_SetSecretProviderVault_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSecretProviderVault_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetSecretProviderVault_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetSessionTokenTTLSeconds provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error {
 	ret := _mock.Called(ctx, seconds)
+
 	if len(ret) == 0 {
 		panic("no return value specified for SetSessionTokenTTLSeconds")
 	}
+
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, int) error); ok {
 		r0 = returnFunc(ctx, seconds)
@@ -5141,10 +5656,14 @@ func (_mock *MockStoreAPI) SetSessionTokenTTLSeconds(ctx context.Context, second
 	return r0
 }
 
+// MockStoreAPI_SetSessionTokenTTLSeconds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSessionTokenTTLSeconds'
 type MockStoreAPI_SetSessionTokenTTLSeconds_Call struct {
 	*mock.Call
 }
 
+// SetSessionTokenTTLSeconds is a helper method to define mock.On call
+//   - ctx context.Context
+//   - seconds int
 func (_e *MockStoreAPI_Expecter) SetSessionTokenTTLSeconds(ctx interface{}, seconds interface{}) *MockStoreAPI_SetSessionTokenTTLSeconds_Call {
 	return &MockStoreAPI_SetSessionTokenTTLSeconds_Call{Call: _e.mock.On("SetSessionTokenTTLSeconds", ctx, seconds)}
 }
@@ -5159,7 +5678,10 @@ func (_c *MockStoreAPI_SetSessionTokenTTLSeconds_Call) Run(run func(ctx context.
 		if args[1] != nil {
 			arg1 = args[1].(int)
 		}
-		run(arg0, arg1)
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }

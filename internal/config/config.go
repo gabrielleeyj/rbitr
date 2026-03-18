@@ -25,6 +25,11 @@ type Config struct {
 	FeatureCrossTenantChain bool
 	SessionTokenTTL         time.Duration
 	MaxChainDepth           int
+	SecretProviderAWS       bool
+	SecretProviderGCP       bool
+	SecretProviderVault     bool
+	SecretProviderVaultAddr string
+	SecretProviderAzure     bool
 	DevAutoTools            bool
 	DevMockInternalURL      string
 	DevJiraURL              string
@@ -63,6 +68,11 @@ func Load() Config {
 		FeatureCrossTenantChain: getEnvBool("RBTR_FEATURE_CROSS_TENANT_CHAIN"),
 		MaxChainDepth:           getEnvInt("RBTR_MAX_CHAIN_DEPTH", defaultMaxChainDepth),
 		SessionTokenTTL:         getEnvDurationFromSeconds("RBTR_SESSION_TOKEN_TTL_SECONDS", defaultSessionTokenTTL),
+		SecretProviderAWS:       getEnvBool("RBTR_SECRET_PROVIDER_AWS"),
+		SecretProviderGCP:       getEnvBool("RBTR_SECRET_PROVIDER_GCP"),
+		SecretProviderVault:     getEnvBool("RBTR_SECRET_PROVIDER_VAULT"),
+		SecretProviderVaultAddr: getEnv("VAULT_ADDR", ""),
+		SecretProviderAzure:     getEnvBool("RBTR_SECRET_PROVIDER_AZURE"),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:              getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),

@@ -175,6 +175,10 @@ type SettingsResponse struct {
 	FeatureSessionTokens         bool   `json:"feature_session_tokens"`
 	FeatureFileGovernance        bool   `json:"feature_file_governance"`
 	SessionTokenTTLSeconds       int    `json:"session_token_ttl_seconds"`
+	SecretProviderAWS            bool   `json:"secret_provider_aws"`
+	SecretProviderGCP            bool   `json:"secret_provider_gcp"`
+	SecretProviderVault          bool   `json:"secret_provider_vault"`
+	SecretProviderAzure          bool   `json:"secret_provider_azure"`
 	TenantID                     string `json:"tenant_id,omitempty"`
 	EnforcementMode              string `json:"enforcement_mode,omitempty"`
 	MCPPassthroughUpstreamToolID string `json:"mcp_passthrough_upstream_tool_id,omitempty"`
@@ -757,6 +761,22 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetSessionTokenTTLSeconds(c.Request().Context()); err == nil && value > 0 {
 		sessionTokenTTLSeconds = value
 	}
+	secretProviderAWS := d.Config.SecretProviderAWS
+	if value, err := d.Store.GetSecretProviderAWS(c.Request().Context()); err == nil {
+		secretProviderAWS = value
+	}
+	secretProviderGCP := d.Config.SecretProviderGCP
+	if value, err := d.Store.GetSecretProviderGCP(c.Request().Context()); err == nil {
+		secretProviderGCP = value
+	}
+	secretProviderVault := d.Config.SecretProviderVault
+	if value, err := d.Store.GetSecretProviderVault(c.Request().Context()); err == nil {
+		secretProviderVault = value
+	}
+	secretProviderAzure := d.Config.SecretProviderAzure
+	if value, err := d.Store.GetSecretProviderAzure(c.Request().Context()); err == nil {
+		secretProviderAzure = value
+	}
 	defaultRateLimit := models.RateLimitConfig{
 		PerMinute: defaultMinutes,
 		PerDay:    defaultDays,
@@ -793,6 +813,10 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 		FeatureSessionTokens:         featureSessionTokens,
 		FeatureFileGovernance:        featureFileGovernance,
 		SessionTokenTTLSeconds:       sessionTokenTTLSeconds,
+		SecretProviderAWS:            secretProviderAWS,
+		SecretProviderGCP:            secretProviderGCP,
+		SecretProviderVault:          secretProviderVault,
+		SecretProviderAzure:          secretProviderAzure,
 		TenantID:                     tenantID,
 		EnforcementMode:              enforcementMode,
 		MCPPassthroughUpstreamToolID: mcpPassthroughUpstreamToolID,
@@ -1891,6 +1915,46 @@ func (d *Dependencies) handleSessionTokenTTLUpdate(c *echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *Dependencies) handleSecretProviderAWSUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.SECRET_PROVIDER_AWS.SET",
+		"secret_provider_aws",
+		d.Store.GetSecretProviderAWS,
+		d.Store.SetSecretProviderAWS,
+	)
+}
+
+func (d *Dependencies) handleSecretProviderGCPUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.SECRET_PROVIDER_GCP.SET",
+		"secret_provider_gcp",
+		d.Store.GetSecretProviderGCP,
+		d.Store.SetSecretProviderGCP,
+	)
+}
+
+func (d *Dependencies) handleSecretProviderVaultUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.SECRET_PROVIDER_VAULT.SET",
+		"secret_provider_vault",
+		d.Store.GetSecretProviderVault,
+		d.Store.SetSecretProviderVault,
+	)
+}
+
+func (d *Dependencies) handleSecretProviderAzureUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.SECRET_PROVIDER_AZURE.SET",
+		"secret_provider_azure",
+		d.Store.GetSecretProviderAzure,
+		d.Store.SetSecretProviderAzure,
+	)
 }
 
 func (d *Dependencies) handleBooleanSystemSettingUpdate(

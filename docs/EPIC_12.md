@@ -9,7 +9,7 @@
 | **3** Ticketing & ITSM (Jira, ServiceNow) | Planned | — |
 | **4** Observability & SIEM Export | Planned | — |
 | **5** Identity & SSO (OIDC/SAML) | Planned | — |
-| **6** Secret Manager Providers | Planned | — |
+| **6** Secret Manager Providers | **DONE** | 2026-03-18 |
 | **7** Generic Outbound Webhooks | **SKIPPED** | — |
 
 ## Summary
@@ -275,13 +275,80 @@ Extend `CompositeResolver` with new `SecretProvider` implementations:
 | **HashiCorp Vault** | `vault://` | `vault://secret/data/rbitr/slack` |
 | **Azure Key Vault** | `azure-kv://` | `azure-kv://myvault/slack-token` |
 
+### Configuration
+
+Each provider is opt-in via an environment variable **and** a DB-backed toggle in the admin UI (Settings > Secret providers). Both must be enabled for the provider to be active at runtime — the env var controls startup wiring, the DB toggle controls the system setting.
+
+#### AWS Secrets Manager
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `RBTR_SECRET_PROVIDER_AWS` | `true` | Enable the AWS Secrets Manager provider |
+| `AWS_ACCESS_KEY_ID` | `AKIA...` | AWS access key (or use IAM role / instance profile) |
+| `AWS_SECRET_ACCESS_KEY` | `wJal...` | AWS secret key (or use IAM role / instance profile) |
+| `AWS_REGION` | `us-east-1` | AWS region for Secrets Manager API calls |
+
+- **URI scheme**: `aws-sm://<secret-id>`
+- **Examples**: `aws-sm://rbitr/slack-token`, `aws-sm://prod/api-keys/stripe`
+- **Auth**: Uses AWS SDK v2 default credential chain (env vars, shared credentials file, IAM role, ECS task role, EC2 instance profile)
+- **Note**: Only `SecretString` values are supported; binary secrets return an error
+
+#### GCP Secret Manager
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `RBTR_SECRET_PROVIDER_GCP` | `true` | Enable the GCP Secret Manager provider |
+| `GCP_SECRET_MANAGER_TOKEN` | `ya29.a0...` | OAuth2 access token for the Secret Manager API |
+
+- **URI scheme**: `gcp-sm://<resource-name>`
+- **Examples**: `gcp-sm://projects/myproj/secrets/slack-token`, `gcp-sm://projects/myproj/secrets/token/versions/3`
+- **Auth**: Set `GCP_SECRET_MANAGER_TOKEN` explicitly, or run on GCE/GKE/Cloud Run where a metadata server token is fetched automatically
+- **Note**: If no `/versions/` segment is present in the ref, `/versions/latest` is appended automatically
+
+#### HashiCorp Vault
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `RBTR_SECRET_PROVIDER_VAULT` | `true` | Enable the HashiCorp Vault provider |
+| `VAULT_ADDR` | `https://vault.example.com:8200` | Vault server address |
+| `VAULT_TOKEN` | `hvs.CAESI...` | Vault authentication token |
+
+- **URI scheme**: `vault://<kv-v2-path>` or `vault://<kv-v2-path>#<key>`
+- **Examples**: `vault://secret/data/rbitr/slack#token`, `vault://secret/data/app/single`
+- **Auth**: Static token via `VAULT_TOKEN` environment variable
+- **Note**: Only KV v2 engine is supported (paths must follow `secret/data/...` convention). If the secret has multiple keys, use `#key` to select one; if it has exactly one key, the value is returned directly
+
+#### Azure Key Vault
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `RBTR_SECRET_PROVIDER_AZURE` | `true` | Enable the Azure Key Vault provider |
+| `AZURE_KEY_VAULT_TOKEN` | `eyJ0eX...` | OAuth2 bearer token for the Key Vault API |
+
+- **URI scheme**: `azure-kv://<vault-name>/<secret-name>`
+- **Examples**: `azure-kv://myvault/slack-token`, `azure-kv://prod-vault/api-key`
+- **Auth**: Set `AZURE_KEY_VAULT_TOKEN` with a valid OAuth2 token for `https://vault.azure.net` scope
+- **Note**: The vault URL is derived as `https://<vault-name>.vault.azure.net`. Uses API version 7.4.
+
+### Admin UI Toggle
+
+All four providers appear as toggle switches in **Settings > Secret providers**. The DB-backed toggle persists across restarts and is stored in `rbitr.system_settings` under these keys:
+
+| System Setting Key | Default |
+|--------------------|---------|
+| `secret_provider_aws` | `false` |
+| `secret_provider_gcp` | `false` |
+| `secret_provider_vault` | `false` |
+| `secret_provider_azure` | `false` |
+
 ### Implementation
 
 - `internal/notifications/secrets_aws.go` — AWS Secrets Manager provider
 - `internal/notifications/secrets_gcp.go` — GCP Secret Manager provider
-- `internal/notifications/secrets_vault.go` — HashiCorp Vault provider
-- `internal/notifications/secrets_azure.go` — Azure Key Vault provider
-- All providers share the existing 5-minute TTL cache
+- `internal/notifications/secrets_vault.go` — HashiCorp Vault provider (raw HTTP, no Vault SDK dependency)
+- `internal/notifications/secrets_azure.go` — Azure Key Vault provider (raw HTTP, no Azure SDK dependency)
+- `cmd/gateway/secret_providers.go` — SDK adapter types and startup wiring
+- All providers share the existing 5-minute TTL cache via `CompositeResolver`
 - No migration needed — extends existing secret ref resolution
 
 ---

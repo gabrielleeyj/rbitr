@@ -71,10 +71,12 @@ func main() {
 	metrics := telemetry.NewMetrics()
 	policyEval := policy.NewEvaluator(st)
 	restConnector := connector.NewREST(cfg.ResponseLimit)
-	secretResolver := notifications.NewCompositeResolver([]notifications.SecretProvider{
+	secretProviders := []notifications.SecretProvider{
 		notifications.EnvProvider{},
 		notifications.FileProvider{},
-	}, secretTTL)
+	}
+	secretProviders = appendCloudSecretProviders(secretProviders, &cfg)
+	secretResolver := notifications.NewCompositeResolver(secretProviders, secretTTL)
 	notificationService := notifications.NewService(st, secretResolver, serviceCooldown, metrics)
 	expiryScheduler := notifications.NewApprovalExpiryScheduler(st, notificationService, time.Minute, approvalExpiryWindow)
 	auditRetention := retention.NewAuditRetentionScheduler(st, auditRetentionInterval)
