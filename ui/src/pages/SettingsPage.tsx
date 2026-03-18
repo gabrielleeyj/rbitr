@@ -19,6 +19,10 @@ import {
   setFeatureFileGovernance as updateFeatureFileGovernance,
   setFeatureRateLimiting as updateFeatureRateLimiting,
   setFeatureSessionTokens as updateFeatureSessionTokens,
+  setSecretProviderAWS as updateSecretProviderAWS,
+  setSecretProviderAzure as updateSecretProviderAzure,
+  setSecretProviderGCP as updateSecretProviderGCP,
+  setSecretProviderVault as updateSecretProviderVault,
   setSessionTokenTTL,
   setMCPPassthroughUpstreamTool,
   type ToolConfig,
@@ -46,6 +50,10 @@ export function SettingsPage() {
   const [featureSessionTokens, setFeatureSessionTokens] = useState(true);
   const [featureFileGovernance, setFeatureFileGovernance] = useState(true);
   const [sessionTokenTTLMinutes, setSessionTokenTTLMinutes] = useState(60);
+  const [secretProviderAWS, setSecretProviderAWS] = useState(false);
+  const [secretProviderGCP, setSecretProviderGCP] = useState(false);
+  const [secretProviderVault, setSecretProviderVault] = useState(false);
+  const [secretProviderAzure, setSecretProviderAzure] = useState(false);
   const [mcpPassthroughUpstreamToolID, setMCPPassthroughUpstreamToolID] = useState("");
   const [mcpUpstreamTools, setMCPUpstreamTools] = useState<ToolConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +94,10 @@ export function SettingsPage() {
         if (data.session_token_ttl_seconds && data.session_token_ttl_seconds > 0) {
           setSessionTokenTTLMinutes(Math.round(data.session_token_ttl_seconds / 60));
         }
+        setSecretProviderAWS(Boolean(data.secret_provider_aws));
+        setSecretProviderGCP(Boolean(data.secret_provider_gcp));
+        setSecretProviderVault(Boolean(data.secret_provider_vault));
+        setSecretProviderAzure(Boolean(data.secret_provider_azure));
         setRateLimitPerMinute(Number(data.default_rate_limit_per_minute) > 0 ? Number(data.default_rate_limit_per_minute) : 60);
         setRateLimitPerDay(Number(data.default_rate_limit_per_day) > 0 ? Number(data.default_rate_limit_per_day) : 10000);
         const nextScope = data.default_rate_limit_scope;
@@ -270,6 +282,58 @@ export function SettingsPage() {
       toast.success("Session token TTL updated", { description: `${sessionTokenTTLMinutes} minutes` });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update session token TTL.");
+    }
+  };
+
+  const handleSecretProviderAWSToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setSecretProviderAWS(value);
+    try {
+      await updateSecretProviderAWS({ adminKey }, value);
+      toast.success("AWS Secrets Manager provider updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update AWS provider.");
+      setSecretProviderAWS(!value);
+    }
+  };
+
+  const handleSecretProviderGCPToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setSecretProviderGCP(value);
+    try {
+      await updateSecretProviderGCP({ adminKey }, value);
+      toast.success("GCP Secret Manager provider updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update GCP provider.");
+      setSecretProviderGCP(!value);
+    }
+  };
+
+  const handleSecretProviderVaultToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setSecretProviderVault(value);
+    try {
+      await updateSecretProviderVault({ adminKey }, value);
+      toast.success("HashiCorp Vault provider updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update Vault provider.");
+      setSecretProviderVault(!value);
+    }
+  };
+
+  const handleSecretProviderAzureToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setSecretProviderAzure(value);
+    try {
+      await updateSecretProviderAzure({ adminKey }, value);
+      toast.success("Azure Key Vault provider updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update Azure provider.");
+      setSecretProviderAzure(!value);
     }
   };
 
@@ -541,6 +605,77 @@ export function SettingsPage() {
               </div>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Secret providers</CardTitle>
+          <CardDescription>
+            Cloud secret manager integrations for resolving secret references (aws-sm://, gcp-sm://, vault://, azure-kv://).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!canReadSettings ? (
+            <Alert>
+              <AlertDescription>Missing scope: {scopeSettingsRead}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="secret-provider-aws" className="text-sm">
+                AWS Secrets Manager
+              </Label>
+              <div className="text-xs text-muted-foreground">Resolve aws-sm:// refs via AWS Secrets Manager</div>
+            </div>
+            <Switch
+              id="secret-provider-aws"
+              checked={secretProviderAWS}
+              onCheckedChange={handleSecretProviderAWSToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="secret-provider-gcp" className="text-sm">
+                GCP Secret Manager
+              </Label>
+              <div className="text-xs text-muted-foreground">Resolve gcp-sm:// refs via Google Cloud Secret Manager</div>
+            </div>
+            <Switch
+              id="secret-provider-gcp"
+              checked={secretProviderGCP}
+              onCheckedChange={handleSecretProviderGCPToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="secret-provider-vault" className="text-sm">
+                HashiCorp Vault
+              </Label>
+              <div className="text-xs text-muted-foreground">Resolve vault:// refs via Vault KV v2 API (requires VAULT_ADDR and VAULT_TOKEN)</div>
+            </div>
+            <Switch
+              id="secret-provider-vault"
+              checked={secretProviderVault}
+              onCheckedChange={handleSecretProviderVaultToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="secret-provider-azure" className="text-sm">
+                Azure Key Vault
+              </Label>
+              <div className="text-xs text-muted-foreground">Resolve azure-kv:// refs via Azure Key Vault (requires AZURE_KEY_VAULT_TOKEN)</div>
+            </div>
+            <Switch
+              id="secret-provider-azure"
+              checked={secretProviderAzure}
+              onCheckedChange={handleSecretProviderAzureToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
         </CardContent>
       </Card>
       <Card>

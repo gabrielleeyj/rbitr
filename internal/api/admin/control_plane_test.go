@@ -856,6 +856,10 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAWS", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderGCP", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderVault", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAzure", context.Background()).Return(false, store.ErrNotFound)
 			},
 			expectedCode:          http.StatusOK,
 			expectMode:            "enforce",
@@ -888,6 +892,10 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAWS", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderGCP", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderVault", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAzure", context.Background()).Return(false, store.ErrNotFound)
 			},
 			expectedCode:            http.StatusOK,
 			expectMode:              "enforce",
@@ -918,6 +926,10 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetFeatureSessionTokens", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureFileGovernance", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetSessionTokenTTLSeconds", context.Background()).Return(0, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAWS", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderGCP", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderVault", context.Background()).Return(false, store.ErrNotFound)
+				storeMock.On("GetSecretProviderAzure", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetTenantConfig", context.Background(), "t1").Return(models.TenantConfig{
 					TenantID:                     "t1",
 					ActivePolicyVersion:          "p1",

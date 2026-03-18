@@ -187,6 +187,10 @@ export interface AdminSettings {
   feature_session_tokens?: boolean;
   feature_file_governance?: boolean;
   session_token_ttl_seconds?: number;
+  secret_provider_aws?: boolean;
+  secret_provider_gcp?: boolean;
+  secret_provider_vault?: boolean;
+  secret_provider_azure?: boolean;
 }
 
 export interface NotificationConfig {
@@ -784,6 +788,34 @@ export function setSessionTokenTTL(config: ApiConfig, seconds: number): Promise<
   return request<void>(`/admin/settings/session-token-ttl`, config, {
     method: "PUT",
     body: JSON.stringify({ ttl_seconds: seconds }),
+  });
+}
+
+export function setSecretProviderAWS(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/secret-provider-aws`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setSecretProviderGCP(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/secret-provider-gcp`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setSecretProviderVault(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/secret-provider-vault`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setSecretProviderAzure(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/secret-provider-azure`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
   });
 }
 

@@ -33,6 +33,10 @@ const (
 	featureSessionTokensKey      = "feature_session_tokens"
 	featureFileGovernanceKey     = "feature_file_governance"
 	sessionTokenTTLSecondsKey    = "session_token_ttl_seconds"
+	secretProviderAWSKey         = "secret_provider_aws"
+	secretProviderGCPKey         = "secret_provider_gcp"
+	secretProviderVaultKey       = "secret_provider_vault"
+	secretProviderAzureKey       = "secret_provider_azure"
 	defaultRateLimitPerMinuteKey = "default_rate_limit_per_minute"
 	defaultRateLimitPerDayKey    = "default_rate_limit_per_day"
 	defaultRateLimitScopeKey     = "default_rate_limit_scope"
@@ -103,6 +107,14 @@ type StoreAPI interface {
 	GetFeatureFileGovernance(ctx context.Context) (bool, error)
 	SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error
 	GetSessionTokenTTLSeconds(ctx context.Context) (int, error)
+	SetSecretProviderAWS(ctx context.Context, enabled bool) error
+	GetSecretProviderAWS(ctx context.Context) (bool, error)
+	SetSecretProviderGCP(ctx context.Context, enabled bool) error
+	GetSecretProviderGCP(ctx context.Context) (bool, error)
+	SetSecretProviderVault(ctx context.Context, enabled bool) error
+	GetSecretProviderVault(ctx context.Context) (bool, error)
+	SetSecretProviderAzure(ctx context.Context, enabled bool) error
+	GetSecretProviderAzure(ctx context.Context) (bool, error)
 	SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error
 	GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error)
 	SetTenantEnforcementMode(ctx context.Context, tenantID, enforcementMode string) error
@@ -1393,6 +1405,38 @@ func (s *Store) SetFeatureFileGovernance(ctx context.Context, enabled bool) erro
 
 func (s *Store) GetFeatureFileGovernance(ctx context.Context) (bool, error) {
 	return s.getSystemSettingBool(ctx, featureFileGovernanceKey)
+}
+
+func (s *Store) SetSecretProviderAWS(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, secretProviderAWSKey, enabled)
+}
+
+func (s *Store) GetSecretProviderAWS(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, secretProviderAWSKey)
+}
+
+func (s *Store) SetSecretProviderGCP(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, secretProviderGCPKey, enabled)
+}
+
+func (s *Store) GetSecretProviderGCP(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, secretProviderGCPKey)
+}
+
+func (s *Store) SetSecretProviderVault(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, secretProviderVaultKey, enabled)
+}
+
+func (s *Store) GetSecretProviderVault(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, secretProviderVaultKey)
+}
+
+func (s *Store) SetSecretProviderAzure(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, secretProviderAzureKey, enabled)
+}
+
+func (s *Store) GetSecretProviderAzure(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, secretProviderAzureKey)
 }
 
 func (s *Store) SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error {

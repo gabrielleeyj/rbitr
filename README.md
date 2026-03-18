@@ -242,6 +242,48 @@ Signed provenance tokens track agent-to-agent request chains across tenant bound
 - Configurable max chain depth (default 5) prevents infinite loops
 - Enable: `RBTR_FEATURE_CROSS_TENANT_CHAIN=true`
 
+## Notifications (Epic 12)
+
+rbitr supports multi-channel notifications for approval events, security alerts, and policy violations.
+
+### Channels
+
+| Channel | Config Key | Secret Ref |
+|---------|-----------|------------|
+| Slack Webhook | `slack_webhook_enabled` | `env://` or `file://` |
+| Slack Bot | `slack_bot_enabled` | `env://` or `file://` |
+| Email (SES/SendGrid/Mailgun) | `email_enabled` | `env://` or `file://` |
+| Telegram | `telegram_enabled` | `env://` or `file://` |
+| WhatsApp Business | `whatsapp_enabled` | `env://` or `file://` |
+
+All channels are configured per-tenant via the admin API and UI (Notifications page). Secret refs support all registered secret providers (see below).
+
+### Secret Providers
+
+Secret references in notification config (e.g., API tokens, webhook URLs) are resolved via pluggable providers. The built-in providers (`env://`, `file://`) are always available. Cloud providers are opt-in.
+
+| Provider | URI Scheme | Enable Env Var | Required Env Vars |
+|----------|-----------|----------------|-------------------|
+| Environment variable | `env://` | Always on | — |
+| File | `file://` | Always on | — |
+| AWS Secrets Manager | `aws-sm://` | `RBTR_SECRET_PROVIDER_AWS=true` | AWS credential chain (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) |
+| GCP Secret Manager | `gcp-sm://` | `RBTR_SECRET_PROVIDER_GCP=true` | `GCP_SECRET_MANAGER_TOKEN` or GCE/GKE metadata |
+| HashiCorp Vault | `vault://` | `RBTR_SECRET_PROVIDER_VAULT=true` | `VAULT_ADDR`, `VAULT_TOKEN` |
+| Azure Key Vault | `azure-kv://` | `RBTR_SECRET_PROVIDER_AZURE=true` | `AZURE_KEY_VAULT_TOKEN` |
+
+Cloud providers can also be toggled from the admin UI under **Settings > Secret providers**. All resolved secrets are cached with a 5-minute TTL.
+
+Examples:
+
+```
+env://SLACK_WEBHOOK_URL
+file:///run/secrets/slack-token
+aws-sm://prod/rbitr/slack-token
+gcp-sm://projects/myproj/secrets/slack-token
+vault://secret/data/rbitr/slack#token
+azure-kv://myvault/slack-token
+```
+
 ## API
 
 - Tool call payload is a JSON envelope with `http_method`, `path`, `query`, `headers`, `body` expected by `POST /v1/tools/{tool_id}/call`.
