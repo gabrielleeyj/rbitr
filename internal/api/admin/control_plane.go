@@ -85,6 +85,11 @@ type NotificationConfigRequest struct {
 	EmailRegion                string `json:"email_region"`
 	EmailDomain                string `json:"email_domain"`
 	EmailDefaultMailingListID  string `json:"email_default_mailing_list_id"`
+	TelegramEnabled            bool   `json:"telegram_enabled"`
+	TelegramChatID             string `json:"telegram_chat_id"`
+	WhatsAppEnabled            bool   `json:"whatsapp_enabled"`
+	WhatsAppPhoneNumberID      string `json:"whatsapp_phone_number_id"`
+	WhatsAppDefaultRecipient   string `json:"whatsapp_default_recipient"`
 	NotifyApprovalExpiring     bool   `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool   `json:"notify_token_abuse"`
 	NotifyPolicyInvalid        bool   `json:"notify_policy_invalid"`
@@ -128,6 +133,13 @@ type NotificationConfigResponse struct {
 	EmailRegion                string    `json:"email_region"`
 	EmailDomain                string    `json:"email_domain"`
 	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
+	TelegramEnabled            bool      `json:"telegram_enabled"`
+	TelegramConfigured         bool      `json:"telegram_configured"`
+	TelegramChatID             string    `json:"telegram_chat_id"`
+	WhatsAppEnabled            bool      `json:"whatsapp_enabled"`
+	WhatsAppConfigured         bool      `json:"whatsapp_configured"`
+	WhatsAppPhoneNumberID      string    `json:"whatsapp_phone_number_id"`
+	WhatsAppDefaultRecipient   string    `json:"whatsapp_default_recipient"`
 	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
 	NotifyPolicyInvalid        bool      `json:"notify_policy_invalid"`
@@ -964,6 +976,13 @@ func (d *Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 		EmailRegion:                config.EmailRegion,
 		EmailDomain:                config.EmailDomain,
 		EmailDefaultMailingListID:  config.EmailDefaultMailingListID,
+		TelegramEnabled:            config.TelegramEnabled,
+		TelegramConfigured:         config.TelegramSecretRef != "",
+		TelegramChatID:             config.TelegramChatID,
+		WhatsAppEnabled:            config.WhatsAppEnabled,
+		WhatsAppConfigured:         config.WhatsAppSecretRef != "",
+		WhatsAppPhoneNumberID:      config.WhatsAppPhoneNumberID,
+		WhatsAppDefaultRecipient:   config.WhatsAppDefaultRecipient,
 		NotifyApprovalExpiring:     config.NotifyApprovalExpiring,
 		NotifyTokenAbuse:           config.NotifyTokenAbuse,
 		NotifyPolicyInvalid:        config.NotifyPolicyInvalid,
@@ -995,6 +1014,15 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 	if payload.EmailEnabled && strings.EqualFold(payload.EmailProvider, "mailgun") && payload.EmailDomain == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email_domain required for mailgun"})
 	}
+	if payload.TelegramEnabled && payload.TelegramChatID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "telegram_chat_id required"})
+	}
+	if payload.WhatsAppEnabled && payload.WhatsAppPhoneNumberID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "whatsapp_phone_number_id required"})
+	}
+	if payload.WhatsAppEnabled && payload.WhatsAppDefaultRecipient == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "whatsapp_default_recipient required"})
+	}
 
 	tenantID := c.Param("tenant_id")
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
@@ -1020,6 +1048,13 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		EmailRegion:                payload.EmailRegion,
 		EmailDomain:                payload.EmailDomain,
 		EmailDefaultMailingListID:  payload.EmailDefaultMailingListID,
+		TelegramEnabled:            payload.TelegramEnabled,
+		TelegramSecretRef:          before.TelegramSecretRef,
+		TelegramChatID:             payload.TelegramChatID,
+		WhatsAppEnabled:            payload.WhatsAppEnabled,
+		WhatsAppSecretRef:          before.WhatsAppSecretRef,
+		WhatsAppPhoneNumberID:      payload.WhatsAppPhoneNumberID,
+		WhatsAppDefaultRecipient:   payload.WhatsAppDefaultRecipient,
 		NotifyApprovalExpiring:     payload.NotifyApprovalExpiring,
 		NotifyTokenAbuse:           payload.NotifyTokenAbuse,
 		NotifyPolicyInvalid:        payload.NotifyPolicyInvalid,
@@ -1032,11 +1067,15 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		"slack_bot_enabled":     before.SlackBotEnabled,
 		"email_enabled":         before.EmailEnabled,
 		"email_provider":        before.EmailProvider,
+		"telegram_enabled":      before.TelegramEnabled,
+		"whatsapp_enabled":      before.WhatsAppEnabled,
 	}, map[string]any{
 		"slack_webhook_enabled": payload.SlackWebhookEnabled,
 		"slack_bot_enabled":     payload.SlackBotEnabled,
 		"email_enabled":         payload.EmailEnabled,
 		"email_provider":        payload.EmailProvider,
+		"telegram_enabled":      payload.TelegramEnabled,
+		"whatsapp_enabled":      payload.WhatsAppEnabled,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to audit notification update",
@@ -1349,6 +1388,160 @@ func (d *Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+func (d *Dependencies) handleNotificationTelegramSecretRefSet(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
+	if err != nil {
+		return err
+	}
+	var payload SecretRefRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if !isValidSecretRef(payload.SecretRef) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	beforeConfigured := before.TelegramSecretRef != ""
+	config := before
+	config.TenantID = tenantID
+	config.TelegramSecretRef = payload.SecretRef
+
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), &config); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update telegram secret ref"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.TELEGRAM_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
+		"configured": beforeConfigured,
+	}, map[string]any{
+		"configured": true,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit telegram secret ref",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *Dependencies) handleNotificationWhatsAppSecretRefSet(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeNotifWrite)
+	if err != nil {
+		return err
+	}
+	var payload SecretRefRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if !isValidSecretRef(payload.SecretRef) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+	}
+
+	tenantID := c.Param("tenant_id")
+	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	beforeConfigured := before.WhatsAppSecretRef != ""
+	config := before
+	config.TenantID = tenantID
+	config.WhatsAppSecretRef = payload.SecretRef
+
+	if err := d.Store.UpsertNotificationConfig(c.Request().Context(), &config); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update whatsapp secret ref"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.WHATSAPP_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
+		"configured": beforeConfigured,
+	}, map[string]any{
+		"configured": true,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit whatsapp secret ref",
+			"detail": err.Error(),
+		})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *Dependencies) handleNotificationTestTelegram(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
+		return err
+	}
+	if d.Notifications == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+	}
+	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	if !config.TelegramEnabled || config.TelegramSecretRef == "" || config.TelegramChatID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "telegram not configured"})
+	}
+	botToken, err := d.Notifications.ResolveSecret(c.Request().Context(), config.TelegramSecretRef)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to resolve telegram secret"})
+	}
+	engine := notifications.NewEngine(d.Store, map[string]notifications.Notifier{
+		notifications.TelegramChannel: notifications.NewTelegramNotifier(botToken, config.TelegramChatID),
+	}, d.Notifications.Cooldown, d.Metrics)
+	msg := notifications.NotificationMessage{
+		Title:  "Telegram notification test",
+		Body:   "This is a test notification from rbitr.",
+		Fields: map[string]string{"Tenant": tenantID},
+	}
+	if err := engine.Send(c.Request().Context(), notifications.TelegramChannel, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  "NOTIFICATIONS.TEST",
+		Severity:   "INFO",
+		ResourceID: "test",
+	}, msg); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send telegram test"})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (d *Dependencies) handleNotificationTestWhatsApp(c *echo.Context) error {
+	if _, err := requireAdminScope(c, d.Store, scopeNotifTest); err != nil {
+		return err
+	}
+	if d.Notifications == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+	}
+	tenantID := c.Param("tenant_id")
+	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+	}
+	if !config.WhatsAppEnabled || config.WhatsAppSecretRef == "" || config.WhatsAppPhoneNumberID == "" || config.WhatsAppDefaultRecipient == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "whatsapp not configured"})
+	}
+	accessToken, err := d.Notifications.ResolveSecret(c.Request().Context(), config.WhatsAppSecretRef)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to resolve whatsapp secret"})
+	}
+	engine := notifications.NewEngine(d.Store, map[string]notifications.Notifier{
+		notifications.WhatsAppChannel: notifications.NewWhatsAppNotifier(accessToken, config.WhatsAppPhoneNumberID, config.WhatsAppDefaultRecipient),
+	}, d.Notifications.Cooldown, d.Metrics)
+	msg := notifications.NotificationMessage{
+		Title:  "WhatsApp notification test",
+		Body:   "This is a test notification from rbitr.",
+		Fields: map[string]string{"Tenant": tenantID},
+	}
+	if err := engine.Send(c.Request().Context(), notifications.WhatsAppChannel, notifications.NotificationEvent{
+		TenantID:   tenantID,
+		EventType:  "NOTIFICATIONS.TEST",
+		Severity:   "INFO",
+		ResourceID: "test",
+	}, msg); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send whatsapp test"})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
 func (d *Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
@@ -1380,6 +1573,8 @@ func (d *Dependencies) handleNotificationEventTypes(c *echo.Context) error {
 		notifications.SlackWebhookChannel,
 		notifications.SlackBotChannel,
 		notifications.EmailChannel,
+		notifications.TelegramChannel,
+		notifications.WhatsAppChannel,
 	}
 	sort.Strings(channels)
 	return c.JSON(http.StatusOK, NotificationMetadataResponse{

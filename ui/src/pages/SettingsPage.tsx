@@ -16,7 +16,10 @@ import {
   setDefaultRateLimitConfig,
   setEnforcementMode,
   setFeatureArgConstraints as updateFeatureArgConstraints,
+  setFeatureFileGovernance as updateFeatureFileGovernance,
   setFeatureRateLimiting as updateFeatureRateLimiting,
+  setFeatureSessionTokens as updateFeatureSessionTokens,
+  setSessionTokenTTL,
   setMCPPassthroughUpstreamTool,
   type ToolConfig,
 } from "@/lib/api";
@@ -40,6 +43,9 @@ export function SettingsPage() {
   const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60);
   const [rateLimitPerDay, setRateLimitPerDay] = useState(10000);
   const [rateLimitScope, setRateLimitScope] = useState<RateLimitScope>("tenant_agent_tool");
+  const [featureSessionTokens, setFeatureSessionTokens] = useState(true);
+  const [featureFileGovernance, setFeatureFileGovernance] = useState(true);
+  const [sessionTokenTTLMinutes, setSessionTokenTTLMinutes] = useState(60);
   const [mcpPassthroughUpstreamToolID, setMCPPassthroughUpstreamToolID] = useState("");
   const [mcpUpstreamTools, setMCPUpstreamTools] = useState<ToolConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +81,11 @@ export function SettingsPage() {
         setDisableXTenantKey(Boolean(data.disable_x_tenant_key));
         setFeatureRateLimiting(Boolean(data.feature_rate_limiting));
         setFeatureArgConstraints(Boolean(data.feature_arg_constraints));
+        setFeatureSessionTokens(data.feature_session_tokens !== false);
+        setFeatureFileGovernance(data.feature_file_governance !== false);
+        if (data.session_token_ttl_seconds && data.session_token_ttl_seconds > 0) {
+          setSessionTokenTTLMinutes(Math.round(data.session_token_ttl_seconds / 60));
+        }
         setRateLimitPerMinute(Number(data.default_rate_limit_per_minute) > 0 ? Number(data.default_rate_limit_per_minute) : 60);
         setRateLimitPerDay(Number(data.default_rate_limit_per_day) > 0 ? Number(data.default_rate_limit_per_day) : 10000);
         const nextScope = data.default_rate_limit_scope;
@@ -221,6 +232,44 @@ export function SettingsPage() {
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update argument constraints feature.");
       setFeatureArgConstraints(!value);
+    }
+  };
+
+  const handleFeatureSessionTokensToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setFeatureSessionTokens(value);
+    try {
+      await updateFeatureSessionTokens({ adminKey }, value);
+      toast.success("Session tokens feature updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update session tokens feature.");
+      setFeatureSessionTokens(!value);
+    }
+  };
+
+  const handleFeatureFileGovernanceToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setFeatureFileGovernance(value);
+    try {
+      await updateFeatureFileGovernance({ adminKey }, value);
+      toast.success("File governance feature updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update file governance feature.");
+      setFeatureFileGovernance(!value);
+    }
+  };
+
+  const handleSessionTokenTTLUpdate = async () => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    const seconds = Math.round(sessionTokenTTLMinutes * 60);
+    try {
+      await setSessionTokenTTL({ adminKey }, seconds);
+      toast.success("Session token TTL updated", { description: `${sessionTokenTTLMinutes} minutes` });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update session token TTL.");
     }
   };
 
@@ -374,6 +423,56 @@ export function SettingsPage() {
               disabled={loading || !canWriteSettings}
             />
           </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="feature-session-tokens" className="text-sm">
+              Feature: Session tokens
+            </Label>
+            <Switch
+              id="feature-session-tokens"
+              checked={featureSessionTokens}
+              onCheckedChange={handleFeatureSessionTokensToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="feature-file-governance" className="text-sm">
+              Feature: File governance
+            </Label>
+            <Switch
+              id="feature-file-governance"
+              checked={featureFileGovernance}
+              onCheckedChange={handleFeatureFileGovernanceToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          {featureSessionTokens ? (
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <div className="text-sm font-medium">Session token TTL</div>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <Label htmlFor="session-token-ttl" className="text-xs text-muted-foreground">
+                  TTL (minutes)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="session-token-ttl"
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={sessionTokenTTLMinutes}
+                    onChange={(event) => setSessionTokenTTLMinutes(Number(event.target.value) || 60)}
+                    className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
+                    disabled={loading || !canWriteSettings}
+                  />
+                  <Button variant="outline" onClick={handleSessionTokenTTLUpdate} disabled={loading || !canWriteSettings}>
+                    Save
+                  </Button>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                How long session tokens remain valid. Min 1 minute, max 1440 minutes.
+              </div>
+            </div>
+          ) : null}
           {featureRateLimiting ? (
             <div className="rounded-md border border-border p-3 space-y-3">
               <div className="text-sm font-medium">Default rate limits</div>

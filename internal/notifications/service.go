@@ -79,6 +79,34 @@ func (s *Service) Send(ctx context.Context, tenantID string, event NotificationE
 		}
 	}
 
+	if config.TelegramEnabled && config.TelegramSecretRef != "" && config.TelegramChatID != "" {
+		botToken, err := s.ResolveSecret(ctx, config.TelegramSecretRef)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			engine := NewEngine(s.Store, map[string]Notifier{
+				TelegramChannel: NewTelegramNotifier(botToken, config.TelegramChatID),
+			}, s.Cooldown, s.Metrics)
+			if err := engine.Send(ctx, TelegramChannel, event, msg); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	if config.WhatsAppEnabled && config.WhatsAppSecretRef != "" && config.WhatsAppPhoneNumberID != "" && config.WhatsAppDefaultRecipient != "" {
+		accessToken, err := s.ResolveSecret(ctx, config.WhatsAppSecretRef)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			engine := NewEngine(s.Store, map[string]Notifier{
+				WhatsAppChannel: NewWhatsAppNotifier(accessToken, config.WhatsAppPhoneNumberID, config.WhatsAppDefaultRecipient),
+			}, s.Cooldown, s.Metrics)
+			if err := engine.Send(ctx, WhatsAppChannel, event, msg); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}

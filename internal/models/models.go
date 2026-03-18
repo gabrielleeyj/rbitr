@@ -230,6 +230,13 @@ type NotificationConfig struct {
 	EmailRegion                string    `json:"email_region"`
 	EmailDomain                string    `json:"email_domain"`
 	EmailDefaultMailingListID  string    `json:"email_default_mailing_list_id"`
+	TelegramEnabled            bool      `json:"telegram_enabled"`
+	TelegramSecretRef          string    `json:"-"`
+	TelegramChatID             string    `json:"telegram_chat_id"`
+	WhatsAppEnabled            bool      `json:"whatsapp_enabled"`
+	WhatsAppSecretRef          string    `json:"-"`
+	WhatsAppPhoneNumberID      string    `json:"whatsapp_phone_number_id"`
+	WhatsAppDefaultRecipient   string    `json:"whatsapp_default_recipient"`
 	NotifyApprovalExpiring     bool      `json:"notify_approval_expiring"`
 	NotifyTokenAbuse           bool      `json:"notify_token_abuse"`
 	NotifyPolicyInvalid        bool      `json:"notify_policy_invalid"`

@@ -184,6 +184,9 @@ export interface AdminSettings {
   tenant_id?: string;
   enforcement_mode?: "enforce" | "shadow";
   mcp_passthrough_upstream_tool_id?: string;
+  feature_session_tokens?: boolean;
+  feature_file_governance?: boolean;
+  session_token_ttl_seconds?: number;
 }
 
 export interface NotificationConfig {
@@ -201,6 +204,13 @@ export interface NotificationConfig {
   email_region?: string;
   email_domain?: string;
   email_default_mailing_list_id?: string;
+  telegram_enabled: boolean;
+  telegram_configured: boolean;
+  telegram_chat_id?: string;
+  whatsapp_enabled: boolean;
+  whatsapp_configured: boolean;
+  whatsapp_phone_number_id?: string;
+  whatsapp_default_recipient?: string;
   notify_approval_expiring: boolean;
   notify_token_abuse: boolean;
   notify_policy_invalid: boolean;
@@ -756,6 +766,27 @@ export function setFeatureArgConstraints(config: ApiConfig, enabled: boolean): P
   });
 }
 
+export function setFeatureSessionTokens(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/feature-session-tokens`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setFeatureFileGovernance(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/feature-file-governance`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setSessionTokenTTL(config: ApiConfig, seconds: number): Promise<void> {
+  return request<void>(`/admin/settings/session-token-ttl`, config, {
+    method: "PUT",
+    body: JSON.stringify({ ttl_seconds: seconds }),
+  });
+}
+
 export function setEnforcementMode(
   config: ApiConfig,
   tenantId: string,
@@ -863,7 +894,7 @@ export function getActionTypes(config: ApiConfig): Promise<ActionTypesResponse> 
 export function updateNotificationConfig(
   config: ApiConfig,
   tenantId: string,
-  payload: Omit<NotificationConfig, "tenant_id" | "slack_webhook_configured" | "slack_bot_configured" | "email_configured" | "updated_at">
+  payload: Omit<NotificationConfig, "tenant_id" | "slack_webhook_configured" | "slack_bot_configured" | "email_configured" | "telegram_configured" | "whatsapp_configured" | "updated_at">
 ): Promise<void> {
   return request<void>(`/admin/tenants/${tenantId}/notifications`, config, {
     method: "PUT",
@@ -895,6 +926,28 @@ export function sendSlackBotTest(config: ApiConfig, tenantId: string): Promise<v
 
 export function sendEmailTest(config: ApiConfig, tenantId: string): Promise<void> {
   return request<void>(`/admin/tenants/${tenantId}/notifications/test/email`, config, { method: "POST" });
+}
+
+export function setTelegramSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/telegram-secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function sendTelegramTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/test/telegram`, config, { method: "POST" });
+}
+
+export function setWhatsAppSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/whatsapp-secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function sendWhatsAppTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/notifications/test/whatsapp`, config, { method: "POST" });
 }
 
 export async function listMailingLists(config: ApiConfig, tenantId: string): Promise<MailingList[]> {

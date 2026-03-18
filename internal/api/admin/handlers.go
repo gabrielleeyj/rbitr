@@ -98,6 +98,10 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.POST("/notifications/test/slack", deps.handleNotificationTestSlack)
 	tenantGroup.POST("/notifications/test/slack-bot", deps.handleNotificationTestSlackBot)
 	tenantGroup.POST("/notifications/test/email", deps.handleNotificationTestEmail)
+	tenantGroup.PUT("/notifications/telegram-secret-ref", deps.handleNotificationTelegramSecretRefSet)
+	tenantGroup.POST("/notifications/test/telegram", deps.handleNotificationTestTelegram)
+	tenantGroup.PUT("/notifications/whatsapp-secret-ref", deps.handleNotificationWhatsAppSecretRefSet)
+	tenantGroup.POST("/notifications/test/whatsapp", deps.handleNotificationTestWhatsApp)
 	tenantGroup.GET("/notifications/suppressions", deps.handleNotificationSuppressions)
 
 	tenantGroup.GET("/mailing-lists", deps.handleMailingListsList)

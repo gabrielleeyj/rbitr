@@ -1,0 +1,360 @@
+# EPIC 12 — Enterprise Integrations
+
+## Status
+
+| Phase | Status | Date |
+|-------|--------|------|
+| **1** Chat Integrations (Telegram, WhatsApp) | **DONE** | 2026-03-18 |
+| **2** Chat Integrations (Microsoft Teams, Discord) | **SKIPPED** | — |
+| **3** Ticketing & ITSM (Jira, ServiceNow) | Planned | — |
+| **4** Observability & SIEM Export | Planned | — |
+| **5** Identity & SSO (OIDC/SAML) | Planned | — |
+| **6** Secret Manager Providers | Planned | — |
+| **7** Generic Outbound Webhooks | **SKIPPED** | — |
+
+## Summary
+
+Epic 12 extends rbitr's integration surface beyond the current Slack and email channels. The goal is enterprise-grade connectivity across chat, ticketing, observability, identity, and secret management platforms — making rbitr deployable in any corporate environment without custom glue code.
+
+### Current State
+
+rbitr supports three notification channels today:
+- **Slack Webhook** — incoming webhook posts
+- **Slack Bot** — Slack App Bot API with signing
+- **Email** — AWS SES, SendGrid, Mailgun providers
+
+All channels follow the `Notifier` interface (`Send`, `Name`) with per-tenant configuration, deduplication/cooldown, and secret reference resolution (`env://` / `file://`).
+
+---
+
+## Phase 1 — Chat Integrations: Telegram & WhatsApp
+
+### Problem
+
+Many enterprise and regional deployments rely on Telegram or WhatsApp as their primary communication channel. Approval notifications, security alerts, and policy violations must reach operators where they already are.
+
+### Solution
+
+Add two new `Notifier` implementations following the existing Slack pattern.
+
+#### Telegram
+
+- Uses the [Telegram Bot API](https://core.telegram.org/bots/api) (`sendMessage` endpoint)
+- Bot token stored as secret ref (`env://` or `file://`)
+- Chat ID configured per tenant (group chat or individual)
+- Supports Markdown formatting for structured approval/alert messages
+- Optional: inline keyboard buttons for approve/deny actions via callback queries
+
+#### WhatsApp
+
+- Uses the [WhatsApp Business Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api) (Meta Graph API)
+- Requires a WhatsApp Business Account and phone number ID
+- Access token stored as secret ref
+- Uses pre-approved message templates for notifications (WhatsApp requirement for business-initiated messages)
+- Template parameters populated with approval details, policy decisions, etc.
+
+### Config Model Changes
+
+```sql
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  telegram_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  telegram_secret_ref TEXT NOT NULL DEFAULT '';
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  telegram_chat_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  whatsapp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  whatsapp_secret_ref TEXT NOT NULL DEFAULT '';
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  whatsapp_phone_number_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE rbitr.notification_config ADD COLUMN IF NOT EXISTS
+  whatsapp_default_recipient TEXT NOT NULL DEFAULT '';
+```
+
+### Implementation
+
+- `internal/notifications/telegram.go` — `TelegramNotifier` implementing `Notifier`
+- `internal/notifications/whatsapp.go` — `WhatsAppNotifier` implementing `Notifier`
+- Update `NotificationConfig` model with new fields
+- Update `Service.buildNotifiers()` to instantiate new channels
+- Admin API endpoints for secret refs and test sends
+- Migration: `00031_telegram_whatsapp_notifications.sql`
+
+### Admin API Endpoints
+
+```
+PUT  /admin/tenants/:tenant_id/notifications/telegram-secret-ref
+POST /admin/tenants/:tenant_id/notifications/test/telegram
+PUT  /admin/tenants/:tenant_id/notifications/whatsapp-secret-ref
+POST /admin/tenants/:tenant_id/notifications/test/whatsapp
+```
+
+### Acceptance Criteria
+
+- Tenant can enable Telegram and receive approval/security notifications in a Telegram group
+- Tenant can enable WhatsApp and receive templated notifications via WhatsApp Business API
+- Both channels respect existing deduplication/cooldown logic
+- Secret refs resolved via existing `CompositeResolver`
+- Test send endpoints work for both channels
+
+---
+
+## Phase 2 — Chat Integrations: Microsoft Teams & Discord
+
+### Problem
+
+Microsoft Teams is the default chat platform in many enterprises. Discord is common in developer-first and open-source teams. Both are missing from rbitr's notification surface.
+
+### Solution
+
+#### Microsoft Teams
+
+- Uses [Incoming Webhooks](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) (Adaptive Card JSON payloads)
+- Webhook URL stored as secret ref
+- Adaptive Card format for structured approval notifications with action buttons
+- Optional: Teams Bot Framework integration for interactive approve/deny
+
+#### Discord
+
+- Uses [Discord Webhook API](https://discord.com/developers/docs/resources/webhook)
+- Webhook URL stored as secret ref
+- Rich embed formatting for structured messages
+- Optional: Discord Bot with slash commands for approval management
+
+### Implementation
+
+- `internal/notifications/teams.go` — `TeamsNotifier`
+- `internal/notifications/discord.go` — `DiscordNotifier`
+- Migration: `00032_teams_discord_notifications.sql`
+
+---
+
+## Phase 3 — Ticketing & ITSM Integration
+
+### Problem
+
+In regulated environments, approval requests and security incidents must create tickets in ITSM systems. Manual ticket creation from rbitr audit events is error-prone and adds operational overhead.
+
+### Solution
+
+Bidirectional integration with ticketing platforms — rbitr creates tickets on specific events and can receive status updates (e.g., ticket resolved = approval granted).
+
+#### Jira
+
+- Create issues on REQUIRE_APPROVAL decisions (project, issue type, priority mapping)
+- Update issue status when approval is granted/denied/expired
+- Link ADR decision IDs to Jira issue keys for traceability
+- Webhook receiver for Jira status transitions → trigger approval actions
+- JQL-based query for approval status sync
+
+#### ServiceNow
+
+- Create incidents or change requests on policy decisions
+- Map rbitr severity → ServiceNow priority
+- CMDB integration for agent/tool asset mapping
+- REST Table API for CRUD operations
+
+#### Linear (lightweight alternative)
+
+- Create issues on approval events
+- Label-based workflow mapping
+- Webhook receiver for status changes
+
+### Config Model
+
+```sql
+CREATE TABLE IF NOT EXISTS rbitr.ticketing_config (
+  tenant_id    TEXT PRIMARY KEY REFERENCES rbitr.tenants(tenant_id),
+  provider     TEXT NOT NULL DEFAULT '',          -- 'jira', 'servicenow', 'linear'
+  enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+  base_url     TEXT NOT NULL DEFAULT '',
+  secret_ref   TEXT NOT NULL DEFAULT '',          -- API token / OAuth secret
+  project_key  TEXT NOT NULL DEFAULT '',          -- Jira project, ServiceNow assignment group
+  auto_create  BOOLEAN NOT NULL DEFAULT FALSE,    -- auto-create tickets on REQUIRE_APPROVAL
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Implementation
+
+- `internal/ticketing/` — new package with `TicketProvider` interface
+- `internal/ticketing/jira.go`, `servicenow.go`, `linear.go`
+- Webhook receiver endpoints for inbound status updates
+- Migration: `00033_ticketing_config.sql`
+
+---
+
+## Phase 4 — Observability & SIEM Export
+
+### Problem
+
+Security teams need rbitr audit events and policy decisions flowing into their existing observability and SIEM platforms for centralized monitoring, alerting, and forensics.
+
+### Solution
+
+Structured event export to observability platforms. Events include ADR decisions, policy evaluations, approval lifecycle, and security incidents.
+
+#### Supported Targets
+
+| Target | Protocol | Use Case |
+|--------|----------|----------|
+| **Datadog** | HTTP API (logs/events) | APM-centric teams |
+| **Splunk** | HEC (HTTP Event Collector) | Enterprise SIEM |
+| **Elastic / OpenSearch** | Bulk API | Self-hosted SIEM |
+| **Syslog** | RFC 5424 (TCP/UDP/TLS) | Legacy / on-prem SIEM |
+| **OTEL Collector** | OTLP (gRPC/HTTP) | Cloud-native observability |
+
+#### Event Schema
+
+All exports use a common envelope:
+
+```json
+{
+  "event_type": "POLICY.DECISION",
+  "timestamp": "2026-03-18T10:00:00Z",
+  "tenant_id": "t1",
+  "decision_id": "d-abc123",
+  "severity": "HIGH",
+  "action_type": "file.write",
+  "outcome": "REQUIRE_APPROVAL",
+  "metadata": { ... }
+}
+```
+
+### Implementation
+
+- `internal/export/` — new package with `Exporter` interface
+- Async event pipeline: audit events → buffered channel → batch export
+- Configurable batch size, flush interval, retry with backoff
+- System-level config (not per-tenant) — exports all tenant events
+- Migration: `00034_export_config.sql`
+
+---
+
+## Phase 5 — Identity & SSO
+
+### Problem
+
+Admin authentication currently uses HMAC-hashed API keys. Enterprise deployments require SSO via corporate identity providers (Okta, Azure AD, Google Workspace) for admin console access.
+
+### Solution
+
+- OIDC (OpenID Connect) provider integration for admin authentication
+- SAML 2.0 support for legacy enterprise IdPs
+- Map IdP groups/roles to rbitr admin scopes
+- Session management with JWT tokens post-SSO
+- Retain API key auth as fallback for programmatic access
+
+### Implementation
+
+- `internal/auth/oidc.go` — OIDC discovery, token validation, user info
+- `internal/auth/saml.go` — SAML assertion parsing, attribute mapping
+- Admin API: `/admin/auth/oidc/callback`, `/admin/auth/saml/acs`
+- SSO config stored in system settings
+- Migration: `00035_sso_config.sql`
+
+---
+
+## Phase 6 — Secret Manager Providers
+
+### Problem
+
+The current secret resolver supports `env://` and `file://` references. Enterprise deployments store secrets in cloud-managed vaults, not environment variables or mounted files.
+
+### Solution
+
+Extend `CompositeResolver` with new `SecretProvider` implementations:
+
+| Provider | URI Scheme | Example |
+|----------|-----------|---------|
+| **AWS Secrets Manager** | `aws-sm://` | `aws-sm://rbitr/slack-token` |
+| **GCP Secret Manager** | `gcp-sm://` | `gcp-sm://projects/myproj/secrets/slack-token` |
+| **HashiCorp Vault** | `vault://` | `vault://secret/data/rbitr/slack` |
+| **Azure Key Vault** | `azure-kv://` | `azure-kv://myvault/slack-token` |
+
+### Implementation
+
+- `internal/notifications/secrets_aws.go` — AWS Secrets Manager provider
+- `internal/notifications/secrets_gcp.go` — GCP Secret Manager provider
+- `internal/notifications/secrets_vault.go` — HashiCorp Vault provider
+- `internal/notifications/secrets_azure.go` — Azure Key Vault provider
+- All providers share the existing 5-minute TTL cache
+- No migration needed — extends existing secret ref resolution
+
+---
+
+## Phase 7 — Generic Outbound Webhooks
+
+### Problem
+
+Not every integration target has a dedicated provider. Teams need a way to push rbitr events to arbitrary HTTP endpoints for custom workflows (internal tools, Zapier, n8n, custom dashboards).
+
+### Solution
+
+- Configurable outbound webhook per tenant
+- HTTP POST with JSON payload on configurable event types
+- HMAC-SHA256 request signing for webhook verification
+- Retry with exponential backoff (3 attempts)
+- Delivery log with status tracking
+
+### Config Model
+
+```sql
+CREATE TABLE IF NOT EXISTS rbitr.outbound_webhooks (
+  webhook_id   TEXT PRIMARY KEY,
+  tenant_id    TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
+  url          TEXT NOT NULL,
+  secret_ref   TEXT NOT NULL DEFAULT '',
+  event_types  TEXT[] NOT NULL DEFAULT '{}',
+  enabled      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### Implementation
+
+- `internal/webhooks/` — new package
+- `internal/webhooks/dispatcher.go` — async dispatch with retry
+- Admin API: CRUD for webhooks, delivery log query, test send
+- Migration: `00036_outbound_webhooks.sql`
+
+---
+
+## Implementation Priority
+
+| Phase | Integration | Effort | Enterprise Impact |
+|-------|------------|--------|-------------------|
+| **1** | Telegram & WhatsApp | Low | Regional/mobile-first teams |
+| **2** | Microsoft Teams & Discord | Low | Enterprise chat coverage |
+| **3** | Ticketing (Jira, ServiceNow) | High | Regulated environments |
+| **4** | Observability & SIEM | Medium | Security operations |
+| **5** | Identity & SSO | High | Enterprise admin auth |
+| **6** | Secret Manager Providers | Medium | Cloud-native deployments |
+| **7** | Generic Outbound Webhooks | Low | Custom integrations |
+
+Planned order: **1 → 6 → 4 → 5 → 3**
+
+Phases 2 (Teams/Discord) and 7 (Generic Webhooks) are skipped for now. Focus is on core enterprise needs: chat notifications (1), cloud secret management (6), security observability (4), SSO (5), and ticketing (3).
+
+---
+
+## Definition of Done
+
+- Phase 1: Telegram and WhatsApp notifications delivered with deduplication and cooldown
+- Phase 2: Teams and Discord notifications delivered with rich formatting
+- Phase 3: Tickets auto-created on approval events; bidirectional status sync
+- Phase 4: Audit events exported to at least one SIEM target in structured format
+- Phase 5: Admin login via OIDC with IdP group → scope mapping
+- Phase 6: Secrets resolved from at least one cloud vault provider
+- Phase 7: Outbound webhooks delivered with signing, retry, and delivery log
+
+## Non-Goals for Epic 12
+
+- Inbound message processing (chatbots that receive commands via Telegram/WhatsApp)
+- Real-time streaming (WebSocket/SSE) to external systems
+- Multi-provider failover (e.g., if Slack fails, fallback to Teams)
+- Custom notification template engine (structured messages are code-defined)
