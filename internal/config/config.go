@@ -58,8 +58,8 @@ func Load() Config {
 		FeatureRateLimiting:     getEnvBool("RBTR_FEATURE_RATE_LIMITING"),
 		FeatureArgConstraints:   getEnvBool("RBTR_FEATURE_ARG_CONSTRAINTS"),
 		FeatureShadowMode:       getEnvBool("RBTR_FEATURE_SHADOW_MODE"),
-		FeatureSessionTokens:    getEnvBool("RBTR_FEATURE_SESSION_TOKENS"),
-		FeatureFileGovernance:   getEnvBool("RBTR_FEATURE_FILE_GOVERNANCE"),
+		FeatureSessionTokens:    getEnvBoolDefault("RBTR_FEATURE_SESSION_TOKENS", true),
+		FeatureFileGovernance:   getEnvBoolDefault("RBTR_FEATURE_FILE_GOVERNANCE", true),
 		FeatureCrossTenantChain: getEnvBool("RBTR_FEATURE_CROSS_TENANT_CHAIN"),
 		MaxChainDepth:           getEnvInt("RBTR_MAX_CHAIN_DEPTH", defaultMaxChainDepth),
 		SessionTokenTTL:         getEnvDurationFromSeconds("RBTR_SESSION_TOKEN_TTL_SECONDS", defaultSessionTokenTTL),
@@ -108,12 +108,16 @@ func getEnvDurationFromSeconds(key string, fallback time.Duration) time.Duration
 }
 
 func getEnvBool(key string) bool {
+	return getEnvBoolDefault(key, false)
+}
+
+func getEnvBoolDefault(key string, fallback bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			return parsed
 		}
 	}
-	return false
+	return fallback
 }
 
 func getEnvCSV(key string) []string {

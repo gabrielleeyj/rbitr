@@ -378,7 +378,7 @@ func (d *Dependencies) handleInitialize(c *echo.Context, tenant models.Tenant, a
 	}
 
 	// Issue ephemeral session token if feature is enabled.
-	if d.SessionManager != nil && d.Config.FeatureSessionTokens {
+	if d.SessionManager != nil && d.featureSessionTokensEnabled(c.Request().Context()) {
 		sourceIP := extractClientIP(c)
 		token, claims, err := d.SessionManager.IssueToken(tenant.TenantID, agentID, sourceIP)
 		if err != nil {
@@ -1451,7 +1451,7 @@ func isValidToolID(toolID string) bool {
 // Session tokens are only accepted when the feature is enabled and a SessionManager is configured.
 func (d *Dependencies) authenticateMCPRequest(c *echo.Context, tenantID string) (models.Tenant, string, error) {
 	// Try session token auth first if feature is enabled.
-	if d.SessionManager != nil && d.Config.FeatureSessionTokens {
+	if d.SessionManager != nil && d.featureSessionTokensEnabled(c.Request().Context()) {
 		if tenant, agentID, ok, err := d.authenticateViaSession(c, tenantID); ok || err != nil {
 			return tenant, agentID, err
 		}

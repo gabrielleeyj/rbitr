@@ -30,6 +30,9 @@ const (
 	disableXTenantKeyKey         = "disable_x_tenant_key"
 	featureRateLimitingKey       = "feature_rate_limiting"
 	featureArgConstraintsKey     = "feature_arg_constraints"
+	featureSessionTokensKey      = "feature_session_tokens"
+	featureFileGovernanceKey     = "feature_file_governance"
+	sessionTokenTTLSecondsKey    = "session_token_ttl_seconds"
 	defaultRateLimitPerMinuteKey = "default_rate_limit_per_minute"
 	defaultRateLimitPerDayKey    = "default_rate_limit_per_day"
 	defaultRateLimitScopeKey     = "default_rate_limit_scope"
@@ -94,6 +97,12 @@ type StoreAPI interface {
 	GetFeatureRateLimiting(ctx context.Context) (bool, error)
 	SetFeatureArgConstraints(ctx context.Context, enabled bool) error
 	GetFeatureArgConstraints(ctx context.Context) (bool, error)
+	SetFeatureSessionTokens(ctx context.Context, enabled bool) error
+	GetFeatureSessionTokens(ctx context.Context) (bool, error)
+	SetFeatureFileGovernance(ctx context.Context, enabled bool) error
+	GetFeatureFileGovernance(ctx context.Context) (bool, error)
+	SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error
+	GetSessionTokenTTLSeconds(ctx context.Context) (int, error)
 	SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error
 	GetDefaultRateLimitConfig(ctx context.Context) (models.RateLimitConfig, error)
 	SetTenantEnforcementMode(ctx context.Context, tenantID, enforcementMode string) error
@@ -1368,6 +1377,53 @@ func (s *Store) SetFeatureArgConstraints(ctx context.Context, enabled bool) erro
 
 func (s *Store) GetFeatureArgConstraints(ctx context.Context) (bool, error) {
 	return s.getSystemSettingBool(ctx, featureArgConstraintsKey)
+}
+
+func (s *Store) SetFeatureSessionTokens(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, featureSessionTokensKey, enabled)
+}
+
+func (s *Store) GetFeatureSessionTokens(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, featureSessionTokensKey)
+}
+
+func (s *Store) SetFeatureFileGovernance(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, featureFileGovernanceKey, enabled)
+}
+
+func (s *Store) GetFeatureFileGovernance(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, featureFileGovernanceKey)
+}
+
+func (s *Store) SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error {
+	if seconds <= 0 {
+		return errors.New("session_token_ttl_seconds must be > 0")
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+		sessionTokenTTLSecondsKey,
+		strconv.Itoa(seconds),
+		time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *Store) GetSessionTokenTTLSeconds(ctx context.Context) (int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT value FROM rbitr.system_settings WHERE key = $1`, sessionTokenTTLSecondsKey)
+	var value string
+	if err := row.Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	return parsed, nil
 }
 
 func (s *Store) SetDefaultRateLimitConfig(ctx context.Context, perMinute, perDay int64, scope string) error {

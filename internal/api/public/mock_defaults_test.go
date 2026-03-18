@@ -19,4 +19,6 @@ func addPublicFeatureFlagDefaults(mockStore *store.MockStoreAPI) {
 	mockStore.On("GetDisableXTenantKey", mock.Anything).Maybe().Return(false, store.ErrNotFound)
 	mockStore.On("GetFeatureRateLimiting", mock.Anything).Maybe().Return(false, store.ErrNotFound)
 	mockStore.On("GetFeatureArgConstraints", mock.Anything).Maybe().Return(false, store.ErrNotFound)
+	mockStore.On("GetFeatureFileGovernance", mock.Anything).Maybe().Return(false, store.ErrNotFound)
+	mockStore.On("GetFeatureSessionTokens", mock.Anything).Maybe().Return(false, store.ErrNotFound)
 }

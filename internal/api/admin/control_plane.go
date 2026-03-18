@@ -160,6 +160,9 @@ type SettingsResponse struct {
 	DefaultRateLimitPerMinute    int64  `json:"default_rate_limit_per_minute"`
 	DefaultRateLimitPerDay       int64  `json:"default_rate_limit_per_day"`
 	DefaultRateLimitScope        string `json:"default_rate_limit_scope"`
+	FeatureSessionTokens         bool   `json:"feature_session_tokens"`
+	FeatureFileGovernance        bool   `json:"feature_file_governance"`
+	SessionTokenTTLSeconds       int    `json:"session_token_ttl_seconds"`
 	TenantID                     string `json:"tenant_id,omitempty"`
 	EnforcementMode              string `json:"enforcement_mode,omitempty"`
 	MCPPassthroughUpstreamToolID string `json:"mcp_passthrough_upstream_tool_id,omitempty"`
@@ -730,6 +733,18 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetFeatureArgConstraints(c.Request().Context()); err == nil {
 		featureArgConstraints = value
 	}
+	featureSessionTokens := d.Config.FeatureSessionTokens
+	if value, err := d.Store.GetFeatureSessionTokens(c.Request().Context()); err == nil {
+		featureSessionTokens = value
+	}
+	featureFileGovernance := d.Config.FeatureFileGovernance
+	if value, err := d.Store.GetFeatureFileGovernance(c.Request().Context()); err == nil {
+		featureFileGovernance = value
+	}
+	sessionTokenTTLSeconds := int(d.Config.SessionTokenTTL.Seconds())
+	if value, err := d.Store.GetSessionTokenTTLSeconds(c.Request().Context()); err == nil && value > 0 {
+		sessionTokenTTLSeconds = value
+	}
 	defaultRateLimit := models.RateLimitConfig{
 		PerMinute: defaultMinutes,
 		PerDay:    defaultDays,
@@ -763,6 +778,9 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 		DefaultRateLimitPerMinute:    defaultRateLimit.PerMinute,
 		DefaultRateLimitPerDay:       defaultRateLimit.PerDay,
 		DefaultRateLimitScope:        defaultRateLimit.Scope,
+		FeatureSessionTokens:         featureSessionTokens,
+		FeatureFileGovernance:        featureFileGovernance,
+		SessionTokenTTLSeconds:       sessionTokenTTLSeconds,
 		TenantID:                     tenantID,
 		EnforcementMode:              enforcementMode,
 		MCPPassthroughUpstreamToolID: mcpPassthroughUpstreamToolID,
@@ -1625,6 +1643,59 @@ func (d *Dependencies) handleFeatureArgConstraintsUpdate(c *echo.Context) error 
 		d.Store.GetFeatureArgConstraints,
 		d.Store.SetFeatureArgConstraints,
 	)
+}
+
+func (d *Dependencies) handleFeatureSessionTokensUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.FEATURE_SESSION_TOKENS.SET",
+		"feature_session_tokens",
+		d.Store.GetFeatureSessionTokens,
+		d.Store.SetFeatureSessionTokens,
+	)
+}
+
+func (d *Dependencies) handleFeatureFileGovernanceUpdate(c *echo.Context) error {
+	return d.handleBooleanSystemSettingUpdate(
+		c,
+		"SETTINGS.FEATURE_FILE_GOVERNANCE.SET",
+		"feature_file_governance",
+		d.Store.GetFeatureFileGovernance,
+		d.Store.SetFeatureFileGovernance,
+	)
+}
+
+func (d *Dependencies) handleSessionTokenTTLUpdate(c *echo.Context) error {
+	adminKey, err := requireAdminScope(c, d.Store, scopeSettingsWrite)
+	if err != nil {
+		return err
+	}
+
+	var payload DefaultApprovalTTLRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+
+	if payload.Seconds < 60 || payload.Seconds > 86400 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "seconds must be between 60 and 86400"})
+	}
+
+	beforeTTL, _ := d.Store.GetSessionTokenTTLSeconds(c.Request().Context())
+	if err := d.Store.SetSessionTokenTTLSeconds(c.Request().Context(), payload.Seconds); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update session token ttl"})
+	}
+	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.SESSION_TOKEN_TTL.SET", "SETTINGS", "session_token_ttl_seconds", map[string]any{
+		"value": beforeTTL,
+	}, map[string]any{
+		"value": payload.Seconds,
+	}); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error":  "failed to audit session token ttl update",
+			"detail": err.Error(),
+		})
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (d *Dependencies) handleBooleanSystemSettingUpdate(

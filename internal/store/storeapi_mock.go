@@ -4877,6 +4877,303 @@ func (_c *MockStoreAPI_SetFeatureRateLimiting_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+func (_mock *MockStoreAPI) GetFeatureSessionTokens(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureSessionTokens")
+	}
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStoreAPI_GetFeatureSessionTokens_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) GetFeatureSessionTokens(ctx interface{}) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	return &MockStoreAPI_GetFeatureSessionTokens_Call{Call: _e.mock.On("GetFeatureSessionTokens", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureSessionTokens_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStoreAPI) SetFeatureSessionTokens(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+	if len(ret) == 0 {
+		panic("no return value specified for SetFeatureSessionTokens")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStoreAPI_SetFeatureSessionTokens_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) SetFeatureSessionTokens(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureSessionTokens_Call {
+	return &MockStoreAPI_SetFeatureSessionTokens_Call{Call: _e.mock.On("SetFeatureSessionTokens", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureSessionTokens_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) Return(err error) *MockStoreAPI_SetFeatureSessionTokens_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureSessionTokens_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStoreAPI) GetFeatureFileGovernance(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+	if len(ret) == 0 {
+		panic("no return value specified for GetFeatureFileGovernance")
+	}
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStoreAPI_GetFeatureFileGovernance_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) GetFeatureFileGovernance(ctx interface{}) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	return &MockStoreAPI_GetFeatureFileGovernance_Call{Call: _e.mock.On("GetFeatureFileGovernance", ctx)}
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) Return(b bool, err error) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetFeatureFileGovernance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStoreAPI) SetFeatureFileGovernance(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+	if len(ret) == 0 {
+		panic("no return value specified for SetFeatureFileGovernance")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStoreAPI_SetFeatureFileGovernance_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) SetFeatureFileGovernance(ctx interface{}, enabled interface{}) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	return &MockStoreAPI_SetFeatureFileGovernance_Call{Call: _e.mock.On("SetFeatureFileGovernance", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) Return(err error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetFeatureFileGovernance_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureFileGovernance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStoreAPI) GetSessionTokenTTLSeconds(ctx context.Context) (int, error) {
+	ret := _mock.Called(ctx)
+	if len(ret) == 0 {
+		panic("no return value specified for GetSessionTokenTTLSeconds")
+	}
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStoreAPI_GetSessionTokenTTLSeconds_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) GetSessionTokenTTLSeconds(ctx interface{}) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	return &MockStoreAPI_GetSessionTokenTTLSeconds_Call{Call: _e.mock.On("GetSessionTokenTTLSeconds", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) Return(n int, err error) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSessionTokenTTLSeconds_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_GetSessionTokenTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStoreAPI) SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error {
+	ret := _mock.Called(ctx, seconds)
+	if len(ret) == 0 {
+		panic("no return value specified for SetSessionTokenTTLSeconds")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) error); ok {
+		r0 = returnFunc(ctx, seconds)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStoreAPI_SetSessionTokenTTLSeconds_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStoreAPI_Expecter) SetSessionTokenTTLSeconds(ctx interface{}, seconds interface{}) *MockStoreAPI_SetSessionTokenTTLSeconds_Call {
+	return &MockStoreAPI_SetSessionTokenTTLSeconds_Call{Call: _e.mock.On("SetSessionTokenTTLSeconds", ctx, seconds)}
+}
+
+func (_c *MockStoreAPI_SetSessionTokenTTLSeconds_Call) Run(run func(ctx context.Context, seconds int)) *MockStoreAPI_SetSessionTokenTTLSeconds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSessionTokenTTLSeconds_Call) Return(err error) *MockStoreAPI_SetSessionTokenTTLSeconds_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSessionTokenTTLSeconds_Call) RunAndReturn(run func(ctx context.Context, seconds int) error) *MockStoreAPI_SetSessionTokenTTLSeconds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetTenantEnabled provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error {
 	ret := _mock.Called(ctx, tenantID, enabled)

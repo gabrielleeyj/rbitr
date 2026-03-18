@@ -49,8 +49,32 @@ func (d *Dependencies) featureArgConstraintsEnabled(ctx context.Context) bool {
 	return d.Config.FeatureArgConstraints
 }
 
-func (d *Dependencies) featureFileGovernanceEnabled(_ context.Context) bool {
+func (d *Dependencies) featureFileGovernanceEnabled(ctx context.Context) bool {
+	if d.Store == nil {
+		return d.Config.FeatureFileGovernance
+	}
+	enabled, err := d.Store.GetFeatureFileGovernance(ctx)
+	if err == nil {
+		return enabled
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		return d.Config.FeatureFileGovernance
+	}
 	return d.Config.FeatureFileGovernance
+}
+
+func (d *Dependencies) featureSessionTokensEnabled(ctx context.Context) bool {
+	if d.Store == nil {
+		return d.Config.FeatureSessionTokens
+	}
+	enabled, err := d.Store.GetFeatureSessionTokens(ctx)
+	if err == nil {
+		return enabled
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		return d.Config.FeatureSessionTokens
+	}
+	return d.Config.FeatureSessionTokens
 }
 
 func (d *Dependencies) featureCrossTenantChainEnabled(_ context.Context) bool {
