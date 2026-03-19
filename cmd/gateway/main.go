@@ -136,13 +136,18 @@ func main() {
 		SessionManager:    sessionMgr,
 		ProvenanceManager: provenanceMgr,
 	})
+	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
+
 	admin.RegisterRoutes(e, &admin.Dependencies{
-		Store:         st,
-		Notifications: notificationService,
-		Metrics:       metrics,
-		Config:        cfg,
-		ToolCache:     toolCache,
-		RiskCache:     riskOverrideCache,
+		Store:           st,
+		Notifications:   notificationService,
+		Metrics:         metrics,
+		Config:          cfg,
+		ToolCache:       toolCache,
+		RiskCache:       riskOverrideCache,
+		OIDCProvider:    oidcProvider,
+		AdminSessionMgr: adminSessionMgr,
+		SecretResolver:  secretResolver,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -169,6 +174,19 @@ func initProvenanceManager(cfg *config.Config) *auth.ProvenanceManager {
 	}
 	log.Printf("cross-tenant provenance chain enabled (max_depth=%d)", cfg.MaxChainDepth)
 	return pm
+}
+
+func initSSOComponents(cfg *config.Config) (*auth.OIDCProvider, *auth.AdminSessionManager) {
+	if !cfg.SSOEnabled {
+		return nil, nil
+	}
+	provider := auth.NewOIDCProvider(nil)
+	mgr, err := auth.NewAdminSessionManager(auth.AdminSessionTTL)
+	if err != nil {
+		log.Fatalf("admin session manager init failed: %v", err)
+	}
+	log.Printf("SSO/OIDC enabled (issuer=%s)", cfg.SSOIssuer)
+	return provider, mgr
 }
 
 func initSessionManager(cfg *config.Config) *auth.SessionManager {

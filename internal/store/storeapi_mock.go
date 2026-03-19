@@ -2100,6 +2100,126 @@ func (_c *MockStoreAPI_GetRiskOverride_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// GetSSOConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSSOConfig(ctx context.Context) (SSOConfig, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSSOConfig")
+	}
+
+	var r0 SSOConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (SSOConfig, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) SSOConfig); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(SSOConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSSOConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSSOConfig'
+type MockStoreAPI_GetSSOConfig_Call struct {
+	*mock.Call
+}
+
+// GetSSOConfig is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSSOConfig(ctx interface{}) *MockStoreAPI_GetSSOConfig_Call {
+	return &MockStoreAPI_GetSSOConfig_Call{Call: _e.mock.On("GetSSOConfig", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSSOConfig_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSSOConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSSOConfig_Call) Return(sSOConfig SSOConfig, err error) *MockStoreAPI_GetSSOConfig_Call {
+	_c.Call.Return(sSOConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSSOConfig_Call) RunAndReturn(run func(ctx context.Context) (SSOConfig, error)) *MockStoreAPI_GetSSOConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSSOEnabled provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetSSOEnabled(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSSOEnabled")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetSSOEnabled_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSSOEnabled'
+type MockStoreAPI_GetSSOEnabled_Call struct {
+	*mock.Call
+}
+
+// GetSSOEnabled is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetSSOEnabled(ctx interface{}) *MockStoreAPI_GetSSOEnabled_Call {
+	return &MockStoreAPI_GetSSOEnabled_Call{Call: _e.mock.On("GetSSOEnabled", ctx)}
+}
+
+func (_c *MockStoreAPI_GetSSOEnabled_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetSSOEnabled_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSSOEnabled_Call) Return(b bool, err error) *MockStoreAPI_GetSSOEnabled_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetSSOEnabled_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_GetSSOEnabled_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetSecretProviderAWS provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetSecretProviderAWS(ctx context.Context) (bool, error) {
 	ret := _mock.Called(ctx)
@@ -5407,6 +5527,150 @@ func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) Return(err error) *MockStor
 }
 
 func (_c *MockStoreAPI_SetFeatureSessionTokens_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetFeatureSessionTokens_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetSSOConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSSOConfig(ctx context.Context, issuer string, clientID string, clientSecretRef string, redirectURI string, allowedDomains string, defaultScopes string) error {
+	ret := _mock.Called(ctx, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetSSOConfig")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, string) error); ok {
+		r0 = returnFunc(ctx, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetSSOConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSSOConfig'
+type MockStoreAPI_SetSSOConfig_Call struct {
+	*mock.Call
+}
+
+// SetSSOConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - issuer string
+//   - clientID string
+//   - clientSecretRef string
+//   - redirectURI string
+//   - allowedDomains string
+//   - defaultScopes string
+func (_e *MockStoreAPI_Expecter) SetSSOConfig(ctx interface{}, issuer interface{}, clientID interface{}, clientSecretRef interface{}, redirectURI interface{}, allowedDomains interface{}, defaultScopes interface{}) *MockStoreAPI_SetSSOConfig_Call {
+	return &MockStoreAPI_SetSSOConfig_Call{Call: _e.mock.On("SetSSOConfig", ctx, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes)}
+}
+
+func (_c *MockStoreAPI_SetSSOConfig_Call) Run(run func(ctx context.Context, issuer string, clientID string, clientSecretRef string, redirectURI string, allowedDomains string, defaultScopes string)) *MockStoreAPI_SetSSOConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSSOConfig_Call) Return(err error) *MockStoreAPI_SetSSOConfig_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSSOConfig_Call) RunAndReturn(run func(ctx context.Context, issuer string, clientID string, clientSecretRef string, redirectURI string, allowedDomains string, defaultScopes string) error) *MockStoreAPI_SetSSOConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetSSOEnabled provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) SetSSOEnabled(ctx context.Context, enabled bool) error {
+	ret := _mock.Called(ctx, enabled)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetSSOEnabled")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, bool) error); ok {
+		r0 = returnFunc(ctx, enabled)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_SetSSOEnabled_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSSOEnabled'
+type MockStoreAPI_SetSSOEnabled_Call struct {
+	*mock.Call
+}
+
+// SetSSOEnabled is a helper method to define mock.On call
+//   - ctx context.Context
+//   - enabled bool
+func (_e *MockStoreAPI_Expecter) SetSSOEnabled(ctx interface{}, enabled interface{}) *MockStoreAPI_SetSSOEnabled_Call {
+	return &MockStoreAPI_SetSSOEnabled_Call{Call: _e.mock.On("SetSSOEnabled", ctx, enabled)}
+}
+
+func (_c *MockStoreAPI_SetSSOEnabled_Call) Run(run func(ctx context.Context, enabled bool)) *MockStoreAPI_SetSSOEnabled_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSSOEnabled_Call) Return(err error) *MockStoreAPI_SetSSOEnabled_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_SetSSOEnabled_Call) RunAndReturn(run func(ctx context.Context, enabled bool) error) *MockStoreAPI_SetSSOEnabled_Call {
 	_c.Call.Return(run)
 	return _c
 }

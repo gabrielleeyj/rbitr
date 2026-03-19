@@ -179,6 +179,13 @@ type SettingsResponse struct {
 	SecretProviderGCP            bool   `json:"secret_provider_gcp"`
 	SecretProviderVault          bool   `json:"secret_provider_vault"`
 	SecretProviderAzure          bool   `json:"secret_provider_azure"`
+	SSOEnabled                   bool   `json:"sso_enabled"`
+	SSOIssuer                    string `json:"sso_issuer"`
+	SSOClientID                  string `json:"sso_client_id"`
+	SSOClientSecretRef           string `json:"sso_client_secret_ref"`
+	SSORedirectURI               string `json:"sso_redirect_uri"`
+	SSOAllowedDomains            string `json:"sso_allowed_domains"`
+	SSODefaultScopes             string `json:"sso_default_scopes"`
 	TenantID                     string `json:"tenant_id,omitempty"`
 	EnforcementMode              string `json:"enforcement_mode,omitempty"`
 	MCPPassthroughUpstreamToolID string `json:"mcp_passthrough_upstream_tool_id,omitempty"`
@@ -785,6 +792,8 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	if value, err := d.Store.GetDefaultRateLimitConfig(c.Request().Context()); err == nil {
 		defaultRateLimit = value
 	}
+	ssoConfig, _ := d.Store.GetSSOConfig(c.Request().Context())
+
 	enforcementMode := enforcementModeEnforce
 	mcpPassthroughUpstreamToolID := ""
 	if tenantID != "" {
@@ -817,6 +826,13 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 		SecretProviderGCP:            secretProviderGCP,
 		SecretProviderVault:          secretProviderVault,
 		SecretProviderAzure:          secretProviderAzure,
+		SSOEnabled:                   ssoConfig.Enabled,
+		SSOIssuer:                    ssoConfig.Issuer,
+		SSOClientID:                  ssoConfig.ClientID,
+		SSOClientSecretRef:           ssoConfig.ClientSecretRef,
+		SSORedirectURI:               ssoConfig.RedirectURI,
+		SSOAllowedDomains:            ssoConfig.AllowedDomains,
+		SSODefaultScopes:             ssoConfig.DefaultScopes,
 		TenantID:                     tenantID,
 		EnforcementMode:              enforcementMode,
 		MCPPassthroughUpstreamToolID: mcpPassthroughUpstreamToolID,

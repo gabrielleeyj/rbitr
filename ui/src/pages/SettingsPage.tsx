@@ -25,6 +25,8 @@ import {
   setSecretProviderVault as updateSecretProviderVault,
   setSessionTokenTTL,
   setMCPPassthroughUpstreamTool,
+  setSSOEnabled as updateSSOEnabled,
+  updateSSOConfig,
   type ToolConfig,
 } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
@@ -54,6 +56,13 @@ export function SettingsPage() {
   const [secretProviderGCP, setSecretProviderGCP] = useState(false);
   const [secretProviderVault, setSecretProviderVault] = useState(false);
   const [secretProviderAzure, setSecretProviderAzure] = useState(false);
+  const [ssoEnabled, setSSOEnabled] = useState(false);
+  const [ssoIssuer, setSSOIssuer] = useState("");
+  const [ssoClientId, setSSOClientId] = useState("");
+  const [ssoClientSecretRef, setSSOClientSecretRef] = useState("");
+  const [ssoRedirectUri, setSSORedirectUri] = useState("");
+  const [ssoAllowedDomains, setSSOAllowedDomains] = useState("");
+  const [ssoDefaultScopes, setSSODefaultScopes] = useState("");
   const [mcpPassthroughUpstreamToolID, setMCPPassthroughUpstreamToolID] = useState("");
   const [mcpUpstreamTools, setMCPUpstreamTools] = useState<ToolConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +107,13 @@ export function SettingsPage() {
         setSecretProviderGCP(Boolean(data.secret_provider_gcp));
         setSecretProviderVault(Boolean(data.secret_provider_vault));
         setSecretProviderAzure(Boolean(data.secret_provider_azure));
+        setSSOEnabled(Boolean(data.sso_enabled));
+        setSSOIssuer(data.sso_issuer ?? "");
+        setSSOClientId(data.sso_client_id ?? "");
+        setSSOClientSecretRef(data.sso_client_secret_ref ?? "");
+        setSSORedirectUri(data.sso_redirect_uri ?? "");
+        setSSOAllowedDomains(data.sso_allowed_domains ?? "");
+        setSSODefaultScopes(data.sso_default_scopes ?? "");
         setRateLimitPerMinute(Number(data.default_rate_limit_per_minute) > 0 ? Number(data.default_rate_limit_per_minute) : 60);
         setRateLimitPerDay(Number(data.default_rate_limit_per_day) > 0 ? Number(data.default_rate_limit_per_day) : 10000);
         const nextScope = data.default_rate_limit_scope;
@@ -334,6 +350,37 @@ export function SettingsPage() {
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to update Azure provider.");
       setSecretProviderAzure(!value);
+    }
+  };
+
+  const handleSSOEnabledToggle = async (value: boolean) => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    setSSOEnabled(value);
+    try {
+      await updateSSOEnabled({ adminKey }, value);
+      toast.success("SSO updated", { description: value ? "Enabled" : "Disabled" });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to update SSO.");
+      setSSOEnabled(!value);
+    }
+  };
+
+  const handleSSOConfigSave = async () => {
+    if (!adminKey || !canWriteSettings) return;
+    setActionError("");
+    try {
+      await updateSSOConfig({ adminKey }, {
+        sso_issuer: ssoIssuer,
+        sso_client_id: ssoClientId,
+        sso_client_secret_ref: ssoClientSecretRef,
+        sso_redirect_uri: ssoRedirectUri,
+        sso_allowed_domains: ssoAllowedDomains,
+        sso_default_scopes: ssoDefaultScopes,
+      });
+      toast.success("SSO configuration saved");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to save SSO configuration.");
     }
   };
 
@@ -676,6 +723,133 @@ export function SettingsPage() {
               disabled={loading || !canWriteSettings}
             />
           </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Identity & SSO</CardTitle>
+          <CardDescription>
+            Configure single sign-on via an external OIDC identity provider.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!canReadSettings ? (
+            <Alert>
+              <AlertDescription>Missing scope: {scopeSettingsRead}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="sso-enabled" className="text-sm">
+                SSO Enabled
+              </Label>
+              <div className="text-xs text-muted-foreground">Enable OIDC-based single sign-on for admin login</div>
+            </div>
+            <Switch
+              id="sso-enabled"
+              checked={ssoEnabled}
+              onCheckedChange={handleSSOEnabledToggle}
+              disabled={loading || !canWriteSettings}
+            />
+          </div>
+          {ssoEnabled ? (
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <div className="text-sm font-medium">SSO configuration</div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-issuer" className="text-xs text-muted-foreground">
+                  Issuer URL
+                </Label>
+                <input
+                  id="sso-issuer"
+                  type="text"
+                  value={ssoIssuer}
+                  onChange={(event) => setSSOIssuer(event.target.value)}
+                  placeholder="https://accounts.google.com"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-client-id" className="text-xs text-muted-foreground">
+                  Client ID
+                </Label>
+                <input
+                  id="sso-client-id"
+                  type="text"
+                  value={ssoClientId}
+                  onChange={(event) => setSSOClientId(event.target.value)}
+                  placeholder="your-client-id"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-client-secret-ref" className="text-xs text-muted-foreground">
+                  Client Secret Ref
+                </Label>
+                <input
+                  id="sso-client-secret-ref"
+                  type="text"
+                  value={ssoClientSecretRef}
+                  onChange={(event) => setSSOClientSecretRef(event.target.value)}
+                  placeholder="aws-sm://my-sso-secret"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-redirect-uri" className="text-xs text-muted-foreground">
+                  Redirect URI
+                </Label>
+                <input
+                  id="sso-redirect-uri"
+                  type="text"
+                  value={ssoRedirectUri}
+                  onChange={(event) => setSSORedirectUri(event.target.value)}
+                  placeholder="https://your-app.example.com/auth/callback"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-allowed-domains" className="text-xs text-muted-foreground">
+                  Allowed Domains (comma-separated)
+                </Label>
+                <input
+                  id="sso-allowed-domains"
+                  type="text"
+                  value={ssoAllowedDomains}
+                  onChange={(event) => setSSOAllowedDomains(event.target.value)}
+                  placeholder="example.com, corp.example.com"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sso-default-scopes" className="text-xs text-muted-foreground">
+                  Default Scopes (comma-separated)
+                </Label>
+                <input
+                  id="sso-default-scopes"
+                  type="text"
+                  value={ssoDefaultScopes}
+                  onChange={(event) => setSSODefaultScopes(event.target.value)}
+                  placeholder="openid, email, profile"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  disabled={loading || !canWriteSettings}
+                />
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleSSOConfigSave}
+                  disabled={loading || !canWriteSettings}
+                >
+                  Save SSO Config
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
       <Card>

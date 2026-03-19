@@ -18,12 +18,15 @@ import (
 )
 
 type Dependencies struct {
-	Store         store.StoreAPI
-	Notifications *notifications.Service
-	Metrics       *telemetry.Metrics
-	Config        config.Config
-	ToolCache     *cache.TTLCache[models.Tool]
-	RiskCache     *cache.TTLCache[string]
+	Store           store.StoreAPI
+	Notifications   *notifications.Service
+	Metrics         *telemetry.Metrics
+	Config          config.Config
+	ToolCache       *cache.TTLCache[models.Tool]
+	RiskCache       *cache.TTLCache[string]
+	OIDCProvider    *auth.OIDCProvider
+	AdminSessionMgr *auth.AdminSessionManager
+	SecretResolver  notifications.SecretResolver
 }
 
 type TenantConfigRequest struct {
@@ -138,10 +141,30 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/enforcement-mode", deps.handleEnforcementModeUpdate)
 	adminGroup.PUT("/settings/mcp-passthrough-upstream", deps.handleMCPPassthroughUpstreamUpdate)
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
+	adminGroup.PUT("/settings/sso-enabled", deps.handleSSOEnabledUpdate)
+	adminGroup.PUT("/settings/sso-config", deps.handleSSOConfigUpdate)
+	adminGroup.GET("/auth/sso/config", deps.handleSSOConfigGet)
+	adminGroup.GET("/auth/sso/authorize", deps.handleSSOAuthorize)
+	adminGroup.GET("/auth/sso/callback", deps.handleSSOCallback)
+	adminGroup.POST("/auth/sso/logout", deps.handleSSOLogout)
 }
 
 func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
+		// Try SSO session first, fall back to API key.
+		if d.AdminSessionMgr != nil {
+			token := auth.AdminKeyFromRequest(c.Request())
+			if auth.IsAdminSessionToken(token) {
+				claims, err := d.AdminSessionMgr.ValidateSession(token)
+				if err != nil {
+					return authError(c, auth.ErrUnauthorized)
+				}
+				c.Set(telemetry.CtxAdminID, "sso:"+claims.Email)
+				c.Set("admin_session_claims", claims)
+				return d.requireTenantVisibleContinue(c, next)
+			}
+		}
+
 		adminKey := auth.AdminKeyFromRequest(c.Request())
 		key, err := auth.AuthenticateAdminAny(c.Request().Context(), d.Store, adminKey)
 		if err != nil {
@@ -151,18 +174,22 @@ func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerF
 			c.Set(telemetry.CtxAdminID, key.AdminKeyID)
 		}
 
-		tenantID := c.Param("tenant_id")
-		if tenantID == "" {
-			return next(c)
-		}
-		if _, err := d.Store.GetTenant(c.Request().Context(), tenantID); err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
-			}
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant"})
-		}
+		return d.requireTenantVisibleContinue(c, next)
+	}
+}
+
+func (d *Dependencies) requireTenantVisibleContinue(c *echo.Context, next echo.HandlerFunc) error {
+	tenantID := c.Param("tenant_id")
+	if tenantID == "" {
 		return next(c)
 	}
+	if _, err := d.Store.GetTenant(c.Request().Context(), tenantID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant"})
+	}
+	return next(c)
 }
 
 func (d *Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
@@ -429,6 +456,19 @@ func (d *Dependencies) handleBootstrapComplete(c *echo.Context) error {
 }
 
 func requireAdminScope(c *echo.Context, st store.StoreAPI, scope string) (models.AdminKey, error) {
+	// Check if already authenticated via SSO session (set by requireTenantVisible middleware).
+	if claims, ok := c.Get("admin_session_claims").(auth.AdminSessionClaims); ok {
+		if !auth.HasScopeInList(claims.Scopes, scope) {
+			_ = authError(c, auth.ErrForbidden)
+			return models.AdminKey{}, auth.ErrForbidden
+		}
+		return models.AdminKey{
+			AdminKeyID: "sso:" + claims.Email,
+			Scopes:     claims.Scopes,
+		}, nil
+	}
+
+	// Fall back to API key authentication.
 	adminKey := auth.AdminKeyFromRequest(c.Request())
 	key, err := auth.AuthenticateAdmin(c.Request().Context(), st, adminKey, scope)
 	if err != nil {
