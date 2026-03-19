@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testSigningKey = []byte("test-signing-key-32-bytes-long!!")
+func testSigningKey() []byte {
+	return []byte("test-signing-key-32-bytes-long!!")
+}
 
 func TestNewAdminSessionManager(t *testing.T) {
 	t.Parallel()
@@ -23,7 +25,7 @@ func TestNewAdminSessionManager(t *testing.T) {
 func TestAdminSessionIssueAndValidate(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 
 	user := OIDCUserInfo{
 		Subject: "sub_123",
@@ -51,7 +53,7 @@ func TestAdminSessionIssueAndValidate(t *testing.T) {
 func TestAdminSessionValidateInvalidToken(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 
 	_, err := mgr.ValidateSession("tampered.token")
 	require.ErrorIs(t, err, ErrAdminSessionInvalid)
@@ -60,7 +62,7 @@ func TestAdminSessionValidateInvalidToken(t *testing.T) {
 func TestAdminSessionValidateTamperedToken(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 
 	user := OIDCUserInfo{Email: "alice@example.com", Name: "Alice", Subject: "sub_123"}
 	token, _, err := mgr.IssueSession(user, []string{"admin:read"})
@@ -74,7 +76,7 @@ func TestAdminSessionValidateTamperedToken(t *testing.T) {
 func TestAdminSessionValidateExpired(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 1*time.Second)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 1*time.Second)
 
 	user := OIDCUserInfo{Email: "alice@example.com", Name: "Alice", Subject: "sub_123"}
 	token, _, err := mgr.IssueSession(user, []string{"admin:read"})
@@ -82,7 +84,7 @@ func TestAdminSessionValidateExpired(t *testing.T) {
 
 	// Wait for expiry. Token uses Unix seconds, so we need to cross
 	// a full second boundary to guarantee now > expiresAt.
-	time.Sleep(2100 * time.Millisecond) //nolint:mnd // deliberately waiting past second boundary
+	time.Sleep(2100 * time.Millisecond)
 
 	_, err = mgr.ValidateSession(token)
 	require.ErrorIs(t, err, ErrAdminSessionExpired)
@@ -91,7 +93,7 @@ func TestAdminSessionValidateExpired(t *testing.T) {
 func TestAdminSessionRevoke(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 
 	user := OIDCUserInfo{Email: "alice@example.com", Name: "Alice", Subject: "sub_123"}
 	token, claims, err := mgr.IssueSession(user, []string{"admin:read"})
@@ -112,7 +114,7 @@ func TestAdminSessionRevoke(t *testing.T) {
 func TestIsAdminSessionToken(t *testing.T) {
 	t.Parallel()
 
-	mgr := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 	user := OIDCUserInfo{Email: "alice@example.com", Name: "Alice", Subject: "sub_123"}
 	token, _, err := mgr.IssueSession(user, []string{"admin:read"})
 	require.NoError(t, err)
@@ -123,7 +125,7 @@ func TestIsAdminSessionToken(t *testing.T) {
 		expected bool
 	}{
 		{name: "valid admin session token", token: token, expected: true},
-		{name: "plain API key", token: "rbtr_key_abc123", expected: false},
+		{name: "plain API key", token: "not-a-session-token", expected: false},
 		{name: "empty string", token: "", expected: false},
 		{name: "random string no dot", token: "nodothere", expected: false},
 	}
@@ -152,7 +154,7 @@ func TestGenerateAdminSessionID(t *testing.T) {
 func TestAdminSessionDifferentKey(t *testing.T) {
 	t.Parallel()
 
-	mgr1 := newAdminSessionManagerWithKey(testSigningKey, 15*time.Minute)
+	mgr1 := newAdminSessionManagerWithKey(testSigningKey(), 15*time.Minute)
 	mgr2 := newAdminSessionManagerWithKey([]byte("different-signing-key-32-bytes!!"), 15*time.Minute)
 
 	user := OIDCUserInfo{Email: "alice@example.com", Name: "Alice", Subject: "sub_123"}

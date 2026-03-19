@@ -40,7 +40,7 @@ const (
 	ssoEnabledKey                = "sso_enabled"
 	ssoIssuerKey                 = "sso_issuer"
 	ssoClientIDKey               = "sso_client_id"
-	ssoClientSecretRefKey        = "sso_client_secret_ref"
+	ssoClientSecretRefKey        = "sso_client_secret_ref" //nolint:gosec // setting key name, not a credential
 	ssoRedirectURIKey            = "sso_redirect_uri"
 	ssoAllowedDomainsKey         = "sso_allowed_domains"
 	ssoDefaultScopesKey          = "sso_default_scopes"
@@ -166,13 +166,13 @@ type StoreAPI interface {
 
 // SSOConfig holds SSO/OIDC configuration persisted in system_settings.
 type SSOConfig struct {
-	Enabled        bool
-	Issuer         string
-	ClientID       string
+	Enabled         bool
+	Issuer          string
+	ClientID        string
 	ClientSecretRef string
-	RedirectURI    string
-	AllowedDomains string
-	DefaultScopes  string
+	RedirectURI     string
+	AllowedDomains  string
+	DefaultScopes   string
 }
 
 // Store wraps database operations.

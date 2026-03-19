@@ -860,7 +860,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetSecretProviderGCP", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetSecretProviderVault", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetSecretProviderAzure", context.Background()).Return(false, store.ErrNotFound)
-			storeMock.On("GetSSOConfig", context.Background()).Return(store.SSOConfig{}, nil)
+				storeMock.On("GetSSOConfig", context.Background()).Return(store.SSOConfig{}, nil)
 			},
 			expectedCode:          http.StatusOK,
 			expectMode:            "enforce",
