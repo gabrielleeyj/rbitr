@@ -203,15 +203,37 @@ Report artifact: `artifacts/marketplace_onboarding_report.json` (override with `
 
 GitHub Actions manual run: `.github/workflows/marketplace-onboarding.yml`.
 
-## Security Hardening (Epic 11)
+## Policy Engine
 
-### Mandatory Base Policy
+### Action Classification
+
+Tool calls are automatically classified into action types based on HTTP method, path, query, and headers. Each action type is assigned a risk level (LOW, MEDIUM, HIGH, CRITICAL). Per-tenant risk overrides can adjust the default risk.
+
+### OPA/Rego Policies
+
+Per-tenant policies are authored in Rego and stored in PostgreSQL. The gateway evaluates policies on every tool call and produces a decision: ALLOW, DENY, or REQUIRE_APPROVAL.
+
+- **Policy Versioning**: multiple versions per tenant with publish/rollback
+- **Policy Simulation**: dry-run evaluation against test inputs via `POST /admin/tenants/{tenant_id}/policies/simulate`
+
+### Mandatory Base Policy (Epic 11)
 
 A system-level base policy evaluates before every tenant policy. Base policy DENY/REQUIRE_APPROVAL cannot be overridden by tenant policies:
 
 - All CRITICAL risk actions require approval
 - Destructive actions (`DATA.DELETE`, `DATA.BULK_EXPORT`) at HIGH/CRITICAL require approval
 - Identity/access actions (`ACCESS.GRANT`, `ACCESS.ROLE_CHANGE`) always require approval
+
+## Approval Workflow
+
+When a policy returns REQUIRE_APPROVAL, the gateway creates a pending approval request with a cryptographically secure approval token. The agent receives HTTP 409 with the `approval_request_id` and `approval_token`.
+
+- Default TTL: 15 minutes (configurable per-system via `default_approval_ttl_seconds`)
+- States: PENDING, APPROVED, DENIED, EXECUTING, EXECUTED, EXPIRED, REVOKED
+- Replay: agent resubmits with `X-Approval-Request-Id` and `X-Approval-Token` headers
+- Retry window: 60 seconds for transient execution failures
+
+## Security Hardening (Epic 11)
 
 ### Ephemeral Session Tokens
 
@@ -242,6 +264,141 @@ Signed provenance tokens track agent-to-agent request chains across tenant bound
 - Configurable max chain depth (default 5) prevents infinite loops
 - Enable: `RBTR_FEATURE_CROSS_TENANT_CHAIN=true`
 
+## Rate Limiting
+
+Per-request rate limiting with configurable scopes and windows:
+
+- **Scopes**: `tenant`, `tenant_agent`, `tenant_tool`, `tenant_agent_tool`
+- **Windows**: per-minute and per-day limits
+- **Defaults**: 60 requests/minute, 10,000 requests/day
+- Returns HTTP 429 with `retry_after_seconds` when exceeded
+- Enable: `RBTR_FEATURE_RATE_LIMITING=true`
+
+Configurable via `PUT /admin/settings/default-rate-limit`.
+
+## Argument Constraints
+
+Policy-level constraints on tool call arguments:
+
+- **Path-based matching**: JSONPath-style paths (e.g., `$.user_id`)
+- **Operators**: `eq`, `prefix`, `regex`, `in`, `contains`, `jsonschema`
+- **Allow/deny rules**: whitelist and blacklist constraints
+- **Custom messages**: per-rule violation messages
+- Enable: `RBTR_FEATURE_ARG_CONSTRAINTS=true`
+
+## MCP (Model Context Protocol)
+
+Native MCP support for AI agent frameworks:
+
+- `POST /v1/mcp/{tenant_id}` - JSON-RPC 2.0 endpoint
+- `GET /v1/mcp/{tenant_id}` - Streamable HTTP (SSE transport)
+
+Implemented methods:
+
+| Method | Description |
+|--------|-------------|
+| `initialize` | Agent handshake with session token issuance |
+| `tools/list` | List available tools for the tenant |
+| `tools/call` | Call tool with full governance evaluation |
+| `notifications/initialized` | Agent notification acknowledgement |
+
+Unknown methods are forwarded to the upstream MCP server without governance (configurable via `MCPPassthroughUpstreamToolID`).
+
+Protocol: JSON-RPC 2.0, version `20251125`, max request 256 KB, SSE heartbeat every 15s.
+
+## Authentication
+
+### Tenant Authentication
+
+- `Authorization: Bearer <tenant_key>` (preferred)
+- `X-Tenant-Key` header (legacy fallback)
+- HMAC-SHA256 key verification with automatic hash algorithm upgrade
+- Agent ID required via `X-Agent-Id` header
+- Key rotation: `RBTR_TENANT_KEY_HMAC_SECRETS` (comma-separated current, previous...)
+
+### Admin Authentication
+
+- `Authorization: Bearer <admin_key>` (preferred)
+- `X-Admin-Key` header (legacy fallback)
+- Scope-based access control (25 granular scopes)
+- Key rotation: `RBTR_ADMIN_KEY_HMAC_SECRETS` (comma-separated current, previous...)
+
+### SSO / OIDC Authentication (Epic 12)
+
+Admin console supports SSO via any OIDC-compliant identity provider. Dual auth: SSO sessions and API keys work side-by-side.
+
+| Provider | Issuer URL Example |
+|----------|-------------------|
+| Google Workspace | `https://accounts.google.com` |
+| AWS IAM Identity Center | `https://your-sso-portal.awsapps.com/start` |
+| Okta | `https://your-org.okta.com` |
+| Azure AD / Entra ID | `https://login.microsoftonline.com/{tenant-id}/v2.0` |
+| Auth0 | `https://your-domain.auth0.com` |
+| Keycloak | `https://keycloak.example.com/realms/{realm}` |
+
+| Env Var | Description |
+|---------|-------------|
+| `RBTR_SSO_ENABLED` | Enable SSO (`true`/`false`) |
+| `RBTR_SSO_ISSUER` | OIDC issuer URL |
+| `RBTR_SSO_CLIENT_ID` | OAuth2 client ID |
+| `RBTR_SSO_CLIENT_SECRET_REF` | Secret ref for client secret (e.g., `env://SSO_CLIENT_SECRET`) |
+| `RBTR_SSO_REDIRECT_URI` | OAuth2 callback URL |
+| `RBTR_SSO_ALLOWED_DOMAINS` | Comma-separated allowed email domains |
+| `RBTR_SSO_DEFAULT_SCOPES` | Default admin scopes (default: `admin:read,admin:write`) |
+
+SSO can also be configured at runtime via the admin Settings UI. The login page automatically shows a "Sign in with SSO" button when SSO is enabled.
+
+### Admin Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `admin:tenants:read` | List and read tenant details |
+| `admin:tenants:write` | Update tenant config, create/delete tenants |
+| `admin:keys:read` | List tenant keys |
+| `admin:keys:rotate` | Rotate tenant keys |
+| `admin:keys:revoke` | Revoke tenant keys |
+| `admin:tools:read` | List and read tool definitions |
+| `admin:tools:write` | Update tool config and metadata |
+| `admin:policies:read` | View policies |
+| `admin:policies:write` | Create and update policies |
+| `admin:policies:publish` | Publish policy versions |
+| `admin:policies:rollback` | Rollback to previous policy |
+| `admin:policies:simulate` | Simulate policy decisions |
+| `admin:approvals:read` | View approval requests |
+| `admin:approvals:decide` | Approve, deny, or revoke approvals |
+| `admin:audit:read` | Read audit trail |
+| `admin:audit:export` | Export audit trail (JSON/CSV) |
+| `admin:notifications:read` | View notification config |
+| `admin:notifications:write` | Update notification channels |
+| `admin:notifications:test` | Send test notifications |
+| `admin:settings:read` | Read system settings |
+| `admin:settings:write` | Modify system settings |
+
+Umbrella scopes: `admin:read` covers all `:read`/`:export`/`:simulate` scopes. `admin:write` covers all other scopes.
+
+## Tenant Management
+
+Multi-tenant architecture with per-tenant isolation:
+
+- **Create/delete tenants**: `POST /admin/tenants`, `DELETE /admin/tenants/{tenant_id}`
+- **Enable/disable**: `PUT /admin/tenants/{tenant_id}/enabled`
+- **Key lifecycle**: create, rotate, and revoke tenant API keys
+- **Per-tenant config**: policies, tools, notifications, rate limits, enforcement mode
+
+Each tenant has isolated:
+- Tool definitions with independent backend URLs and auth
+- OPA/Rego policies with version history
+- Notification channel configuration
+- Risk overrides
+- Audit trail
+
+### Enforcement Mode
+
+Per-tenant enforcement mode controls whether decisions are enforced or reported:
+
+- `enforce` (default) - DENY and REQUIRE_APPROVAL decisions are enforced
+- `shadow` - all decisions are recorded but not enforced (tool calls always proceed)
+
 ## Notifications (Epic 12)
 
 rbitr supports multi-channel notifications for approval events, security alerts, and policy violations.
@@ -258,14 +415,26 @@ rbitr supports multi-channel notifications for approval events, security alerts,
 
 All channels are configured per-tenant via the admin API and UI (Notifications page). Secret refs support all registered secret providers (see below).
 
+### Notification Events
+
+| Event | Severity | Description |
+|-------|----------|-------------|
+| `APPROVAL.EXPIRING` | WARN | Approval expires in ~1 minute |
+| `APPROVAL.EXPIRED` | INFO | Approval has expired |
+| `SECURITY.TOKEN_ABUSE` | CRITICAL | Approval token abuse detected |
+| `POLICY.INVALID_OUTPUT` | WARN | Policy returned malformed decision |
+| `POLICY.EVAL_ERROR` | WARN | Policy evaluation runtime error |
+
+Per-event enablement toggles, suppression tracking (dedup + cooldown), and mailing list support for email distribution.
+
 ### Secret Providers
 
-Secret references in notification config (e.g., API tokens, webhook URLs) are resolved via pluggable providers. The built-in providers (`env://`, `file://`) are always available. Cloud providers are opt-in.
+Secret references in notification and SSO config are resolved via pluggable providers. The built-in providers (`env://`, `file://`) are always available. Cloud providers are opt-in.
 
 | Provider | URI Scheme | Enable Env Var | Required Env Vars |
 |----------|-----------|----------------|-------------------|
-| Environment variable | `env://` | Always on | — |
-| File | `file://` | Always on | — |
+| Environment variable | `env://` | Always on | -- |
+| File | `file://` | Always on | -- |
 | AWS Secrets Manager | `aws-sm://` | `RBTR_SECRET_PROVIDER_AWS=true` | AWS credential chain (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) |
 | GCP Secret Manager | `gcp-sm://` | `RBTR_SECRET_PROVIDER_GCP=true` | `GCP_SECRET_MANAGER_TOKEN` or GCE/GKE metadata |
 | HashiCorp Vault | `vault://` | `RBTR_SECRET_PROVIDER_VAULT=true` | `VAULT_ADDR`, `VAULT_TOKEN` |
@@ -284,30 +453,117 @@ vault://secret/data/rbitr/slack#token
 azure-kv://myvault/slack-token
 ```
 
-## API
+## API Reference
 
-- Tool call payload is a JSON envelope with `http_method`, `path`, `query`, `headers`, `body` expected by `POST /v1/tools/{tool_id}/call`.
-- Production migrations are schema-only (no seeded demo data).
-- Tenant auth: `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback.
-- Admin auth: `Authorization: Bearer <admin_key>` (preferred). `X-Admin-Key` is legacy fallback.
-- SSO auth: `Authorization: Bearer <sso_session_token>` — OIDC-based admin authentication (see below).
-- HMAC secret rotation: `RBTR_TENANT_KEY_HMAC_SECRETS` and `RBTR_ADMIN_KEY_HMAC_SECRETS` accept comma-separated values (current, previous...).
+### Public API (Tenant-Scoped)
 
-### SSO / OIDC Authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/tools/{tool_id}/call` | Call a tool with governance |
+| `GET` | `/v1/tenants/{tenant_id}/evidence` | Tenant evidence trail |
+| `POST` | `/v1/mcp/{tenant_id}` | MCP JSON-RPC endpoint |
+| `GET` | `/v1/mcp/{tenant_id}` | MCP Streamable HTTP (SSE) |
 
-Admin console supports SSO via any OIDC-compliant identity provider (Google, Okta, Azure AD, AWS IAM Identity Center, Auth0, Keycloak).
+### Admin API
 
-| Env Var | Description |
-|---------|-------------|
-| `RBTR_SSO_ENABLED` | Enable SSO (`true`/`false`) |
-| `RBTR_SSO_ISSUER` | OIDC issuer URL (e.g., `https://accounts.google.com`) |
-| `RBTR_SSO_CLIENT_ID` | OAuth2 client ID |
-| `RBTR_SSO_CLIENT_SECRET_REF` | Secret ref for client secret (e.g., `env://SSO_CLIENT_SECRET`) |
-| `RBTR_SSO_REDIRECT_URI` | OAuth2 callback URL |
-| `RBTR_SSO_ALLOWED_DOMAINS` | Comma-separated allowed email domains |
-| `RBTR_SSO_DEFAULT_SCOPES` | Default admin scopes (default: `admin:read,admin:write`) |
+**Tenant Management**
 
-SSO and API key auth work side-by-side (dual auth). API keys remain available for programmatic access. SSO can also be configured at runtime via the Settings UI.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants` | List tenants |
+| `POST` | `/admin/tenants` | Create tenant |
+| `GET` | `/admin/tenants/{tenant_id}` | Tenant details |
+| `DELETE` | `/admin/tenants/{tenant_id}` | Delete tenant |
+| `PUT` | `/admin/tenants/{tenant_id}/config` | Update tenant name/key |
+| `PUT` | `/admin/tenants/{tenant_id}/enabled` | Enable/disable tenant |
+| `GET` | `/admin/tenants/{tenant_id}/keys` | List tenant keys |
+| `POST` | `/admin/tenants/{tenant_id}/keys` | Create key |
+| `POST` | `/admin/tenants/{tenant_id}/keys/rotate` | Rotate keys |
+| `POST` | `/admin/tenants/{tenant_id}/keys/{key_id}/revoke` | Revoke key |
+
+**Tools**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/tools` | List tools |
+| `PUT` | `/admin/tenants/{tenant_id}/tools/{tool_id}` | Update tool config |
+| `PUT` | `/admin/tenants/{tenant_id}/tools/{tool_id}/metadata` | Update tool metadata |
+
+**Policies**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/policies` | List policy versions |
+| `GET` | `/admin/tenants/{tenant_id}/policies/{version}` | Get policy |
+| `POST` | `/admin/tenants/{tenant_id}/policies` | Create policy version |
+| `POST` | `/admin/tenants/{tenant_id}/policies/simulate` | Simulate policy |
+| `PUT` | `/admin/tenants/{tenant_id}/policies/{version}/publish` | Publish version |
+| `PUT` | `/admin/tenants/{tenant_id}/policies/rollback` | Rollback policy |
+
+**Approvals**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/approvals` | List approvals |
+| `GET` | `/admin/tenants/{tenant_id}/approvals/{id}` | Approval details |
+| `GET` | `/admin/tenants/{tenant_id}/approvals/pending-count` | Pending count |
+| `POST` | `/admin/tenants/{tenant_id}/approvals/{id}/approve` | Approve |
+| `POST` | `/admin/tenants/{tenant_id}/approvals/{id}/deny` | Deny |
+| `POST` | `/admin/tenants/{tenant_id}/approvals/{id}/revoke` | Revoke |
+
+**Audit**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/audit` | Tenant audit trail |
+| `GET` | `/admin/tenants/{tenant_id}/audit/export` | Export audit (JSON/CSV) |
+| `GET` | `/admin/tenants/{tenant_id}/audit/resource-types` | Resource types |
+| `GET` | `/admin/audit` | Global audit trail |
+
+**Notifications**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/notifications` | Get config |
+| `PUT` | `/admin/tenants/{tenant_id}/notifications` | Update config |
+| `PUT` | `/admin/tenants/{tenant_id}/notifications/{channel}-secret-ref` | Set channel secret |
+| `POST` | `/admin/tenants/{tenant_id}/notifications/test/{channel}` | Test send |
+| `GET` | `/admin/tenants/{tenant_id}/notifications/suppressions` | Suppression history |
+| `GET/POST/PUT/DELETE` | `/admin/tenants/{tenant_id}/mailing-lists/...` | Mailing list CRUD |
+
+**Risk Overrides**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/risk-overrides` | List overrides |
+| `PUT` | `/admin/tenants/{tenant_id}/risk-overrides/{action_type}` | Set override |
+| `DELETE` | `/admin/tenants/{tenant_id}/risk-overrides/{action_type}` | Remove override |
+
+**System Settings**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/settings` | Get all settings |
+| `GET` | `/admin/me` | Current admin info |
+| `GET` | `/admin/action-types` | Available action types |
+| `PUT` | `/admin/settings/default-approval-ttl` | Approval TTL |
+| `PUT` | `/admin/settings/default-rate-limit` | Rate limit config |
+| `PUT` | `/admin/settings/audit-retention` | Audit retention days |
+| `PUT` | `/admin/settings/enforcement-mode` | Enforcement mode |
+| `PUT` | `/admin/settings/feature-*` | Feature flag toggles |
+| `PUT` | `/admin/settings/secret-provider-*` | Secret provider toggles |
+| `PUT` | `/admin/settings/sso-enabled` | Toggle SSO |
+| `PUT` | `/admin/settings/sso-config` | SSO configuration |
+
+**SSO**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/auth/sso/status` | SSO enabled status (no auth) |
+| `GET` | `/admin/auth/sso/config` | SSO configuration (admin auth) |
+| `GET` | `/admin/auth/sso/authorize` | Start OIDC flow (no auth) |
+| `GET` | `/admin/auth/sso/callback` | OIDC callback (no auth) |
+| `POST` | `/admin/auth/sso/logout` | Revoke SSO session |
 
 ## Observability
 
@@ -317,16 +573,27 @@ Structured request logging via Echo/v5 with context fields: `request_id`, `tenan
 
 ### Prometheus Metrics
 
-- `decisions_total{decision,action_type}`
-- `gateway_requests_total`
-- `tool_exec_total`
-- `errors_total`
-- `decision_latency_ms`
-- `tool_latency_ms`
-- `policy_eval_invalid_total{reason}`
-- `setup_attempts_total{result}`
-- `setup_duration_ms`
-- `setup_state{state}`
+Gateway metrics exposed at `GET /metrics`:
+
+- `decisions_total{decision,action_type}` - governance decisions
+- `gateway_requests_total` - total requests
+- `tool_exec_total` - tool executions
+- `errors_total` - errors
+- `decision_latency_ms` - policy evaluation latency
+- `tool_latency_ms` - tool execution latency
+- `rate_limit_latency_ms` - rate limit check latency
+- `policy_eval_invalid_total{reason}` - invalid policy outputs
+- `approvals_created_total` - approvals created
+- `approvals_executed_total{result}` - approval executions
+- `notifications_sent_total{channel,event_type}` - notifications sent
+- `notifications_suppressed_total{channel,event_type}` - suppressed notifications
+- `cache_hits_total{cache_name}` / `cache_misses_total{cache_name}` - cache stats
+- `setup_attempts_total{result}` / `setup_duration_ms` / `setup_state{state}`
+
+### Health Checks
+
+- `GET /healthz` - liveness probe (always 200)
+- `GET /readyz` - readiness probe (checks DB connectivity)
 
 ### Audit Trail (SOC-ready)
 
@@ -346,6 +613,23 @@ Export endpoints (tenant-scoped):
 - `include_details=true` to include `before/after` payloads
 
 Export defaults are safe-by-default (redacted payloads, no secrets).
+
+## Feature Flags
+
+All features can be toggled via environment variables at startup or via the admin Settings UI at runtime.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `RBTR_FEATURE_RATE_LIMITING` | `false` | Per-request rate limiting |
+| `RBTR_FEATURE_ARG_CONSTRAINTS` | `false` | Argument constraint enforcement |
+| `RBTR_FEATURE_SESSION_TOKENS` | `true` | Ephemeral MCP session tokens |
+| `RBTR_FEATURE_FILE_GOVERNANCE` | `true` | File path sandbox enforcement |
+| `RBTR_FEATURE_CROSS_TENANT_CHAIN` | `false` | Cross-tenant provenance tracking |
+| `RBTR_SSO_ENABLED` | `false` | OIDC SSO for admin console |
+| `RBTR_SECRET_PROVIDER_AWS` | `false` | AWS Secrets Manager |
+| `RBTR_SECRET_PROVIDER_GCP` | `false` | GCP Secret Manager |
+| `RBTR_SECRET_PROVIDER_VAULT` | `false` | HashiCorp Vault |
+| `RBTR_SECRET_PROVIDER_AZURE` | `false` | Azure Key Vault |
 
 ## Demo
 
