@@ -46,6 +46,15 @@ type SSOSessionResponse struct {
 	Name      string `json:"name"`
 }
 
+// handleSSOStatus returns only whether SSO is enabled (no auth required, used by login page).
+func (d *Dependencies) handleSSOStatus(c *echo.Context) error {
+	cfg, err := d.Store.GetSSOConfig(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusOK, map[string]any{"sso_enabled": false})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"sso_enabled": cfg.Enabled})
+}
+
 func (d *Dependencies) handleSSOConfigGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeSettingsRead); err != nil {
 		return err
