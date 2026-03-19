@@ -111,8 +111,8 @@ func (p *OIDCProvider) Discover(ctx context.Context, issuer string) (*OIDCDiscov
 	}
 
 	var disc OIDCDiscovery
-	if err := json.Unmarshal(body, &disc); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrOIDCDiscoveryFailed, err)
+	if unmarshalErr := json.Unmarshal(body, &disc); unmarshalErr != nil {
+		return nil, fmt.Errorf("%w: %w", ErrOIDCDiscoveryFailed, unmarshalErr)
 	}
 
 	if disc.JWKSURI == "" {
@@ -135,7 +135,7 @@ func (p *OIDCProvider) Discover(ctx context.Context, issuer string) (*OIDCDiscov
 }
 
 // AuthorizationURL builds the IdP authorization URL for the OIDC code flow.
-func (p *OIDCProvider) AuthorizationURL(config OIDCConfig, state string) (string, error) {
+func (p *OIDCProvider) AuthorizationURL(config *OIDCConfig, state string) (string, error) {
 	p.mu.RLock()
 	disc := p.discovery
 	p.mu.RUnlock()
@@ -156,7 +156,7 @@ func (p *OIDCProvider) AuthorizationURL(config OIDCConfig, state string) (string
 }
 
 // ExchangeCode exchanges an authorization code for tokens.
-func (p *OIDCProvider) ExchangeCode(ctx context.Context, config OIDCConfig, code string) (*OIDCTokenResponse, error) {
+func (p *OIDCProvider) ExchangeCode(ctx context.Context, config *OIDCConfig, code string) (*OIDCTokenResponse, error) {
 	p.mu.RLock()
 	disc := p.discovery
 	p.mu.RUnlock()
@@ -207,7 +207,7 @@ func (p *OIDCProvider) ExchangeCode(ctx context.Context, config OIDCConfig, code
 }
 
 // ValidateIDToken validates an OIDC ID token and returns the user info.
-func (p *OIDCProvider) ValidateIDToken(ctx context.Context, rawToken string, config OIDCConfig) (OIDCUserInfo, error) {
+func (p *OIDCProvider) ValidateIDToken(ctx context.Context, rawToken string, config *OIDCConfig) (OIDCUserInfo, error) {
 	p.mu.RLock()
 	keySet := p.keySet
 	p.mu.RUnlock()

@@ -135,10 +135,10 @@ func (d *Dependencies) handleSSOAuthorize(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "SSO is not enabled"})
 	}
 
-	oidcCfg := ssoConfigToOIDC(cfg)
+	oidcCfg := ssoConfigToOIDC(&cfg)
 
 	// Discover OIDC endpoints.
-	if _, err := d.OIDCProvider.Discover(c.Request().Context(), oidcCfg.Issuer); err != nil {
+	if _, discoverErr := d.OIDCProvider.Discover(c.Request().Context(), oidcCfg.Issuer); discoverErr != nil {
 		return c.JSON(http.StatusBadGateway, map[string]string{"error": "OIDC discovery failed"})
 	}
 
@@ -173,7 +173,7 @@ func (d *Dependencies) handleSSOCallback(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "SSO is not enabled"})
 	}
 
-	oidcCfg := ssoConfigToOIDC(cfg)
+	oidcCfg := ssoConfigToOIDC(&cfg)
 
 	// Resolve the client secret from the secret reference.
 	clientSecret, err := d.resolveClientSecret(c, cfg.ClientSecretRef)
@@ -240,8 +240,8 @@ func (d *Dependencies) resolveClientSecret(c *echo.Context, secretRef string) (s
 	return secretRef, nil
 }
 
-func ssoConfigToOIDC(cfg store.SSOConfig) auth.OIDCConfig {
-	return auth.OIDCConfig{
+func ssoConfigToOIDC(cfg *store.SSOConfig) *auth.OIDCConfig {
+	return &auth.OIDCConfig{
 		Enabled:        cfg.Enabled,
 		Issuer:         cfg.Issuer,
 		ClientID:       cfg.ClientID,

@@ -66,7 +66,7 @@ func TestClaimString(t *testing.T) {
 	// that when keySet is nil the function returns an error, which exercises the
 	// guard before claimString would be called.
 	p := NewOIDCProvider(nil)
-	_, err := p.ValidateIDToken(t.Context(), "fake.token.here", OIDCConfig{})
+	_, err := p.ValidateIDToken(t.Context(), "fake.token.here", &OIDCConfig{})
 	require.ErrorIs(t, err, ErrOIDCNotConfigured)
 }
 
@@ -97,7 +97,7 @@ func TestAuthorizationURLWithoutDiscovery(t *testing.T) {
 		ClientID:    "client-id",
 		RedirectURI: "http://localhost/callback",
 	}
-	_, err := p.AuthorizationURL(cfg, "state123")
+	_, err := p.AuthorizationURL(&cfg, "state123")
 	require.ErrorIs(t, err, ErrOIDCNotConfigured)
 }
 
@@ -109,6 +109,6 @@ func TestValidateIDTokenWithoutKeySet(t *testing.T) {
 		Issuer:   "https://idp.example.com",
 		ClientID: "client-id",
 	}
-	_, err := p.ValidateIDToken(t.Context(), "some.jwt.token", cfg)
+	_, err := p.ValidateIDToken(t.Context(), "some.jwt.token", &cfg)
 	require.ErrorIs(t, err, ErrOIDCNotConfigured)
 }
