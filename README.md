@@ -290,7 +290,24 @@ azure-kv://myvault/slack-token
 - Production migrations are schema-only (no seeded demo data).
 - Tenant auth: `Authorization: Bearer <tenant_key>` (preferred). `X-Tenant-Key` is legacy fallback.
 - Admin auth: `Authorization: Bearer <admin_key>` (preferred). `X-Admin-Key` is legacy fallback.
+- SSO auth: `Authorization: Bearer <sso_session_token>` — OIDC-based admin authentication (see below).
 - HMAC secret rotation: `RBTR_TENANT_KEY_HMAC_SECRETS` and `RBTR_ADMIN_KEY_HMAC_SECRETS` accept comma-separated values (current, previous...).
+
+### SSO / OIDC Authentication
+
+Admin console supports SSO via any OIDC-compliant identity provider (Google, Okta, Azure AD, AWS IAM Identity Center, Auth0, Keycloak).
+
+| Env Var | Description |
+|---------|-------------|
+| `RBTR_SSO_ENABLED` | Enable SSO (`true`/`false`) |
+| `RBTR_SSO_ISSUER` | OIDC issuer URL (e.g., `https://accounts.google.com`) |
+| `RBTR_SSO_CLIENT_ID` | OAuth2 client ID |
+| `RBTR_SSO_CLIENT_SECRET_REF` | Secret ref for client secret (e.g., `env://SSO_CLIENT_SECRET`) |
+| `RBTR_SSO_REDIRECT_URI` | OAuth2 callback URL |
+| `RBTR_SSO_ALLOWED_DOMAINS` | Comma-separated allowed email domains |
+| `RBTR_SSO_DEFAULT_SCOPES` | Default admin scopes (default: `admin:read,admin:write`) |
+
+SSO and API key auth work side-by-side (dual auth). API keys remain available for programmatic access. SSO can also be configured at runtime via the Settings UI.
 
 ## Observability
 

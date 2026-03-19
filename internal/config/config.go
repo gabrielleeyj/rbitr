@@ -30,6 +30,13 @@ type Config struct {
 	SecretProviderVault     bool
 	SecretProviderVaultAddr string
 	SecretProviderAzure     bool
+	SSOEnabled              bool
+	SSOIssuer               string
+	SSOClientID             string
+	SSOClientSecretRef      string
+	SSORedirectURI          string
+	SSOAllowedDomains       []string
+	SSODefaultScopes        []string
 	DevAutoTools            bool
 	DevMockInternalURL      string
 	DevJiraURL              string
@@ -73,6 +80,13 @@ func Load() Config {
 		SecretProviderVault:     getEnvBool("RBTR_SECRET_PROVIDER_VAULT"),
 		SecretProviderVaultAddr: getEnv("VAULT_ADDR", ""),
 		SecretProviderAzure:     getEnvBool("RBTR_SECRET_PROVIDER_AZURE"),
+		SSOEnabled:              getEnvBool("RBTR_SSO_ENABLED"),
+		SSOIssuer:               getEnv("RBTR_SSO_ISSUER", ""),
+		SSOClientID:             getEnv("RBTR_SSO_CLIENT_ID", ""),
+		SSOClientSecretRef:      getEnv("RBTR_SSO_CLIENT_SECRET_REF", ""),
+		SSORedirectURI:          getEnv("RBTR_SSO_REDIRECT_URI", ""),
+		SSOAllowedDomains:       getEnvCSV("RBTR_SSO_ALLOWED_DOMAINS"),
+		SSODefaultScopes:        getEnvCSVDefault("RBTR_SSO_DEFAULT_SCOPES", []string{"admin:read", "admin:write"}),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:              getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),
@@ -128,6 +142,14 @@ func getEnvBoolDefault(key string, fallback bool) bool {
 		}
 	}
 	return fallback
+}
+
+func getEnvCSVDefault(key string, fallback []string) []string {
+	result := getEnvCSV(key)
+	if len(result) == 0 {
+		return fallback
+	}
+	return result
 }
 
 func getEnvCSV(key string) []string {

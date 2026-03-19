@@ -191,6 +191,26 @@ export interface AdminSettings {
   secret_provider_gcp?: boolean;
   secret_provider_vault?: boolean;
   secret_provider_azure?: boolean;
+  sso_enabled?: boolean;
+  sso_issuer?: string;
+  sso_client_id?: string;
+  sso_client_secret_ref?: string;
+  sso_redirect_uri?: string;
+  sso_allowed_domains?: string;
+  sso_default_scopes?: string;
+}
+
+export interface SSOConfigRequest {
+  sso_issuer: string;
+  sso_client_id: string;
+  sso_client_secret_ref: string;
+  sso_redirect_uri: string;
+  sso_allowed_domains: string;
+  sso_default_scopes: string;
+}
+
+export interface SSOAuthorizeResponse {
+  authorize_url: string;
 }
 
 export interface NotificationConfig {
@@ -816,6 +836,30 @@ export function setSecretProviderAzure(config: ApiConfig, enabled: boolean): Pro
   return request<void>(`/admin/settings/secret-provider-azure`, config, {
     method: "PUT",
     body: JSON.stringify({ enabled }),
+  });
+}
+
+export function setSSOEnabled(config: ApiConfig, enabled: boolean): Promise<void> {
+  return request<void>(`/admin/settings/sso-enabled`, config, {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function updateSSOConfig(config: ApiConfig, payload: SSOConfigRequest): Promise<void> {
+  return request<void>(`/admin/settings/sso-config`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getSSOAuthorizeURL(config: ApiConfig): Promise<SSOAuthorizeResponse> {
+  return request<SSOAuthorizeResponse>(`/admin/auth/sso/authorize`, config);
+}
+
+export function ssoLogout(config: ApiConfig): Promise<void> {
+  return request<void>(`/admin/auth/sso/logout`, config, {
+    method: "POST",
   });
 }
 

@@ -7,8 +7,8 @@
 | **1** Chat Integrations (Telegram, WhatsApp) | **DONE** | 2026-03-18 |
 | **2** Chat Integrations (Microsoft Teams, Discord) | **SKIPPED** | — |
 | **3** Ticketing & ITSM (Jira, ServiceNow) | Planned | — |
-| **4** Observability & SIEM Export | Planned | — |
-| **5** Identity & SSO (OIDC/SAML) | Planned | — |
+| **4** Observability & SIEM Export | **SKIPPED** | — |
+| **5** Identity & SSO (OIDC) | **DONE** | 2026-03-19 |
 | **6** Secret Manager Providers | **DONE** | 2026-03-18 |
 | **7** Generic Outbound Webhooks | **SKIPPED** | — |
 
@@ -234,7 +234,7 @@ All exports use a common envelope:
 
 ---
 
-## Phase 5 — Identity & SSO
+## Phase 5 — Identity & SSO (OIDC)
 
 ### Problem
 
@@ -243,18 +243,102 @@ Admin authentication currently uses HMAC-hashed API keys. Enterprise deployments
 ### Solution
 
 - OIDC (OpenID Connect) provider integration for admin authentication
-- SAML 2.0 support for legacy enterprise IdPs
-- Map IdP groups/roles to rbitr admin scopes
-- Session management with JWT tokens post-SSO
-- Retain API key auth as fallback for programmatic access
+- Automatic discovery via `.well-known/openid-configuration`
+- HMAC-SHA256 signed admin session tokens post-SSO authentication
+- Email domain-based access control (allowed domains list)
+- Configurable default scopes for SSO-authenticated admins
+- API key auth retained as fallback for programmatic access (dual auth)
+
+### Supported Providers
+
+Any OIDC-compliant identity provider works out of the box:
+
+| Provider | Issuer URL Example |
+|----------|-------------------|
+| **Google Workspace** | `https://accounts.google.com` |
+| **AWS IAM Identity Center** | `https://your-sso-portal.awsapps.com/start` |
+| **Okta** | `https://your-org.okta.com` |
+| **Azure AD / Entra ID** | `https://login.microsoftonline.com/{tenant-id}/v2.0` |
+| **Auth0** | `https://your-domain.auth0.com` |
+| **Keycloak** | `https://keycloak.example.com/realms/{realm}` |
+
+### Configuration
+
+SSO configuration is stored in `rbitr.system_settings` (no new migration required). Configuration can be set via environment variables at startup or via the admin API / Settings UI at runtime.
+
+#### Environment Variables
+
+| Key | Value | Description |
+|-----|-------|-------------|
+| `RBTR_SSO_ENABLED` | `true` | Enable SSO/OIDC authentication |
+| `RBTR_SSO_ISSUER` | `https://accounts.google.com` | OIDC issuer URL (used for discovery) |
+| `RBTR_SSO_CLIENT_ID` | `your-client-id` | OAuth2 client ID from your IdP |
+| `RBTR_SSO_CLIENT_SECRET_REF` | `env://SSO_CLIENT_SECRET` | Secret reference for the OAuth2 client secret |
+| `RBTR_SSO_REDIRECT_URI` | `https://rbitr.example.com/admin/auth/sso/callback` | OAuth2 callback URL |
+| `RBTR_SSO_ALLOWED_DOMAINS` | `example.com,corp.example.com` | Comma-separated list of allowed email domains |
+| `RBTR_SSO_DEFAULT_SCOPES` | `admin:read,admin:write` | Default rbitr scopes for SSO users (default: `admin:read,admin:write`) |
+
+#### System Setting Keys
+
+| System Setting Key | Description |
+|--------------------|-------------|
+| `sso_enabled` | Toggle SSO on/off |
+| `sso_issuer` | OIDC issuer URL |
+| `sso_client_id` | OAuth2 client ID |
+| `sso_client_secret_ref` | Secret ref for client secret |
+| `sso_redirect_uri` | OAuth2 redirect URI |
+| `sso_allowed_domains` | Comma-separated allowed email domains |
+| `sso_default_scopes` | Comma-separated default admin scopes |
+
+### Admin API Endpoints
+
+```
+GET  /admin/auth/sso/config     — Get SSO configuration
+PUT  /admin/settings/sso-enabled — Toggle SSO enabled/disabled
+PUT  /admin/settings/sso-config  — Update SSO configuration fields
+GET  /admin/auth/sso/authorize   — Get IdP authorization URL (starts OIDC flow)
+GET  /admin/auth/sso/callback    — Handle OIDC callback, exchange code, issue session
+POST /admin/auth/sso/logout      — Revoke SSO admin session
+```
+
+### Authentication Flow
+
+1. Admin clicks "Login with SSO" in the UI
+2. Frontend calls `GET /admin/auth/sso/authorize` → receives `authorize_url` and `state`
+3. Frontend redirects to IdP authorization URL
+4. User authenticates with IdP (Google, Okta, etc.)
+5. IdP redirects back with authorization code
+6. Frontend calls `GET /admin/auth/sso/callback?code=...` → receives session token
+7. Frontend stores session token and uses it as `Authorization: Bearer <token>` for subsequent requests
+8. Dual auth middleware checks for SSO session first, falls back to API key
+
+### Dual Auth (SSO + API Key)
+
+All admin endpoints support both authentication methods:
+- **SSO session**: `Authorization: Bearer <admin-session-token>` (tokens containing `rbas_` prefix in payload)
+- **API key**: `Authorization: Bearer <api-key>` or `X-Admin-Key: <api-key>` (existing behavior)
+
+The middleware detects admin session tokens by checking for the `rbas_` prefix, validates the HMAC-SHA256 signature, and checks scopes. If the token is not an admin session, it falls back to API key authentication.
 
 ### Implementation
 
-- `internal/auth/oidc.go` — OIDC discovery, token validation, user info
-- `internal/auth/saml.go` — SAML assertion parsing, attribute mapping
-- Admin API: `/admin/auth/oidc/callback`, `/admin/auth/saml/acs`
-- SSO config stored in system settings
-- Migration: `00035_sso_config.sql`
+- `internal/auth/oidc.go` — OIDC provider: discovery, authorization URL, code exchange, ID token validation
+- `internal/auth/admin_session.go` — Admin session manager: HMAC-SHA256 signed tokens, TTL cache, revocation
+- `internal/api/admin/sso.go` — SSO API handlers: config CRUD, authorize, callback, logout
+- `internal/api/admin/handlers.go` — Updated `Dependencies` struct, dual auth middleware
+- `internal/config/config.go` — SSO environment variable loading
+- `internal/store/store.go` — SSO config persistence in system_settings
+- Settings UI: SSO configuration card with toggle, text inputs, and save button
+- No new migration needed — uses existing `rbitr.system_settings` table
+
+### Acceptance Criteria
+
+- Admin can configure SSO with any OIDC-compliant IdP via UI or API
+- Admin can authenticate via SSO and receive a session token
+- SSO sessions respect email domain restrictions
+- API key auth continues to work alongside SSO (dual auth)
+- SSO sessions can be revoked via logout endpoint
+- All SSO configuration changes are audit-logged
 
 ---
 
@@ -403,9 +487,9 @@ CREATE TABLE IF NOT EXISTS rbitr.outbound_webhooks (
 | **6** | Secret Manager Providers | Medium | Cloud-native deployments |
 | **7** | Generic Outbound Webhooks | Low | Custom integrations |
 
-Planned order: **1 → 6 → 4 → 5 → 3**
+Completed order: **1 → 6 → 5**. Remaining: **3** (Ticketing & ITSM).
 
-Phases 2 (Teams/Discord) and 7 (Generic Webhooks) are skipped for now. Focus is on core enterprise needs: chat notifications (1), cloud secret management (6), security observability (4), SSO (5), and ticketing (3).
+Phases 2 (Teams/Discord), 4 (Observability & SIEM), and 7 (Generic Webhooks) are skipped for now.
 
 ---
 

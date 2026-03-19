@@ -123,6 +123,12 @@ func authenticateAdminWithHashCandidates(
 	return key, nil
 }
 
+// HasScopeInList checks if the required scope is present in the scopes list,
+// including backward-compatible umbrella scope checks.
+func HasScopeInList(scopes []string, required string) bool {
+	return hasScope(scopes, required)
+}
+
 func hasScope(scopes []string, required string) bool {
 	if slices.Contains(scopes, required) {
 		return true

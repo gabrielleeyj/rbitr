@@ -37,6 +37,13 @@ const (
 	secretProviderGCPKey         = "secret_provider_gcp"
 	secretProviderVaultKey       = "secret_provider_vault"
 	secretProviderAzureKey       = "secret_provider_azure"
+	ssoEnabledKey                = "sso_enabled"
+	ssoIssuerKey                 = "sso_issuer"
+	ssoClientIDKey               = "sso_client_id"
+	ssoClientSecretRefKey        = "sso_client_secret_ref"
+	ssoRedirectURIKey            = "sso_redirect_uri"
+	ssoAllowedDomainsKey         = "sso_allowed_domains"
+	ssoDefaultScopesKey          = "sso_default_scopes"
 	defaultRateLimitPerMinuteKey = "default_rate_limit_per_minute"
 	defaultRateLimitPerDayKey    = "default_rate_limit_per_day"
 	defaultRateLimitScopeKey     = "default_rate_limit_scope"
@@ -141,6 +148,12 @@ type StoreAPI interface {
 	TryAdvisoryLock(ctx context.Context, key int64) (bool, error)
 	ReleaseAdvisoryLock(ctx context.Context, key int64) error
 
+	// SSO config (Epic 12 Phase 5)
+	SetSSOEnabled(ctx context.Context, enabled bool) error
+	GetSSOEnabled(ctx context.Context) (bool, error)
+	SetSSOConfig(ctx context.Context, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes string) error
+	GetSSOConfig(ctx context.Context) (SSOConfig, error)
+
 	// Tenant management (Epic 7)
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
@@ -149,6 +162,17 @@ type StoreAPI interface {
 	CreateTenantKey(ctx context.Context, key *models.TenantKey) error
 	ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error)
 	RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
+}
+
+// SSOConfig holds SSO/OIDC configuration persisted in system_settings.
+type SSOConfig struct {
+	Enabled        bool
+	Issuer         string
+	ClientID       string
+	ClientSecretRef string
+	RedirectURI    string
+	AllowedDomains string
+	DefaultScopes  string
 }
 
 // Store wraps database operations.
@@ -1437,6 +1461,83 @@ func (s *Store) SetSecretProviderAzure(ctx context.Context, enabled bool) error 
 
 func (s *Store) GetSecretProviderAzure(ctx context.Context) (bool, error) {
 	return s.getSystemSettingBool(ctx, secretProviderAzureKey)
+}
+
+func (s *Store) SetSSOEnabled(ctx context.Context, enabled bool) error {
+	return s.setSystemSettingBool(ctx, ssoEnabledKey, enabled)
+}
+
+func (s *Store) GetSSOEnabled(ctx context.Context) (bool, error) {
+	return s.getSystemSettingBool(ctx, ssoEnabledKey)
+}
+
+func (s *Store) SetSSOConfig(ctx context.Context, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes string) error {
+	now := time.Now().UTC()
+	upsertQuery := `INSERT INTO rbitr.system_settings (key, value, updated_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`
+
+	pairs := []struct{ key, value string }{
+		{ssoIssuerKey, issuer},
+		{ssoClientIDKey, clientID},
+		{ssoClientSecretRefKey, clientSecretRef},
+		{ssoRedirectURIKey, redirectURI},
+		{ssoAllowedDomainsKey, allowedDomains},
+		{ssoDefaultScopesKey, defaultScopes},
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // rollback on commit is a no-op
+
+	for _, p := range pairs {
+		if _, err := tx.ExecContext(ctx, upsertQuery, p.key, p.value, now); err != nil {
+			return fmt.Errorf("set %s: %w", p.key, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *Store) GetSSOConfig(ctx context.Context) (SSOConfig, error) {
+	keys := []string{
+		ssoEnabledKey, ssoIssuerKey, ssoClientIDKey, ssoClientSecretRefKey,
+		ssoRedirectURIKey, ssoAllowedDomainsKey, ssoDefaultScopesKey,
+	}
+
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT key, value FROM rbitr.system_settings WHERE key = ANY($1)`,
+		StringArray(keys),
+	)
+	if err != nil {
+		return SSOConfig{}, err
+	}
+	defer rows.Close()
+
+	vals := make(map[string]string, len(keys))
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return SSOConfig{}, err
+		}
+		vals[k] = v
+	}
+	if err := rows.Err(); err != nil {
+		return SSOConfig{}, err
+	}
+
+	return SSOConfig{
+		Enabled:         vals[ssoEnabledKey] == settingTrue,
+		Issuer:          vals[ssoIssuerKey],
+		ClientID:        vals[ssoClientIDKey],
+		ClientSecretRef: vals[ssoClientSecretRefKey],
+		RedirectURI:     vals[ssoRedirectURIKey],
+		AllowedDomains:  vals[ssoAllowedDomainsKey],
+		DefaultScopes:   vals[ssoDefaultScopesKey],
+	}, nil
 }
 
 func (s *Store) SetSessionTokenTTLSeconds(ctx context.Context, seconds int) error {
