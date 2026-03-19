@@ -143,6 +143,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.PUT("/settings/admin-write-lock", deps.handleAdminWriteLock)
 	adminGroup.PUT("/settings/sso-enabled", deps.handleSSOEnabledUpdate)
 	adminGroup.PUT("/settings/sso-config", deps.handleSSOConfigUpdate)
+	adminGroup.GET("/auth/sso/status", deps.handleSSOStatus)
 	adminGroup.GET("/auth/sso/config", deps.handleSSOConfigGet)
 	adminGroup.GET("/auth/sso/authorize", deps.handleSSOAuthorize)
 	adminGroup.GET("/auth/sso/callback", deps.handleSSOCallback)

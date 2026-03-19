@@ -14,18 +14,24 @@ interface AdminKeyContextValue {
 
 const AdminKeyContext = createContext<AdminKeyContextValue | undefined>(undefined);
 
+const STORAGE_KEY = "rbitr_admin_key";
+
 export function AdminKeyProvider({ children }: { children: React.ReactNode }) {
-  const [adminKey, setAdminKeyState] = useState<string | null>(null);
+  const [adminKey, setAdminKeyState] = useState<string | null>(
+    () => sessionStorage.getItem(STORAGE_KEY),
+  );
   const [scopes, setScopes] = useState<string[]>([]);
-  const [scopesLoading, setScopesLoading] = useState<boolean>(false);
+  const [scopesLoading, setScopesLoading] = useState<boolean>(!!sessionStorage.getItem(STORAGE_KEY));
 
   const setAdminKey = (value: string) => {
+    sessionStorage.setItem(STORAGE_KEY, value);
     setAdminKeyState(value);
     setScopes([]);
     setScopesLoading(true);
   };
 
   const clearAdminKey = () => {
+    sessionStorage.removeItem(STORAGE_KEY);
     setAdminKeyState(null);
     setScopes([]);
     setScopesLoading(false);
@@ -48,6 +54,8 @@ export function AdminKeyProvider({ children }: { children: React.ReactNode }) {
         setScopes(data.scopes ?? []);
       } catch {
         if (!mounted) return;
+        sessionStorage.removeItem(STORAGE_KEY);
+        setAdminKeyState(null);
         setScopes([]);
       } finally {
         if (mounted) {

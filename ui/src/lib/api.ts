@@ -209,8 +209,13 @@ export interface SSOConfigRequest {
   sso_default_scopes: string;
 }
 
+export interface SSOStatusResponse {
+  sso_enabled: boolean;
+}
+
 export interface SSOAuthorizeResponse {
   authorize_url: string;
+  state: string;
 }
 
 export interface NotificationConfig {
@@ -853,8 +858,23 @@ export function updateSSOConfig(config: ApiConfig, payload: SSOConfigRequest): P
   });
 }
 
-export function getSSOAuthorizeURL(config: ApiConfig): Promise<SSOAuthorizeResponse> {
-  return request<SSOAuthorizeResponse>(`/admin/auth/sso/authorize`, config);
+export function getSSOStatus(): Promise<SSOStatusResponse> {
+  return requestPublic<SSOStatusResponse>(`/admin/auth/sso/status`);
+}
+
+export function getSSOAuthorizeURL(): Promise<SSOAuthorizeResponse> {
+  return requestPublic<SSOAuthorizeResponse>(`/admin/auth/sso/authorize`);
+}
+
+export interface SSOCallbackResponse {
+  token: string;
+  expires_at: number;
+  email: string;
+  name: string;
+}
+
+export function ssoCallback(code: string): Promise<SSOCallbackResponse> {
+  return requestPublic<SSOCallbackResponse>(`/admin/auth/sso/callback?code=${encodeURIComponent(code)}`);
 }
 
 export function ssoLogout(config: ApiConfig): Promise<void> {
