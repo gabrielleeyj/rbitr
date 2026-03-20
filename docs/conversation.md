@@ -65,6 +65,12 @@ This is a concise summary and a detailed timeline of key decisions and changes m
 - Added CSV export via authenticated fetch (no 401).
 - Multiple test fixes for updated signatures and audit hashing chain.
 
+### Enterprise Integrations (Epic 12)
+- Phase 1: Telegram + WhatsApp notification channels implemented.
+- Phase 6: Cloud secret manager providers (AWS SM, GCP SM, Vault, Azure KV) implemented.
+- Phase 5: SSO/OIDC admin authentication with dual auth (SSO + API key) implemented.
+- Phase 3: Ticketing & ITSM integration (Jira, ServiceNow, Linear) implemented with bidirectional sync — auto-ticket creation on REQUIRE_APPROVAL, ticket updates on decision/expiry, inbound webhooks for approval actions.
+
 ## Current Follow‑ons
 - Global audit export endpoint with strict scope (planned).
 - SOC export hardening + retention tests coverage.

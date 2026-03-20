@@ -6,7 +6,7 @@
 |-------|--------|------|
 | **1** Chat Integrations (Telegram, WhatsApp) | **DONE** | 2026-03-18 |
 | **2** Chat Integrations (Microsoft Teams, Discord) | **SKIPPED** | — |
-| **3** Ticketing & ITSM (Jira, ServiceNow) | Planned | — |
+| **3** Ticketing & ITSM (Jira, ServiceNow, Linear) | **DONE** | 2026-03-20 |
 | **4** Observability & SIEM Export | **SKIPPED** | — |
 | **5** Identity & SSO (OIDC) | **DONE** | 2026-03-19 |
 | **6** Secret Manager Providers | **DONE** | 2026-03-18 |
@@ -181,9 +181,35 @@ CREATE TABLE IF NOT EXISTS rbitr.ticketing_config (
 ### Implementation
 
 - `internal/ticketing/` — new package with `TicketProvider` interface
-- `internal/ticketing/jira.go`, `servicenow.go`, `linear.go`
-- Webhook receiver endpoints for inbound status updates
-- Migration: `00033_ticketing_config.sql`
+- `internal/ticketing/jira.go` — Jira REST API v3 (ADF descriptions, transitions, Basic Auth + Bearer)
+- `internal/ticketing/servicenow.go` — ServiceNow REST Table API (incidents, sys_id lookup, state mapping)
+- `internal/ticketing/linear.go` — Linear GraphQL API (issue create/update, state transitions)
+- `internal/ticketing/service.go` — orchestrator: `OnApprovalCreated`, `OnApprovalDecided`, `OnApprovalExpired`
+- `internal/ticketing/priority.go` — risk-to-priority mapping per provider
+- `internal/ticketing/webhook_mapping.go` — inbound webhook status → approve/deny/ignore mapping
+- `internal/api/admin/ticketing.go` — admin API handlers: config CRUD, secret refs, test send, webhook receiver
+- Webhook receiver: parses Jira/ServiceNow/Linear payloads, verifies HMAC-SHA256 signatures, triggers approval actions
+- Fire-and-forget integration from public handlers (OnApprovalCreated) and admin handlers (OnApprovalDecided)
+- Expiry scheduler integration (OnApprovalExpired)
+- Migration: `00032_ticketing_config.sql`
+
+### Admin API Endpoints
+
+```
+GET  /admin/tenants/:tenant_id/ticketing              — Get ticketing config
+PUT  /admin/tenants/:tenant_id/ticketing              — Update ticketing config
+PUT  /admin/tenants/:tenant_id/ticketing/secret-ref   — Set API token secret ref
+PUT  /admin/tenants/:tenant_id/ticketing/webhook-secret-ref — Set webhook signing secret ref
+POST /admin/tenants/:tenant_id/ticketing/test         — Create test ticket
+GET  /admin/tenants/:tenant_id/ticketing/links        — List ticket links
+POST /admin/webhooks/ticketing/:provider              — Inbound webhook receiver
+```
+
+### Admin Scopes
+
+- `admin:ticketing:read` — view ticketing config and ticket links
+- `admin:ticketing:write` — update config, set secret refs
+- `admin:ticketing:test` — trigger test ticket creation
 
 ---
 
@@ -487,7 +513,7 @@ CREATE TABLE IF NOT EXISTS rbitr.outbound_webhooks (
 | **6** | Secret Manager Providers | Medium | Cloud-native deployments |
 | **7** | Generic Outbound Webhooks | Low | Custom integrations |
 
-Completed order: **1 → 6 → 5**. Remaining: **3** (Ticketing & ITSM).
+Completed order: **1 → 6 → 5 → 3**. All planned phases are complete.
 
 Phases 2 (Teams/Discord), 4 (Observability & SIEM), and 7 (Generic Webhooks) are skipped for now.
 

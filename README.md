@@ -371,6 +371,9 @@ SSO can also be configured at runtime via the admin Settings UI. The login page 
 | `admin:notifications:read` | View notification config |
 | `admin:notifications:write` | Update notification channels |
 | `admin:notifications:test` | Send test notifications |
+| `admin:ticketing:read` | View ticketing config and links |
+| `admin:ticketing:write` | Update ticketing config |
+| `admin:ticketing:test` | Create test tickets |
 | `admin:settings:read` | Read system settings |
 | `admin:settings:write` | Modify system settings |
 
@@ -426,6 +429,28 @@ All channels are configured per-tenant via the admin API and UI (Notifications p
 | `POLICY.EVAL_ERROR` | WARN | Policy evaluation runtime error |
 
 Per-event enablement toggles, suppression tracking (dedup + cooldown), and mailing list support for email distribution.
+
+### Ticketing & ITSM Integration (Epic 12)
+
+Bidirectional integration with enterprise ticketing systems. When an approval is required, rbitr auto-creates a ticket; when an operator resolves the ticket, a webhook triggers approval in rbitr.
+
+| Provider | API | Protocol |
+|----------|-----|----------|
+| Jira | REST API v3 | HTTP + Basic Auth or Bearer |
+| ServiceNow | REST Table API | HTTP + Bearer |
+| Linear | GraphQL API | HTTP + Bearer |
+
+Per-tenant configuration via admin API:
+- Provider, base URL, project key, issue type
+- Auto-create toggle (creates tickets on REQUIRE_APPROVAL)
+- API token stored as secret ref (supports all registered secret providers)
+- Webhook signing secret for inbound signature verification (HMAC-SHA256)
+
+Lifecycle:
+1. Agent request triggers REQUIRE_APPROVAL → ticket auto-created in configured provider
+2. Approval decision (approve/deny/revoke) → ticket updated with comment + status transition
+3. Approval expiry → ticket updated and closed
+4. Inbound webhook from provider (ticket resolved/closed) → rbitr auto-approves/denies the linked approval
 
 ### Secret Providers
 
@@ -530,6 +555,18 @@ azure-kv://myvault/slack-token
 | `POST` | `/admin/tenants/{tenant_id}/notifications/test/{channel}` | Test send |
 | `GET` | `/admin/tenants/{tenant_id}/notifications/suppressions` | Suppression history |
 | `GET/POST/PUT/DELETE` | `/admin/tenants/{tenant_id}/mailing-lists/...` | Mailing list CRUD |
+
+**Ticketing**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/tenants/{tenant_id}/ticketing` | Get ticketing config |
+| `PUT` | `/admin/tenants/{tenant_id}/ticketing` | Update ticketing config |
+| `PUT` | `/admin/tenants/{tenant_id}/ticketing/secret-ref` | Set API token secret |
+| `PUT` | `/admin/tenants/{tenant_id}/ticketing/webhook-secret-ref` | Set webhook signing secret |
+| `POST` | `/admin/tenants/{tenant_id}/ticketing/test` | Create test ticket |
+| `GET` | `/admin/tenants/{tenant_id}/ticketing/links` | List ticket links |
+| `POST` | `/admin/webhooks/ticketing/{provider}` | Inbound webhook receiver |
 
 **Risk Overrides**
 

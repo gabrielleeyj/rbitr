@@ -116,7 +116,7 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 			log.Printf("approval expired notify failed: %v", err)
 		}
 		if s.Ticketing != nil {
-			go s.Ticketing.OnApprovalExpired(context.Background(), approval.TenantID, approval.ApprovalRequestID)
+			go s.Ticketing.OnApprovalExpired(context.Background(), approval.TenantID, approval.ApprovalRequestID) //nolint:gosec // fire-and-forget; must outlive scheduler tick context
 		}
 	}
 }
