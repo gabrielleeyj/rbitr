@@ -2095,6 +2095,10 @@ func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditActi
 		})
 	}
 
+	if d.TicketingService != nil {
+		go d.TicketingService.OnApprovalDecided(context.Background(), tenantID, approvalID, status, adminKey.AdminKeyID, payload.Comment)
+	}
+
 	return c.JSON(http.StatusOK, after)
 }
 

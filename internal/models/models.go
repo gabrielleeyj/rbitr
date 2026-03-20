@@ -274,3 +274,29 @@ type NotificationSuppression struct {
 	LastPayloadHash string     `json:"last_payload_hash"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
+
+type TicketingConfig struct {
+	TenantID         string    `json:"tenant_id"`
+	Provider         string    `json:"provider"`
+	Enabled          bool      `json:"enabled"`
+	BaseURL          string    `json:"base_url"`
+	SecretRef        string    `json:"-"`
+	ProjectKey       string    `json:"project_key"`
+	IssueType        string    `json:"issue_type"`
+	AutoCreate       bool      `json:"auto_create"`
+	WebhookSecretRef string    `json:"-"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type TicketLink struct {
+	TicketLinkID      string    `json:"ticket_link_id"`
+	TenantID          string    `json:"tenant_id"`
+	ApprovalRequestID string    `json:"approval_request_id"`
+	Provider          string    `json:"provider"`
+	ExternalKey       string    `json:"external_key"`
+	ExternalURL       string    `json:"external_url"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}

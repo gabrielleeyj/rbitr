@@ -29,6 +29,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/retention"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
+	"github.com/gabrielleeyj/rbitr/internal/ticketing"
 )
 
 const (
@@ -78,7 +79,9 @@ func main() {
 	secretProviders = appendCloudSecretProviders(secretProviders, &cfg)
 	secretResolver := notifications.NewCompositeResolver(secretProviders, secretTTL)
 	notificationService := notifications.NewService(st, secretResolver, serviceCooldown, metrics)
+	ticketingService := ticketing.NewService(st, secretResolver)
 	expiryScheduler := notifications.NewApprovalExpiryScheduler(st, notificationService, time.Minute, approvalExpiryWindow)
+	expiryScheduler.Ticketing = ticketingService
 	auditRetention := retention.NewAuditRetentionScheduler(st, auditRetentionInterval)
 
 	e := echo.New()
@@ -135,19 +138,21 @@ func main() {
 		RiskOverrideCache: riskOverrideCache,
 		SessionManager:    sessionMgr,
 		ProvenanceManager: provenanceMgr,
+		TicketingService:  ticketingService,
 	})
 	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
 
 	admin.RegisterRoutes(e, &admin.Dependencies{
-		Store:           st,
-		Notifications:   notificationService,
-		Metrics:         metrics,
-		Config:          cfg,
-		ToolCache:       toolCache,
-		RiskCache:       riskOverrideCache,
-		OIDCProvider:    oidcProvider,
-		AdminSessionMgr: adminSessionMgr,
-		SecretResolver:  secretResolver,
+		Store:            st,
+		Notifications:    notificationService,
+		Metrics:          metrics,
+		Config:           cfg,
+		ToolCache:        toolCache,
+		RiskCache:        riskOverrideCache,
+		OIDCProvider:     oidcProvider,
+		AdminSessionMgr:  adminSessionMgr,
+		SecretResolver:   secretResolver,
+		TicketingService: ticketingService,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
