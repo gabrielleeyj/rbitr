@@ -24,12 +24,18 @@ const (
 	defaultWindow            = 5 * time.Minute
 )
 
+// TicketingHook is called when an approval expires to update linked tickets.
+type TicketingHook interface {
+	OnApprovalExpired(ctx context.Context, tenantID, approvalID string)
+}
+
 type ApprovalExpiryScheduler struct {
-	Store    store.StoreAPI
-	Sender   NotificationSender
-	Interval time.Duration
-	Window   time.Duration
-	LockKey  int64
+	Store     store.StoreAPI
+	Sender    NotificationSender
+	Ticketing TicketingHook
+	Interval  time.Duration
+	Window    time.Duration
+	LockKey   int64
 }
 
 func NewApprovalExpiryScheduler(st store.StoreAPI, service *Service, interval, window time.Duration) *ApprovalExpiryScheduler {
@@ -108,6 +114,9 @@ func (s *ApprovalExpiryScheduler) run(ctx context.Context) {
 		}
 		if err := s.notifyApproval(ctx, approval, EventApprovalExpired, now); err != nil {
 			log.Printf("approval expired notify failed: %v", err)
+		}
+		if s.Ticketing != nil {
+			go s.Ticketing.OnApprovalExpired(context.Background(), approval.TenantID, approval.ApprovalRequestID)
 		}
 	}
 }

@@ -154,6 +154,15 @@ type StoreAPI interface {
 	SetSSOConfig(ctx context.Context, issuer, clientID, clientSecretRef, redirectURI, allowedDomains, defaultScopes string) error
 	GetSSOConfig(ctx context.Context) (SSOConfig, error)
 
+	// Ticketing config (Epic 12 Phase 3)
+	GetTicketingConfig(ctx context.Context, tenantID string) (models.TicketingConfig, error)
+	UpsertTicketingConfig(ctx context.Context, config *models.TicketingConfig) error
+	InsertTicketLink(ctx context.Context, link *models.TicketLink) error
+	GetTicketLinkByApproval(ctx context.Context, tenantID, approvalRequestID string) (models.TicketLink, error)
+	GetTicketLinkByExternalKey(ctx context.Context, provider, externalKey string) (models.TicketLink, error)
+	ListTicketLinks(ctx context.Context, tenantID string, limit, offset int) ([]models.TicketLink, error)
+	UpdateTicketLinkStatus(ctx context.Context, ticketLinkID, status string) error
+
 	// Tenant management (Epic 7)
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error

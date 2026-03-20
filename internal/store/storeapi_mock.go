@@ -2784,6 +2784,216 @@ func (_c *MockStoreAPI_GetTenantKeyHash_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// GetTicketLinkByApproval provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTicketLinkByApproval(ctx context.Context, tenantID string, approvalRequestID string) (models.TicketLink, error) {
+	ret := _mock.Called(ctx, tenantID, approvalRequestID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTicketLinkByApproval")
+	}
+
+	var r0 models.TicketLink
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.TicketLink, error)); ok {
+		return returnFunc(ctx, tenantID, approvalRequestID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.TicketLink); ok {
+		r0 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r0 = ret.Get(0).(models.TicketLink)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, approvalRequestID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTicketLinkByApproval_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTicketLinkByApproval'
+type MockStoreAPI_GetTicketLinkByApproval_Call struct {
+	*mock.Call
+}
+
+// GetTicketLinkByApproval is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - approvalRequestID string
+func (_e *MockStoreAPI_Expecter) GetTicketLinkByApproval(ctx interface{}, tenantID interface{}, approvalRequestID interface{}) *MockStoreAPI_GetTicketLinkByApproval_Call {
+	return &MockStoreAPI_GetTicketLinkByApproval_Call{Call: _e.mock.On("GetTicketLinkByApproval", ctx, tenantID, approvalRequestID)}
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByApproval_Call) Run(run func(ctx context.Context, tenantID string, approvalRequestID string)) *MockStoreAPI_GetTicketLinkByApproval_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByApproval_Call) Return(ticketLink models.TicketLink, err error) *MockStoreAPI_GetTicketLinkByApproval_Call {
+	_c.Call.Return(ticketLink, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByApproval_Call) RunAndReturn(run func(ctx context.Context, tenantID string, approvalRequestID string) (models.TicketLink, error)) *MockStoreAPI_GetTicketLinkByApproval_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTicketLinkByExternalKey provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTicketLinkByExternalKey(ctx context.Context, provider string, externalKey string) (models.TicketLink, error) {
+	ret := _mock.Called(ctx, provider, externalKey)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTicketLinkByExternalKey")
+	}
+
+	var r0 models.TicketLink
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (models.TicketLink, error)); ok {
+		return returnFunc(ctx, provider, externalKey)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) models.TicketLink); ok {
+		r0 = returnFunc(ctx, provider, externalKey)
+	} else {
+		r0 = ret.Get(0).(models.TicketLink)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, provider, externalKey)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTicketLinkByExternalKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTicketLinkByExternalKey'
+type MockStoreAPI_GetTicketLinkByExternalKey_Call struct {
+	*mock.Call
+}
+
+// GetTicketLinkByExternalKey is a helper method to define mock.On call
+//   - ctx context.Context
+//   - provider string
+//   - externalKey string
+func (_e *MockStoreAPI_Expecter) GetTicketLinkByExternalKey(ctx interface{}, provider interface{}, externalKey interface{}) *MockStoreAPI_GetTicketLinkByExternalKey_Call {
+	return &MockStoreAPI_GetTicketLinkByExternalKey_Call{Call: _e.mock.On("GetTicketLinkByExternalKey", ctx, provider, externalKey)}
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByExternalKey_Call) Run(run func(ctx context.Context, provider string, externalKey string)) *MockStoreAPI_GetTicketLinkByExternalKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByExternalKey_Call) Return(ticketLink models.TicketLink, err error) *MockStoreAPI_GetTicketLinkByExternalKey_Call {
+	_c.Call.Return(ticketLink, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketLinkByExternalKey_Call) RunAndReturn(run func(ctx context.Context, provider string, externalKey string) (models.TicketLink, error)) *MockStoreAPI_GetTicketLinkByExternalKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetTicketingConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTicketingConfig(ctx context.Context, tenantID string) (models.TicketingConfig, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTicketingConfig")
+	}
+
+	var r0 models.TicketingConfig
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (models.TicketingConfig, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) models.TicketingConfig); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(models.TicketingConfig)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTicketingConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTicketingConfig'
+type MockStoreAPI_GetTicketingConfig_Call struct {
+	*mock.Call
+}
+
+// GetTicketingConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) GetTicketingConfig(ctx interface{}, tenantID interface{}) *MockStoreAPI_GetTicketingConfig_Call {
+	return &MockStoreAPI_GetTicketingConfig_Call{Call: _e.mock.On("GetTicketingConfig", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_GetTicketingConfig_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_GetTicketingConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketingConfig_Call) Return(ticketingConfig models.TicketingConfig, err error) *MockStoreAPI_GetTicketingConfig_Call {
+	_c.Call.Return(ticketingConfig, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTicketingConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (models.TicketingConfig, error)) *MockStoreAPI_GetTicketingConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetTool provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetTool(ctx context.Context, tenantID string, toolID string) (models.Tool, error) {
 	ret := _mock.Called(ctx, tenantID, toolID)
@@ -3137,6 +3347,63 @@ func (_c *MockStoreAPI_InsertAuditEvent_Call) Return(err error) *MockStoreAPI_In
 }
 
 func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.Context, event *models.AdminAuditEvent) error) *MockStoreAPI_InsertAuditEvent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InsertTicketLink provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) InsertTicketLink(ctx context.Context, link *models.TicketLink) error {
+	ret := _mock.Called(ctx, link)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertTicketLink")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.TicketLink) error); ok {
+		r0 = returnFunc(ctx, link)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_InsertTicketLink_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertTicketLink'
+type MockStoreAPI_InsertTicketLink_Call struct {
+	*mock.Call
+}
+
+// InsertTicketLink is a helper method to define mock.On call
+//   - ctx context.Context
+//   - link *models.TicketLink
+func (_e *MockStoreAPI_Expecter) InsertTicketLink(ctx interface{}, link interface{}) *MockStoreAPI_InsertTicketLink_Call {
+	return &MockStoreAPI_InsertTicketLink_Call{Call: _e.mock.On("InsertTicketLink", ctx, link)}
+}
+
+func (_c *MockStoreAPI_InsertTicketLink_Call) Run(run func(ctx context.Context, link *models.TicketLink)) *MockStoreAPI_InsertTicketLink_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *models.TicketLink
+		if args[1] != nil {
+			arg1 = args[1].(*models.TicketLink)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertTicketLink_Call) Return(err error) *MockStoreAPI_InsertTicketLink_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertTicketLink_Call) RunAndReturn(run func(ctx context.Context, link *models.TicketLink) error) *MockStoreAPI_InsertTicketLink_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4325,6 +4592,86 @@ func (_c *MockStoreAPI_ListTenants_Call) Return(tenantSummarys []models.TenantSu
 }
 
 func (_c *MockStoreAPI_ListTenants_Call) RunAndReturn(run func(ctx context.Context) ([]models.TenantSummary, error)) *MockStoreAPI_ListTenants_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTicketLinks provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListTicketLinks(ctx context.Context, tenantID string, limit int, offset int) ([]models.TicketLink, error) {
+	ret := _mock.Called(ctx, tenantID, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTicketLinks")
+	}
+
+	var r0 []models.TicketLink
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int) ([]models.TicketLink, error)); ok {
+		return returnFunc(ctx, tenantID, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, int) []models.TicketLink); ok {
+		r0 = returnFunc(ctx, tenantID, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.TicketLink)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListTicketLinks_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTicketLinks'
+type MockStoreAPI_ListTicketLinks_Call struct {
+	*mock.Call
+}
+
+// ListTicketLinks is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - limit int
+//   - offset int
+func (_e *MockStoreAPI_Expecter) ListTicketLinks(ctx interface{}, tenantID interface{}, limit interface{}, offset interface{}) *MockStoreAPI_ListTicketLinks_Call {
+	return &MockStoreAPI_ListTicketLinks_Call{Call: _e.mock.On("ListTicketLinks", ctx, tenantID, limit, offset)}
+}
+
+func (_c *MockStoreAPI_ListTicketLinks_Call) Run(run func(ctx context.Context, tenantID string, limit int, offset int)) *MockStoreAPI_ListTicketLinks_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTicketLinks_Call) Return(ticketLinks []models.TicketLink, err error) *MockStoreAPI_ListTicketLinks_Call {
+	_c.Call.Return(ticketLinks, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListTicketLinks_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int, offset int) ([]models.TicketLink, error)) *MockStoreAPI_ListTicketLinks_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -6485,6 +6832,69 @@ func (_c *MockStoreAPI_UpdateTenantConfig_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
+// UpdateTicketLinkStatus provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpdateTicketLinkStatus(ctx context.Context, ticketLinkID string, status string) error {
+	ret := _mock.Called(ctx, ticketLinkID, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateTicketLinkStatus")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, ticketLinkID, status)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpdateTicketLinkStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateTicketLinkStatus'
+type MockStoreAPI_UpdateTicketLinkStatus_Call struct {
+	*mock.Call
+}
+
+// UpdateTicketLinkStatus is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ticketLinkID string
+//   - status string
+func (_e *MockStoreAPI_Expecter) UpdateTicketLinkStatus(ctx interface{}, ticketLinkID interface{}, status interface{}) *MockStoreAPI_UpdateTicketLinkStatus_Call {
+	return &MockStoreAPI_UpdateTicketLinkStatus_Call{Call: _e.mock.On("UpdateTicketLinkStatus", ctx, ticketLinkID, status)}
+}
+
+func (_c *MockStoreAPI_UpdateTicketLinkStatus_Call) Run(run func(ctx context.Context, ticketLinkID string, status string)) *MockStoreAPI_UpdateTicketLinkStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateTicketLinkStatus_Call) Return(err error) *MockStoreAPI_UpdateTicketLinkStatus_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpdateTicketLinkStatus_Call) RunAndReturn(run func(ctx context.Context, ticketLinkID string, status string) error) *MockStoreAPI_UpdateTicketLinkStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateToolConfig provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) UpdateToolConfig(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string) error {
 	ret := _mock.Called(ctx, tenantID, toolID, baseURL, authType, authValue)
@@ -6757,6 +7167,63 @@ func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) Return(err error) *Mo
 }
 
 func (_c *MockStoreAPI_UpsertNotificationSuppression_Call) RunAndReturn(run func(ctx context.Context, suppression *models.NotificationSuppression) error) *MockStoreAPI_UpsertNotificationSuppression_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpsertTicketingConfig provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) UpsertTicketingConfig(ctx context.Context, config *models.TicketingConfig) error {
+	ret := _mock.Called(ctx, config)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpsertTicketingConfig")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.TicketingConfig) error); ok {
+		r0 = returnFunc(ctx, config)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_UpsertTicketingConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertTicketingConfig'
+type MockStoreAPI_UpsertTicketingConfig_Call struct {
+	*mock.Call
+}
+
+// UpsertTicketingConfig is a helper method to define mock.On call
+//   - ctx context.Context
+//   - config *models.TicketingConfig
+func (_e *MockStoreAPI_Expecter) UpsertTicketingConfig(ctx interface{}, config interface{}) *MockStoreAPI_UpsertTicketingConfig_Call {
+	return &MockStoreAPI_UpsertTicketingConfig_Call{Call: _e.mock.On("UpsertTicketingConfig", ctx, config)}
+}
+
+func (_c *MockStoreAPI_UpsertTicketingConfig_Call) Run(run func(ctx context.Context, config *models.TicketingConfig)) *MockStoreAPI_UpsertTicketingConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *models.TicketingConfig
+		if args[1] != nil {
+			arg1 = args[1].(*models.TicketingConfig)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertTicketingConfig_Call) Return(err error) *MockStoreAPI_UpsertTicketingConfig_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_UpsertTicketingConfig_Call) RunAndReturn(run func(ctx context.Context, config *models.TicketingConfig) error) *MockStoreAPI_UpsertTicketingConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }

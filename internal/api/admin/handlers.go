@@ -14,19 +14,21 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
+	"github.com/gabrielleeyj/rbitr/internal/ticketing"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
 
 type Dependencies struct {
-	Store           store.StoreAPI
-	Notifications   *notifications.Service
-	Metrics         *telemetry.Metrics
-	Config          config.Config
-	ToolCache       *cache.TTLCache[models.Tool]
-	RiskCache       *cache.TTLCache[string]
-	OIDCProvider    *auth.OIDCProvider
-	AdminSessionMgr *auth.AdminSessionManager
-	SecretResolver  notifications.SecretResolver
+	Store            store.StoreAPI
+	Notifications    *notifications.Service
+	Metrics          *telemetry.Metrics
+	Config           config.Config
+	ToolCache        *cache.TTLCache[models.Tool]
+	RiskCache        *cache.TTLCache[string]
+	OIDCProvider     *auth.OIDCProvider
+	AdminSessionMgr  *auth.AdminSessionManager
+	SecretResolver   notifications.SecretResolver
+	TicketingService *ticketing.Service
 }
 
 type TenantConfigRequest struct {
@@ -112,6 +114,13 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.PUT("/mailing-lists/:mailing_list_id", deps.handleMailingListUpdate)
 	tenantGroup.DELETE("/mailing-lists/:mailing_list_id", deps.handleMailingListDelete)
 
+	tenantGroup.GET("/ticketing", deps.handleTicketingConfigGet)
+	tenantGroup.PUT("/ticketing", deps.handleTicketingConfigUpdate)
+	tenantGroup.PUT("/ticketing/secret-ref", deps.handleTicketingSecretRefSet)
+	tenantGroup.PUT("/ticketing/webhook-secret-ref", deps.handleTicketingWebhookSecretRefSet)
+	tenantGroup.POST("/ticketing/test", deps.handleTicketingTest)
+	tenantGroup.GET("/ticketing/links", deps.handleTicketLinksList)
+
 	tenantGroup.PUT("/enabled", deps.handleTenantSetEnabled)
 	tenantGroup.GET("/keys", deps.handleTenantKeysList)
 	tenantGroup.POST("/keys", deps.handleTenantKeyCreate)
@@ -148,6 +157,8 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.GET("/auth/sso/authorize", deps.handleSSOAuthorize)
 	adminGroup.GET("/auth/sso/callback", deps.handleSSOCallback)
 	adminGroup.POST("/auth/sso/logout", deps.handleSSOLogout)
+
+	adminGroup.POST("/webhooks/ticketing/:provider", deps.handleTicketingWebhook)
 }
 
 func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {

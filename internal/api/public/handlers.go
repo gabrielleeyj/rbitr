@@ -42,6 +42,12 @@ type Dependencies struct {
 	RiskOverrideCache *cache.TTLCache[string]
 	SessionManager    *auth.SessionManager
 	ProvenanceManager *auth.ProvenanceManager
+	TicketingService  TicketingHook
+}
+
+// TicketingHook is called asynchronously when an approval is created.
+type TicketingHook interface {
+	OnApprovalCreated(ctx context.Context, tenantID string, approval *models.ApprovalRequest)
 }
 
 type ToolCallRequest struct {
@@ -542,6 +548,10 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 				d.Metrics.ErrorsTotal.Inc()
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to persist decision"})
+		}
+		if d.TicketingService != nil {
+			approvalCopy := approval
+			go d.TicketingService.OnApprovalCreated(context.Background(), tenant.TenantID, &approvalCopy)
 		}
 		return c.JSON(http.StatusConflict, ToolCallResponse{
 			Error:             "approval_required",
