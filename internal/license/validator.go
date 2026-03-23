@@ -110,6 +110,11 @@ func (v *Validator) LoadAndValidate() {
 		info.Tier, info.Licensee, info.ExpiresAt.Format(time.DateOnly), info.KeyVersion)
 }
 
+// KeyPath returns the configured license key file path.
+func (v *Validator) KeyPath() string {
+	return v.keyPath
+}
+
 // Info returns the current license info (thread-safe).
 func (v *Validator) Info() LicenseInfo {
 	v.mu.RLock()

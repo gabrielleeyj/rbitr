@@ -8,7 +8,7 @@
 | **2** Usage Metering & Quota Enforcement | **DONE** | 2026-03-23 |
 | **3** Tenant Provisioning Limits (Free Tier) | **DONE** | 2026-03-23 |
 | **4** Feature Gating (API) | **DONE** | 2026-03-23 |
-| **5** License Management UI | **TODO** | — |
+| **5** License Management UI | **DONE** | 2026-03-23 |
 | **6** Admin Dashboard & Usage Visibility | **TODO** | — |
 
 ## Summary
