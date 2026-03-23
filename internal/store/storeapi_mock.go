@@ -3126,6 +3126,78 @@ func (_c *MockStoreAPI_GetTool_Call) RunAndReturn(run func(ctx context.Context, 
 	return _c
 }
 
+// GetUsageMeter provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetUsageMeter(ctx context.Context, tenantID string, period string) (int64, error) {
+	ret := _mock.Called(ctx, tenantID, period)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUsageMeter")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (int64, error)); ok {
+		return returnFunc(ctx, tenantID, period)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) int64); ok {
+		r0 = returnFunc(ctx, tenantID, period)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, period)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetUsageMeter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUsageMeter'
+type MockStoreAPI_GetUsageMeter_Call struct {
+	*mock.Call
+}
+
+// GetUsageMeter is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - period string
+func (_e *MockStoreAPI_Expecter) GetUsageMeter(ctx interface{}, tenantID interface{}, period interface{}) *MockStoreAPI_GetUsageMeter_Call {
+	return &MockStoreAPI_GetUsageMeter_Call{Call: _e.mock.On("GetUsageMeter", ctx, tenantID, period)}
+}
+
+func (_c *MockStoreAPI_GetUsageMeter_Call) Run(run func(ctx context.Context, tenantID string, period string)) *MockStoreAPI_GetUsageMeter_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetUsageMeter_Call) Return(n int64, err error) *MockStoreAPI_GetUsageMeter_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetUsageMeter_Call) RunAndReturn(run func(ctx context.Context, tenantID string, period string) (int64, error)) *MockStoreAPI_GetUsageMeter_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // IncrementRateLimitCounter provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) IncrementRateLimitCounter(ctx context.Context, tenantID string, agentID string, toolID string, actionType string, window string, bucketStart time.Time, now time.Time, limit int64) (bool, int64, error) {
 	ret := _mock.Called(ctx, tenantID, agentID, toolID, actionType, window, bucketStart, now, limit)
@@ -3236,6 +3308,78 @@ func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) Return(allowed bool, coun
 }
 
 func (_c *MockStoreAPI_IncrementRateLimitCounter_Call) RunAndReturn(run func(ctx context.Context, tenantID string, agentID string, toolID string, actionType string, window string, bucketStart time.Time, now time.Time, limit int64) (bool, int64, error)) *MockStoreAPI_IncrementRateLimitCounter_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IncrementUsageMeter provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) IncrementUsageMeter(ctx context.Context, tenantID string, period string) (int64, error) {
+	ret := _mock.Called(ctx, tenantID, period)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IncrementUsageMeter")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (int64, error)); ok {
+		return returnFunc(ctx, tenantID, period)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) int64); ok {
+		r0 = returnFunc(ctx, tenantID, period)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, tenantID, period)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_IncrementUsageMeter_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IncrementUsageMeter'
+type MockStoreAPI_IncrementUsageMeter_Call struct {
+	*mock.Call
+}
+
+// IncrementUsageMeter is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - period string
+func (_e *MockStoreAPI_Expecter) IncrementUsageMeter(ctx interface{}, tenantID interface{}, period interface{}) *MockStoreAPI_IncrementUsageMeter_Call {
+	return &MockStoreAPI_IncrementUsageMeter_Call{Call: _e.mock.On("IncrementUsageMeter", ctx, tenantID, period)}
+}
+
+func (_c *MockStoreAPI_IncrementUsageMeter_Call) Run(run func(ctx context.Context, tenantID string, period string)) *MockStoreAPI_IncrementUsageMeter_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_IncrementUsageMeter_Call) Return(n int64, err error) *MockStoreAPI_IncrementUsageMeter_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_IncrementUsageMeter_Call) RunAndReturn(run func(ctx context.Context, tenantID string, period string) (int64, error)) *MockStoreAPI_IncrementUsageMeter_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4887,6 +5031,80 @@ func (_c *MockStoreAPI_ListTools_Call) Return(tools []models.Tool, err error) *M
 }
 
 func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUsageMeters provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListUsageMeters(ctx context.Context, tenantID string, limit int) ([]UsageMeterRecord, error) {
+	ret := _mock.Called(ctx, tenantID, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUsageMeters")
+	}
+
+	var r0 []UsageMeterRecord
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) ([]UsageMeterRecord, error)); ok {
+		return returnFunc(ctx, tenantID, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int) []UsageMeterRecord); ok {
+		r0 = returnFunc(ctx, tenantID, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]UsageMeterRecord)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListUsageMeters_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUsageMeters'
+type MockStoreAPI_ListUsageMeters_Call struct {
+	*mock.Call
+}
+
+// ListUsageMeters is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - limit int
+func (_e *MockStoreAPI_Expecter) ListUsageMeters(ctx interface{}, tenantID interface{}, limit interface{}) *MockStoreAPI_ListUsageMeters_Call {
+	return &MockStoreAPI_ListUsageMeters_Call{Call: _e.mock.On("ListUsageMeters", ctx, tenantID, limit)}
+}
+
+func (_c *MockStoreAPI_ListUsageMeters_Call) Run(run func(ctx context.Context, tenantID string, limit int)) *MockStoreAPI_ListUsageMeters_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListUsageMeters_Call) Return(usageMeterRecords []UsageMeterRecord, err error) *MockStoreAPI_ListUsageMeters_Call {
+	_c.Call.Return(usageMeterRecords, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListUsageMeters_Call) RunAndReturn(run func(ctx context.Context, tenantID string, limit int) ([]UsageMeterRecord, error)) *MockStoreAPI_ListUsageMeters_Call {
 	_c.Call.Return(run)
 	return _c
 }

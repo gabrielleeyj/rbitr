@@ -148,6 +148,7 @@ func main() {
 		SessionManager:    sessionMgr,
 		ProvenanceManager: provenanceMgr,
 		TicketingService:  ticketingService,
+		LicenseValidator:  licenseValidator,
 	})
 	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
 

@@ -3,6 +3,7 @@ package license
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,10 +49,10 @@ var (
 
 // licenseClaims holds the custom JWT claims for an rbitr license.
 type licenseClaims struct {
-	KeyVersion   int          `json:"key_version"`
-	Tier         string       `json:"tier"`
+	KeyVersion   int           `json:"key_version"`
+	Tier         string        `json:"tier"`
 	Entitlements *Entitlements `json:"entitlements"`
-	Licensee     *licenseeLic `json:"licensee"`
+	Licensee     *licenseeLic  `json:"licensee"`
 }
 
 type licenseeLic struct {
@@ -126,7 +127,7 @@ func (v *Validator) Entitlements() Entitlements {
 // Fingerprint returns the SHA-256 hex fingerprint of the raw license key bytes.
 func Fingerprint(data []byte) string {
 	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h)
+	return hex.EncodeToString(h[:])
 }
 
 // validateFile reads and validates a license key file.

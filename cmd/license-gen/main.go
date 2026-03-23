@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/license"
 )
+
+const secretFileMode fs.FileMode = 0o600
 
 func main() {
 	var (
@@ -38,7 +41,7 @@ func main() {
 	flag.StringVar(&tier, "tier", "paid", "license tier: free or paid")
 	flag.StringVar(&expires, "expires", "", "expiry date in YYYY-MM-DD format (required)")
 	flag.IntVar(&keyVersion, "key-version", license.CurrentKeyVersion, "license key format version")
-	flag.IntVar(&retentionDays, "retention-days", 90, "audit retention days for paid tier")
+	flag.IntVar(&retentionDays, "retention-days", license.PaidAuditRetentionDays, "audit retention days for paid tier")
 
 	flag.Parse()
 
@@ -79,7 +82,7 @@ func main() {
 		log.Fatalf("building license token: %v", err)
 	}
 
-	if err := os.WriteFile(outputPath, tokenBytes, 0600); err != nil {
+	if err := os.WriteFile(outputPath, tokenBytes, secretFileMode); err != nil {
 		log.Fatalf("writing license key: %v", err)
 	}
 
@@ -114,20 +117,20 @@ func buildLicenseToken(
 		return nil, fmt.Errorf("building JWT: %w", err)
 	}
 
-	if err := tok.Set("key_version", keyVersion); err != nil {
-		return nil, fmt.Errorf("setting key_version: %w", err)
+	if setErr := tok.Set("key_version", keyVersion); setErr != nil {
+		return nil, fmt.Errorf("setting key_version: %w", setErr)
 	}
-	if err := tok.Set("tier", tier); err != nil {
-		return nil, fmt.Errorf("setting tier: %w", err)
+	if setErr := tok.Set("tier", tier); setErr != nil {
+		return nil, fmt.Errorf("setting tier: %w", setErr)
 	}
-	if err := tok.Set("entitlements", ent); err != nil {
-		return nil, fmt.Errorf("setting entitlements: %w", err)
+	if setErr := tok.Set("entitlements", ent); setErr != nil {
+		return nil, fmt.Errorf("setting entitlements: %w", setErr)
 	}
-	if err := tok.Set("licensee", map[string]string{
+	if setErr := tok.Set("licensee", map[string]string{
 		"name":  licensee,
 		"email": email,
-	}); err != nil {
-		return nil, fmt.Errorf("setting licensee: %w", err)
+	}); setErr != nil {
+		return nil, fmt.Errorf("setting licensee: %w", setErr)
 	}
 
 	key, err := jwk.Import(privKey)
@@ -162,10 +165,10 @@ func generateKeypair(dir string) {
 	pubPath := filepath.Join(dir, "pubkey.pem")
 	privPath := filepath.Join(dir, "private.pem")
 
-	if err := os.WriteFile(pubPath, pubPEM, 0644); err != nil {
+	if err := os.WriteFile(pubPath, pubPEM, secretFileMode); err != nil {
 		log.Fatalf("writing public key: %v", err)
 	}
-	if err := os.WriteFile(privPath, privPEM, 0600); err != nil {
+	if err := os.WriteFile(privPath, privPEM, secretFileMode); err != nil {
 		log.Fatalf("writing private key: %v", err)
 	}
 
