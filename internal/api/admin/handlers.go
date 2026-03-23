@@ -170,8 +170,11 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 
 	adminGroup.POST("/webhooks/ticketing/:provider", deps.handleTicketingWebhook)
 
-	// License entitlements (Epic 13 Phase 4)
+	// License management (Epic 13 Phase 4-5)
 	adminGroup.GET("/license/entitlements", deps.handleEntitlements)
+	adminGroup.GET("/license", deps.handleLicenseStatus)
+	adminGroup.POST("/license", deps.handleLicenseUpload)
+	adminGroup.DELETE("/license", deps.handleLicenseRemove)
 }
 
 func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {
