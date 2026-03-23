@@ -37,6 +37,7 @@ type Config struct {
 	SSORedirectURI          string
 	SSOAllowedDomains       []string
 	SSODefaultScopes        []string
+	LicenseKeyPath          string
 	DevAutoTools            bool
 	DevMockInternalURL      string
 	DevJiraURL              string
@@ -87,6 +88,7 @@ func Load() Config {
 		SSORedirectURI:          getEnv("RBTR_SSO_REDIRECT_URI", ""),
 		SSOAllowedDomains:       getEnvCSV("RBTR_SSO_ALLOWED_DOMAINS"),
 		SSODefaultScopes:        getEnvCSVDefault("RBTR_SSO_DEFAULT_SCOPES", []string{"admin:read", "admin:write"}),
+		LicenseKeyPath:          getEnv("RBTR_LICENSE_KEY_PATH", "/etc/rbitr/license.key"),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:              getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),

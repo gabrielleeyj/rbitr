@@ -23,6 +23,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
 	"github.com/gabrielleeyj/rbitr/internal/db"
+	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
@@ -56,6 +57,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid RBTR_SETUP_ALLOWED_CIDRS: %v", err)
 	}
+
+	pubKey, err := license.EmbeddedPublicKey()
+	if err != nil {
+		log.Fatalf("license: %v", err)
+	}
+	licenseValidator := license.NewValidator(pubKey, cfg.LicenseKeyPath)
+	licenseValidator.LoadAndValidate()
+	licenseWatcher := license.NewWatcher(licenseValidator, cfg.LicenseKeyPath)
 
 	dbConn, err := db.Connect(cfg.DatabaseURL, db.PoolConfig{
 		MaxOpenConns:    cfg.DBMaxOpenConns,
@@ -153,12 +162,14 @@ func main() {
 		AdminSessionMgr:  adminSessionMgr,
 		SecretResolver:   secretResolver,
 		TicketingService: ticketingService,
+		LicenseValidator: licenseValidator,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go expiryScheduler.Start(ctx)
 	go auditRetention.Start(ctx)
+	go licenseWatcher.Start(ctx)
 
 	sc := echo.StartConfig{
 		Address:         cfg.ListenAddr,
