@@ -4,10 +4,10 @@
 
 | Phase | Status | Date |
 |-------|--------|------|
-| **1** License Key Validation & Entitlement Model | **TODO** | — |
-| **2** Usage Metering & Quota Enforcement | **TODO** | — |
-| **3** Tenant Provisioning Limits (Free Tier) | **TODO** | — |
-| **4** Feature Gating (API + UI) | **TODO** | — |
+| **1** License Key Validation & Entitlement Model | **DONE** | 2026-03-23 |
+| **2** Usage Metering & Quota Enforcement | **DONE** | 2026-03-23 |
+| **3** Tenant Provisioning Limits (Free Tier) | **DONE** | 2026-03-23 |
+| **4** Feature Gating (API) | **DONE** | 2026-03-23 |
 | **5** License Management UI | **TODO** | — |
 | **6** Admin Dashboard & Usage Visibility | **TODO** | — |
 
