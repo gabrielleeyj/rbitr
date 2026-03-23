@@ -27,14 +27,14 @@ func TestWatcher_DetectsFileChange(t *testing.T) {
 	// Create a valid key file.
 	exp := time.Now().Add(365 * 24 * time.Hour)
 	token := signTestToken(t, priv, validClaims(exp))
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	w := NewWatcher(v, keyPath)
 	w.snapshot()
 
 	// Simulate a file change by modifying.
 	time.Sleep(10 * time.Millisecond)
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	w.check()
 	assert.True(t, v.Info().Valid)
@@ -50,7 +50,7 @@ func TestWatcher_DetectsFileRemoval(t *testing.T) {
 
 	exp := time.Now().Add(365 * 24 * time.Hour)
 	token := signTestToken(t, priv, validClaims(exp))
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	v := NewValidator(pub, keyPath)
 	v.LoadAndValidate()
@@ -76,7 +76,7 @@ func TestWatcher_NoChangeNoReload(t *testing.T) {
 
 	exp := time.Now().Add(365 * 24 * time.Hour)
 	token := signTestToken(t, priv, validClaims(exp))
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	v := NewValidator(pub, keyPath)
 	v.LoadAndValidate()

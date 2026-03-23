@@ -590,6 +590,15 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	}
 	c.Set(telemetry.CtxActionType, classificationResult.ActionType)
 
+	// Enforce usage quota before processing the request.
+	quotaViolation, quotaErr := d.enforceUsageQuota(ctx, tenant.TenantID)
+	if quotaErr != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("usage quota check failed")), nil
+	}
+	if quotaViolation != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewQuotaExceededError(quotaViolation.Message)), nil
+	}
+
 	// Handle approval resubmission if token is present
 	if approvalToken != "" {
 		return d.handleMCPApprovedCall(c, tenant, agentID, toolID, requestID, requestHash, classificationResult, approvalToken, approvalRequestID, forwardReq)

@@ -159,6 +159,7 @@ const (
 	ErrorPolicyInvalid     = -32004 // Policy evaluation error
 	ErrorRateLimitExceeded = -32005 // Rate limit exceeded
 	ErrorFileAccessDenied  = -32006 // File access denied
+	ErrorQuotaExceeded     = -32007 // Usage quota exceeded
 )
 
 // MCP method names.

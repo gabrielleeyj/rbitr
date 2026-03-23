@@ -167,6 +167,11 @@ type StoreAPI interface {
 	InsertLicenseHistory(ctx context.Context, tier string, keyVersion int, licensee, email string, expiresAt time.Time, fingerprint string) error
 	GetLatestLicenseHistory(ctx context.Context) (LicenseHistoryRecord, error)
 
+	// Usage metering (Epic 13 Phase 2)
+	IncrementUsageMeter(ctx context.Context, tenantID, period string) (int64, error)
+	GetUsageMeter(ctx context.Context, tenantID, period string) (int64, error)
+	ListUsageMeters(ctx context.Context, tenantID string, limit int) ([]UsageMeterRecord, error)
+
 	// Tenant management (Epic 7)
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
@@ -187,6 +192,14 @@ type LicenseHistoryRecord struct {
 	ExpiresAt   time.Time `json:"expires_at"`
 	ActivatedAt time.Time `json:"activated_at"`
 	Fingerprint string    `json:"fingerprint"`
+}
+
+// UsageMeterRecord represents a tenant's action count for a billing period.
+type UsageMeterRecord struct {
+	TenantID    string    `json:"tenant_id"`
+	Period      string    `json:"period"`
+	ActionCount int64     `json:"action_count"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // SSOConfig holds SSO/OIDC configuration persisted in system_settings.

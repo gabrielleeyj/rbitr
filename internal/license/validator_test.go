@@ -74,15 +74,15 @@ func validClaims(exp time.Time) map[string]any {
 		"key_version": float64(1),
 		"tier":        "paid",
 		"entitlements": map[string]any{
-			"max_tenants":          float64(-1),
+			"max_tenants":           float64(-1),
 			"max_agents_per_tenant": float64(-1),
-			"max_active_keys":      float64(-1),
-			"monthly_action_limit": float64(-1),
-			"audit_retention_days": float64(90),
-			"approval_workflows":   true,
-			"evidence_export":      true,
-			"integrations":         true,
-			"custom_policies":      true,
+			"max_active_keys":       float64(-1),
+			"monthly_action_limit":  float64(-1),
+			"audit_retention_days":  float64(90),
+			"approval_workflows":    true,
+			"evidence_export":       true,
+			"integrations":          true,
+			"custom_policies":       true,
 		},
 		"licensee": map[string]any{
 			"name":  "Test Corp",
@@ -208,7 +208,8 @@ func TestValidateBytes_MergeOverDefaults(t *testing.T) {
 	claims := validClaims(time.Now().Add(365 * 24 * time.Hour))
 
 	// Remove some entitlement fields to test merge-over-defaults.
-	ent := claims["entitlements"].(map[string]any)
+	ent, ok := claims["entitlements"].(map[string]any)
+	require.True(t, ok, "entitlements must be map[string]any")
 	delete(ent, "audit_retention_days")
 	token := signTestToken(t, priv, claims)
 
@@ -238,7 +239,7 @@ func TestLoadAndValidate_ValidFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, "license.key")
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	v := NewValidator(pub, keyPath)
 	v.LoadAndValidate()
@@ -253,7 +254,7 @@ func TestLoadAndValidate_InvalidFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, "license.key")
-	require.NoError(t, os.WriteFile(keyPath, []byte("garbage-data"), 0600))
+	require.NoError(t, os.WriteFile(keyPath, []byte("garbage-data"), 0o600))
 
 	v := NewValidator(pub, keyPath)
 	v.LoadAndValidate()
@@ -278,7 +279,7 @@ func TestEntitlements_ThreadSafe(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, "license.key")
-	require.NoError(t, os.WriteFile(keyPath, token, 0600))
+	require.NoError(t, os.WriteFile(keyPath, token, 0o600))
 
 	v := NewValidator(pub, keyPath)
 	v.LoadAndValidate()
@@ -308,15 +309,15 @@ func TestValidateBytes_FreeTierKey(t *testing.T) {
 		"key_version": float64(1),
 		"tier":        "free",
 		"entitlements": map[string]any{
-			"max_tenants":          float64(1),
+			"max_tenants":           float64(1),
 			"max_agents_per_tenant": float64(1),
-			"max_active_keys":      float64(1),
-			"monthly_action_limit": float64(10000),
-			"audit_retention_days": float64(7),
-			"approval_workflows":   false,
-			"evidence_export":      false,
-			"integrations":         false,
-			"custom_policies":      false,
+			"max_active_keys":       float64(1),
+			"monthly_action_limit":  float64(10000),
+			"audit_retention_days":  float64(7),
+			"approval_workflows":    false,
+			"evidence_export":       false,
+			"integrations":          false,
+			"custom_policies":       false,
 		},
 		"licensee": map[string]any{
 			"name":  "Free User",
@@ -342,15 +343,15 @@ func TestValidateBytes_EntitlementsAsRawJSON(t *testing.T) {
 
 	// Build entitlements as raw JSON to verify the Get() -> json.RawMessage path.
 	entMap := map[string]any{
-		"max_tenants":          -1,
+		"max_tenants":           -1,
 		"max_agents_per_tenant": -1,
-		"max_active_keys":      -1,
-		"monthly_action_limit": -1,
-		"audit_retention_days": 180,
-		"approval_workflows":   true,
-		"evidence_export":      true,
-		"integrations":         true,
-		"custom_policies":      true,
+		"max_active_keys":       -1,
+		"monthly_action_limit":  -1,
+		"audit_retention_days":  180,
+		"approval_workflows":    true,
+		"evidence_export":       true,
+		"integrations":          true,
+		"custom_policies":       true,
 	}
 	entBytes, _ := json.Marshal(entMap)
 	var entRaw json.RawMessage

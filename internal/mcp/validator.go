@@ -153,3 +153,11 @@ func NewPolicyInvalidError(code PolicyErrorCode) *ErrorObject {
 		Data:    dataJSON,
 	}
 }
+
+// NewQuotaExceededError creates a usage quota exceeded error.
+func NewQuotaExceededError(msg string) *ErrorObject {
+	return &ErrorObject{
+		Code:    ErrorQuotaExceeded,
+		Message: msg,
+	}
+}

@@ -2,8 +2,19 @@ package license
 
 import "time"
 
-// Unlimited indicates no limit for a numeric entitlement.
-const Unlimited = -1
+const (
+	// Unlimited indicates no limit for a numeric entitlement.
+	Unlimited = -1
+
+	// freeMonthlyActionLimit is the default monthly action quota for free tier.
+	freeMonthlyActionLimit = 10_000
+
+	// freeAuditRetentionDays is the default audit retention for free tier.
+	freeAuditRetentionDays = 7
+
+	// PaidAuditRetentionDays is the default audit retention for paid tier.
+	PaidAuditRetentionDays = 90
+)
 
 // Entitlements describes what the current installation is allowed to do.
 type Entitlements struct {
@@ -38,8 +49,8 @@ func FreeTierDefaults() Entitlements {
 		MaxTenants:         1,
 		MaxAgentsPerTenant: 1,
 		MaxActiveKeys:      1,
-		MonthlyActionLimit: 10_000,
-		AuditRetentionDays: 7,
+		MonthlyActionLimit: freeMonthlyActionLimit,
+		AuditRetentionDays: freeAuditRetentionDays,
 		ApprovalWorkflows:  false,
 		EvidenceExport:     false,
 		Integrations:       false,
@@ -55,7 +66,7 @@ func PaidTierDefaults() Entitlements {
 		MaxAgentsPerTenant: Unlimited,
 		MaxActiveKeys:      Unlimited,
 		MonthlyActionLimit: int64(Unlimited),
-		AuditRetentionDays: 90,
+		AuditRetentionDays: PaidAuditRetentionDays,
 		ApprovalWorkflows:  true,
 		EvidenceExport:     true,
 		Integrations:       true,

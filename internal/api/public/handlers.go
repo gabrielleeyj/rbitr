@@ -22,6 +22,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
+	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
@@ -43,6 +44,7 @@ type Dependencies struct {
 	SessionManager    *auth.SessionManager
 	ProvenanceManager *auth.ProvenanceManager
 	TicketingService  TicketingHook
+	LicenseValidator  *license.Validator
 }
 
 // TicketingHook is called asynchronously when an approval is created.
@@ -124,6 +126,25 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 	tenant, agentID, err := d.authenticateTenantRequest(c)
 	if err != nil {
 		return authError(c, err)
+	}
+
+	// Enforce usage quota before processing the request.
+	quotaViolation, quotaErr := d.enforceUsageQuota(c.Request().Context(), tenant.TenantID)
+	if quotaErr != nil {
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "usage quota check failed"})
+	}
+	if quotaViolation != nil {
+		c.Response().Header().Set("Retry-After", strconv.Itoa(secondsUntilPeriodReset()))
+		return c.JSON(http.StatusTooManyRequests, map[string]any{
+			"error":   "QUOTA_EXCEEDED",
+			"message": quotaViolation.Message,
+			"limit":   quotaViolation.Limit,
+			"used":    quotaViolation.Used,
+			"period":  quotaViolation.Period,
+		})
 	}
 
 	toolID := c.Param("tool_id")
