@@ -17,6 +17,7 @@ import {
   Wrench,
   Settings,
   BellRing,
+  Ticket,
   ClipboardList,
 } from "lucide-react";
 import { useTenant } from "@/lib/tenant";
@@ -28,6 +29,7 @@ import {
   scopePoliciesRead,
   scopeSettingsRead,
   scopeTenantsRead,
+  scopeTicketingRead,
   scopeToolsRead,
 } from "@/lib/scopes";
 
@@ -40,6 +42,7 @@ const navItems = [
   { to: "/tools", label: "Tools", icon: Wrench, scope: scopeToolsRead },
   { to: "/settings", label: "Settings", icon: Settings, scope: scopeSettingsRead },
   { to: "/notifications", label: "Notifications", icon: BellRing, scope: scopeNotificationsRead },
+  { to: "/ticketing", label: "Ticketing", icon: Ticket, scope: scopeTicketingRead },
   { to: "/audit", label: "Audit", icon: ClipboardList, scope: scopeAuditRead },
 ];
 

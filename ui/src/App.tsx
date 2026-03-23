@@ -19,6 +19,7 @@ import { AuditPage } from "@/pages/AuditPage";
 import { ApprovalsPage } from "@/pages/ApprovalsPage";
 import { ApprovalDetailPage } from "@/pages/ApprovalDetailPage";
 import { NotificationsPage } from "@/pages/NotificationsPage";
+import { TicketingPage } from "@/pages/TicketingPage";
 import { SetupPage } from "@/pages/SetupPage";
 
 export function App() {
@@ -148,6 +149,7 @@ function AppRoutes() {
         <Route path="tools" element={<ToolsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="ticketing" element={<TicketingPage />} />
         <Route path="audit" element={<AuditPage />} />
       </Route>
       <Route path="*" element={<Navigate to={setupRequired ? "/setup" : "/"} replace />} />

@@ -17,6 +17,9 @@ export const scopeAuditExport = "admin:audit:export";
 export const scopeNotificationsRead = "admin:notifications:read";
 export const scopeNotificationsWrite = "admin:notifications:write";
 export const scopeNotificationsTest = "admin:notifications:test";
+export const scopeTicketingRead = "admin:ticketing:read";
+export const scopeTicketingWrite = "admin:ticketing:write";
+export const scopeTicketingTest = "admin:ticketing:test";
 export const scopeSettingsRead = "admin:settings:read";
 export const scopeSettingsWrite = "admin:settings:write";
 

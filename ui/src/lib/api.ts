@@ -1084,6 +1084,84 @@ export function deleteMailingList(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Ticketing
+// ---------------------------------------------------------------------------
+
+export interface TicketingConfig {
+  tenant_id: string;
+  provider: string;
+  enabled: boolean;
+  base_url: string;
+  secret_configured: boolean;
+  project_key: string;
+  issue_type: string;
+  auto_create: boolean;
+  webhook_secret_configured: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketLink {
+  ticket_link_id: string;
+  tenant_id: string;
+  approval_request_id: string;
+  provider: string;
+  external_key: string;
+  external_url: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function getTicketingConfig(config: ApiConfig, tenantId: string): Promise<TicketingConfig> {
+  return request<TicketingConfig>(`/admin/tenants/${tenantId}/ticketing`, config);
+}
+
+export function updateTicketingConfig(
+  config: ApiConfig,
+  tenantId: string,
+  payload: { provider: string; enabled: boolean; base_url: string; project_key: string; issue_type: string; auto_create: boolean }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/ticketing`, config, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setTicketingSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/ticketing/secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function setTicketingWebhookSecretRef(config: ApiConfig, tenantId: string, secretRef: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/ticketing/webhook-secret-ref`, config, {
+    method: "PUT",
+    body: JSON.stringify({ secret_ref: secretRef }),
+  });
+}
+
+export function sendTicketingTest(config: ApiConfig, tenantId: string): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/ticketing/test`, config, { method: "POST" });
+}
+
+export async function listTicketLinks(
+  config: ApiConfig,
+  tenantId: string,
+  params: { limit?: number; offset?: number } = {}
+): Promise<TicketLink[]> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  const data = await request<TicketLink[] | null>(
+    `/admin/tenants/${tenantId}/ticketing/links?${query.toString()}`,
+    config
+  );
+  return data ?? [];
+}
+
 export async function listNotificationSuppressions(
   config: ApiConfig,
   tenantId: string,
