@@ -180,6 +180,10 @@ type StoreAPI interface {
 	CreateTenantKey(ctx context.Context, key *models.TenantKey) error
 	ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error)
 	RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
+
+	// Provisioning limits (Epic 13 Phase 3)
+	CountTenants(ctx context.Context) (int, error)
+	CountActiveKeysByTenant(ctx context.Context, tenantID string) (int, error)
 }
 
 // LicenseHistoryRecord represents a license activation event.

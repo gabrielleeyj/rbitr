@@ -58,6 +58,21 @@ func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+
+	violation, limitErr := d.checkTenantLimit(ctx)
+	if limitErr != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to check tenant limit"})
+	}
+	if violation != nil {
+		return c.JSON(http.StatusForbidden, map[string]any{
+			"error":    "LIMIT_EXCEEDED",
+			"resource": violation.Resource,
+			"current":  violation.Current,
+			"limit":    violation.Limit,
+			"message":  violation.Message,
+		})
+	}
+
 	tenantID := "t_" + uuid.NewString()[:8]
 
 	if createErr := d.Store.CreateTenant(ctx, tenantID, payload.Name); createErr != nil {
@@ -125,6 +140,21 @@ func (d *Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 	tenantID := c.Param("tenant_id")
 	c.Set(telemetry.CtxTenantID, tenantID)
 	ctx := c.Request().Context()
+
+	violation, limitErr := d.checkActiveKeyLimit(ctx, tenantID)
+	if limitErr != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to check key limit"})
+	}
+	if violation != nil {
+		return c.JSON(http.StatusForbidden, map[string]any{
+			"error":    "LIMIT_EXCEEDED",
+			"resource": violation.Resource,
+			"current":  violation.Current,
+			"limit":    violation.Limit,
+			"message":  violation.Message,
+		})
+	}
+
 	now := time.Now().UTC()
 
 	rawKey, keyHash, keyPrefix, err := utils.GenerateAPIKey()

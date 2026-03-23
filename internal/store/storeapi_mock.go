@@ -201,6 +201,72 @@ func (_c *MockStoreAPI_ClaimApprovalExecution_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// CountActiveKeysByTenant provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CountActiveKeysByTenant(ctx context.Context, tenantID string) (int, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountActiveKeysByTenant")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_CountActiveKeysByTenant_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountActiveKeysByTenant'
+type MockStoreAPI_CountActiveKeysByTenant_Call struct {
+	*mock.Call
+}
+
+// CountActiveKeysByTenant is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) CountActiveKeysByTenant(ctx interface{}, tenantID interface{}) *MockStoreAPI_CountActiveKeysByTenant_Call {
+	return &MockStoreAPI_CountActiveKeysByTenant_Call{Call: _e.mock.On("CountActiveKeysByTenant", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_CountActiveKeysByTenant_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_CountActiveKeysByTenant_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CountActiveKeysByTenant_Call) Return(n int, err error) *MockStoreAPI_CountActiveKeysByTenant_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CountActiveKeysByTenant_Call) RunAndReturn(run func(ctx context.Context, tenantID string) (int, error)) *MockStoreAPI_CountActiveKeysByTenant_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountPendingApprovals provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CountPendingApprovals(ctx context.Context, tenantID string, now time.Time) (int, error) {
 	ret := _mock.Called(ctx, tenantID, now)
@@ -269,6 +335,66 @@ func (_c *MockStoreAPI_CountPendingApprovals_Call) Return(n int, err error) *Moc
 }
 
 func (_c *MockStoreAPI_CountPendingApprovals_Call) RunAndReturn(run func(ctx context.Context, tenantID string, now time.Time) (int, error)) *MockStoreAPI_CountPendingApprovals_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountTenants provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CountTenants(ctx context.Context) (int, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountTenants")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (int, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) int); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_CountTenants_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountTenants'
+type MockStoreAPI_CountTenants_Call struct {
+	*mock.Call
+}
+
+// CountTenants is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) CountTenants(ctx interface{}) *MockStoreAPI_CountTenants_Call {
+	return &MockStoreAPI_CountTenants_Call{Call: _e.mock.On("CountTenants", ctx)}
+}
+
+func (_c *MockStoreAPI_CountTenants_Call) Run(run func(ctx context.Context)) *MockStoreAPI_CountTenants_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CountTenants_Call) Return(n int, err error) *MockStoreAPI_CountTenants_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CountTenants_Call) RunAndReturn(run func(ctx context.Context) (int, error)) *MockStoreAPI_CountTenants_Call {
 	_c.Call.Return(run)
 	return _c
 }
