@@ -10,6 +10,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
+	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/store"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	AdminSessionMgr  *auth.AdminSessionManager
 	SecretResolver   notifications.SecretResolver
 	TicketingService *ticketing.Service
+	LicenseValidator *license.Validator
 }
 
 type TenantConfigRequest struct {

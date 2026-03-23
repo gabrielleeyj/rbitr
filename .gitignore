@@ -90,3 +90,8 @@ AGENTS.md
 
 # Claude.md
 Claude.md
+
+# License private keys (NEVER commit)
+**/devkey.pem
+**/private.pem
+license.key

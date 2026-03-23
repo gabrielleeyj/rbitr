@@ -1686,6 +1686,66 @@ func (_c *MockStoreAPI_GetFeatureSessionTokens_Call) RunAndReturn(run func(ctx c
 	return _c
 }
 
+// GetLatestLicenseHistory provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetLatestLicenseHistory(ctx context.Context) (LicenseHistoryRecord, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetLatestLicenseHistory")
+	}
+
+	var r0 LicenseHistoryRecord
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (LicenseHistoryRecord, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) LicenseHistoryRecord); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(LicenseHistoryRecord)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetLatestLicenseHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLatestLicenseHistory'
+type MockStoreAPI_GetLatestLicenseHistory_Call struct {
+	*mock.Call
+}
+
+// GetLatestLicenseHistory is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetLatestLicenseHistory(ctx interface{}) *MockStoreAPI_GetLatestLicenseHistory_Call {
+	return &MockStoreAPI_GetLatestLicenseHistory_Call{Call: _e.mock.On("GetLatestLicenseHistory", ctx)}
+}
+
+func (_c *MockStoreAPI_GetLatestLicenseHistory_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetLatestLicenseHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetLatestLicenseHistory_Call) Return(licenseHistoryRecord LicenseHistoryRecord, err error) *MockStoreAPI_GetLatestLicenseHistory_Call {
+	_c.Call.Return(licenseHistoryRecord, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetLatestLicenseHistory_Call) RunAndReturn(run func(ctx context.Context) (LicenseHistoryRecord, error)) *MockStoreAPI_GetLatestLicenseHistory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetMailingList provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetMailingList(ctx context.Context, tenantID string, mailingListID string) (models.MailingList, error) {
 	ret := _mock.Called(ctx, tenantID, mailingListID)
@@ -3347,6 +3407,93 @@ func (_c *MockStoreAPI_InsertAuditEvent_Call) Return(err error) *MockStoreAPI_In
 }
 
 func (_c *MockStoreAPI_InsertAuditEvent_Call) RunAndReturn(run func(ctx context.Context, event *models.AdminAuditEvent) error) *MockStoreAPI_InsertAuditEvent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InsertLicenseHistory provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) InsertLicenseHistory(ctx context.Context, tier string, keyVersion int, licensee string, email string, expiresAt time.Time, fingerprint string) error {
+	ret := _mock.Called(ctx, tier, keyVersion, licensee, email, expiresAt, fingerprint)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertLicenseHistory")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, int, string, string, time.Time, string) error); ok {
+		r0 = returnFunc(ctx, tier, keyVersion, licensee, email, expiresAt, fingerprint)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_InsertLicenseHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertLicenseHistory'
+type MockStoreAPI_InsertLicenseHistory_Call struct {
+	*mock.Call
+}
+
+// InsertLicenseHistory is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tier string
+//   - keyVersion int
+//   - licensee string
+//   - email string
+//   - expiresAt time.Time
+//   - fingerprint string
+func (_e *MockStoreAPI_Expecter) InsertLicenseHistory(ctx interface{}, tier interface{}, keyVersion interface{}, licensee interface{}, email interface{}, expiresAt interface{}, fingerprint interface{}) *MockStoreAPI_InsertLicenseHistory_Call {
+	return &MockStoreAPI_InsertLicenseHistory_Call{Call: _e.mock.On("InsertLicenseHistory", ctx, tier, keyVersion, licensee, email, expiresAt, fingerprint)}
+}
+
+func (_c *MockStoreAPI_InsertLicenseHistory_Call) Run(run func(ctx context.Context, tier string, keyVersion int, licensee string, email string, expiresAt time.Time, fingerprint string)) *MockStoreAPI_InsertLicenseHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertLicenseHistory_Call) Return(err error) *MockStoreAPI_InsertLicenseHistory_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertLicenseHistory_Call) RunAndReturn(run func(ctx context.Context, tier string, keyVersion int, licensee string, email string, expiresAt time.Time, fingerprint string) error) *MockStoreAPI_InsertLicenseHistory_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -163,6 +163,10 @@ type StoreAPI interface {
 	ListTicketLinks(ctx context.Context, tenantID string, limit, offset int) ([]models.TicketLink, error)
 	UpdateTicketLinkStatus(ctx context.Context, ticketLinkID, status string) error
 
+	// License history (Epic 13)
+	InsertLicenseHistory(ctx context.Context, tier string, keyVersion int, licensee, email string, expiresAt time.Time, fingerprint string) error
+	GetLatestLicenseHistory(ctx context.Context) (LicenseHistoryRecord, error)
+
 	// Tenant management (Epic 7)
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
@@ -171,6 +175,18 @@ type StoreAPI interface {
 	CreateTenantKey(ctx context.Context, key *models.TenantKey) error
 	ListTenantKeys(ctx context.Context, tenantID string) ([]models.TenantKey, error)
 	RevokeTenantKey(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
+}
+
+// LicenseHistoryRecord represents a license activation event.
+type LicenseHistoryRecord struct {
+	ID          string    `json:"id"`
+	Tier        string    `json:"tier"`
+	KeyVersion  int       `json:"key_version"`
+	Licensee    string    `json:"licensee"`
+	Email       string    `json:"email"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	ActivatedAt time.Time `json:"activated_at"`
+	Fingerprint string    `json:"fingerprint"`
 }
 
 // SSOConfig holds SSO/OIDC configuration persisted in system_settings.
