@@ -36,6 +36,9 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: "postgres://postgres:postgres@db:5432/rbitr?sslmode=disable"
+      RBTR_LICENSE_KEY_PATH: "/data/rbitr/license.key"
+    volumes:
+      - license-data:/data/rbitr
     ports:
       - "8080:8080"
 
@@ -54,3 +57,6 @@ services:
       dockerfile: Dockerfile.mocktool
     ports:
       - "8090:8090"
+
+volumes:
+  license-data:
