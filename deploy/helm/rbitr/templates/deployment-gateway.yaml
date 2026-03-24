@@ -71,8 +71,24 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
+          volumeMounts:
+            - name: license-data
+              mountPath: {{ dir .Values.license.keyPath }}
           resources:
             {{- toYaml .Values.gateway.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.license.existingSecret }}
+        - name: license-data
+          secret:
+            secretName: {{ .Values.license.existingSecret }}
+            items:
+              - key: license.key
+                path: {{ base .Values.license.keyPath }}
+            optional: true
+        {{- else }}
+        - name: license-data
+          emptyDir: {}
+        {{- end }}
       {{- with .Values.gateway.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

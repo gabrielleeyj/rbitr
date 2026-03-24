@@ -73,6 +73,17 @@ secrets:
   tenantKeyHmac: ""    # auto-generated if empty
   adminKeyHmac: ""     # auto-generated if empty
 
+## ── License Key ──────────────────────────────────────────────────
+## rbitr operates in free tier by default. Upload a license key via
+## the admin UI or pre-provision one in a Kubernetes Secret.
+license:
+  ## Path inside the container where the license key file is stored.
+  ## The gateway reads from this path at startup and watches for changes.
+  keyPath: "/data/rbitr/license.key"
+  ## Optional: mount an existing Secret containing the license key.
+  ## The Secret should have a key named "license.key" with the raw key data.
+  existingSecret: ""
+
 ## ── Feature Flags ──────────────────────────────────────────────────
 features:
   rateLimiting: false
