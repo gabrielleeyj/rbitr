@@ -552,6 +552,32 @@ Option 2 ("never delete, only filter visibility") was chosen over physical delet
 
 ---
 
+## Follow-up: License Auto-Renewal for Subscriptions
+
+Monthly subscription customers on air-gapped or self-hosted installations currently need to upload a new license key manually when the current one expires. This follow-up adds an optional auto-renewal mechanism.
+
+### Approach: Long Keys + Optional Auto-Renewal (Hybrid)
+
+- **Long-lived keys**: Issue keys with validity aligned to the subscription term. Annual = 1 year, monthly = 45 days (with 15-day grace period). Billing cadence is decoupled from key expiry.
+- **Optional phone-home renewal**: The license JWT includes a `renewal_url` claim. If present and the installation has internet access, the gateway fetches a refreshed key automatically before expiry.
+- **Air-gapped safe**: Auto-renewal is opt-in and disabled by default. Air-gapped installations continue with manual upload. Monthly subscribers get a 45-day window per key, giving a 15-day buffer.
+- **No phone-home promise preserved**: The renewal endpoint is optional. Installations that never set `renewal_url` in their license key never make outbound requests.
+
+### Tasks
+
+- [ ] Add `renewal_url` optional claim to license JWT schema
+- [ ] Implement renewal background goroutine in `internal/license/renewer.go`
+- [ ] Fetch new key from `renewal_url` before expiry (e.g., 7 days before)
+- [ ] Validate fetched key with same Ed25519 signature verification
+- [ ] Write new key to disk atomically, trigger hot-reload
+- [ ] Add `RBTR_LICENSE_AUTO_RENEW` env var (default `false`) to enable/disable
+- [ ] Add renewal status to `GET /admin/license` response (last attempt, next scheduled)
+- [ ] Update `cmd/license-gen` to support `--renewal-url` flag
+- [ ] Write unit tests for renewal logic (success, network failure, invalid key, disabled)
+- [ ] Update docs and runbooks
+
+---
+
 ## Dependencies
 
 | Dependency | Required By | Notes |
