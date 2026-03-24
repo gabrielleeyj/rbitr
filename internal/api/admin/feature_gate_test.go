@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,7 +22,7 @@ func TestFeatureGate_NilValidator_AllowsThrough(t *testing.T) {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}, deps.featureGate("approval_workflows"))
 
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -37,7 +38,7 @@ func TestFeatureGate_FeatureEnabled_AllowsThrough(t *testing.T) {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}, deps.featureGate("approval_workflows"))
 
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -53,7 +54,7 @@ func TestFeatureGate_FeatureDisabled_Returns403(t *testing.T) {
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}, deps.featureGate("approval_workflows"))
 
-	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -78,7 +79,7 @@ func TestFeatureGate_DifferentFeatures(t *testing.T) {
 				return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 			}, deps.featureGate(feature))
 
-			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 
@@ -93,7 +94,7 @@ func TestHandleEntitlements_NilValidator(t *testing.T) {
 	e := echo.New()
 	e.GET("/license/entitlements", deps.handleEntitlements)
 
-	req := httptest.NewRequest(http.MethodGet, "/license/entitlements", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license/entitlements", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -116,7 +117,7 @@ func TestHandleEntitlements_PaidTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/license/entitlements", deps.handleEntitlements)
 
-	req := httptest.NewRequest(http.MethodGet, "/license/entitlements", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license/entitlements", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -145,7 +146,7 @@ func TestHandleEntitlements_FreeTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/license/entitlements", deps.handleEntitlements)
 
-	req := httptest.NewRequest(http.MethodGet, "/license/entitlements", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license/entitlements", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 

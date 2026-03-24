@@ -5,6 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminKeyProvider, RequireAdminKey } from "@/lib/auth";
+import { EntitlementsProvider } from "@/lib/entitlements";
 import { TenantProvider } from "@/lib/tenant";
 import { getSetupStatus, type SetupStatus } from "@/lib/api";
 import { AppLayout } from "@/layouts/AppLayout";
@@ -20,14 +21,18 @@ import { ApprovalsPage } from "@/pages/ApprovalsPage";
 import { ApprovalDetailPage } from "@/pages/ApprovalDetailPage";
 import { NotificationsPage } from "@/pages/NotificationsPage";
 import { TicketingPage } from "@/pages/TicketingPage";
+import { LicensePage } from "@/pages/LicensePage";
+import { UsagePage } from "@/pages/UsagePage";
 import { SetupPage } from "@/pages/SetupPage";
 
 export function App() {
   return (
     <AdminKeyProvider>
-      <TenantProvider>
-        <AppRoutes />
-      </TenantProvider>
+      <EntitlementsProvider>
+        <TenantProvider>
+          <AppRoutes />
+        </TenantProvider>
+      </EntitlementsProvider>
     </AdminKeyProvider>
   );
 }
@@ -150,6 +155,8 @@ function AppRoutes() {
         <Route path="settings" element={<SettingsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="ticketing" element={<TicketingPage />} />
+        <Route path="license" element={<LicensePage />} />
+        <Route path="usage" element={<UsagePage />} />
         <Route path="audit" element={<AuditPage />} />
       </Route>
       <Route path="*" element={<Navigate to={setupRequired ? "/setup" : "/"} replace />} />

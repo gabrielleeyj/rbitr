@@ -22,6 +22,8 @@ export const scopeTicketingWrite = "admin:ticketing:write";
 export const scopeTicketingTest = "admin:ticketing:test";
 export const scopeSettingsRead = "admin:settings:read";
 export const scopeSettingsWrite = "admin:settings:write";
+export const scopeLicenseRead = "admin:settings:read";
+export const scopeLicenseWrite = "admin:settings:write";
 
 function isReadLikeScope(required: string): boolean {
   if (required === "admin:read") {

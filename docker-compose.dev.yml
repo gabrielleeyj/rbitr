@@ -6,6 +6,7 @@ services:
       RBTR_DEV_AUTO_TOOLS: "true"
       RBTR_DEV_MOCK_INTERNAL_URL: "http://mocktool:8090"
       RBTR_DEV_JIRA_URL: "http://localhost:8081"
+      RBTR_LICENSE_KEY_PATH: "/tmp/rbitr/license.key"
     ports:
       - "8080:8080"
 

@@ -1162,6 +1162,120 @@ export async function listTicketLinks(
   return data ?? [];
 }
 
+// --- License management (Epic 13) ---
+
+export interface LicenseStatus {
+  valid: boolean;
+  tier: string;
+  licensee?: string;
+  email?: string;
+  key_version?: number;
+  issued_at?: string;
+  expires_at?: string;
+  days_remaining?: number;
+}
+
+export interface LicenseUploadResponse {
+  valid: boolean;
+  tier: string;
+  licensee: string;
+  email: string;
+  key_version: number;
+  expires_at: string;
+  days_remaining: number;
+  fingerprint: string;
+}
+
+export interface EntitlementsResponse {
+  tier: string;
+  features: {
+    approval_workflows: boolean;
+    evidence_export: boolean;
+    integrations: boolean;
+    custom_policies: boolean;
+  };
+  limits: {
+    max_tenants: number;
+    max_agents_per_tenant: number;
+    max_active_keys: number;
+    monthly_action_limit: number;
+    audit_retention_days: number;
+  };
+}
+
+export interface UsageGauge {
+  used: number;
+  limit: number;
+  pct: number;
+}
+
+export interface UsageSummaryResponse {
+  tier: string;
+  period: string;
+  usage: {
+    governed_actions: UsageGauge;
+    tenants: UsageGauge;
+  };
+  features: {
+    approval_workflows: boolean;
+    evidence_export: boolean;
+    integrations: boolean;
+    custom_policies: boolean;
+  };
+  audit_retention_days: number;
+  license: {
+    valid: boolean;
+    tier: string;
+    upload_url: string;
+  };
+}
+
+export interface UsageHistoryPeriod {
+  period: string;
+  action_count: number;
+  pct: number;
+}
+
+export interface UsageHistoryResponse {
+  periods: UsageHistoryPeriod[];
+}
+
+export function getLicenseStatus(config: ApiConfig): Promise<LicenseStatus> {
+  return request<LicenseStatus>("/admin/license", config);
+}
+
+export function uploadLicenseKey(config: ApiConfig, file: File): Promise<LicenseUploadResponse> {
+  const url = `${config.baseUrl ?? defaultBaseUrl}/admin/license`;
+  return fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.adminKey}` },
+    body: file,
+  }).then(async (response) => {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(text || `Upload failed: ${response.status}`);
+    }
+    return JSON.parse(text) as LicenseUploadResponse;
+  });
+}
+
+export function removeLicenseKey(config: ApiConfig): Promise<LicenseStatus> {
+  return request<LicenseStatus>("/admin/license", config, { method: "DELETE" });
+}
+
+export function getEntitlements(config: ApiConfig): Promise<EntitlementsResponse> {
+  return request<EntitlementsResponse>("/admin/license/entitlements", config);
+}
+
+export function getUsageSummary(config: ApiConfig): Promise<UsageSummaryResponse> {
+  return request<UsageSummaryResponse>("/admin/usage", config);
+}
+
+export function getUsageHistory(config: ApiConfig, months?: number): Promise<UsageHistoryResponse> {
+  const query = months ? `?months=${months}` : "";
+  return request<UsageHistoryResponse>(`/admin/usage/history${query}`, config);
+}
+
 export async function listNotificationSuppressions(
   config: ApiConfig,
   tenantId: string,
