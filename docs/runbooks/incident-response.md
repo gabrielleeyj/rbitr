@@ -90,6 +90,23 @@ The gateway emits structured logs via Echo's request logger middleware. Key log 
 4. Test delivery: `POST /admin/tenants/:tenant_id/notifications/test/slack` or `/test/email`.
 5. Check `notifications_suppressed_total` — suppression may be throttling via cooldown (default: 10 minutes).
 
+### Usage Quota Exceeded (SEV3/SEV4)
+
+Free-tier installations have a 10,000 governed actions/month limit. When exceeded, the gateway returns `429 Too Many Requests`.
+
+1. Check if the tenant is on the free tier: `GET /admin/usage` — look at the `tier` field.
+2. Review current period usage: the `usage.governed_actions` gauge shows `used`, `limit`, and `pct`.
+3. If the quota is legitimately exceeded, the operator needs to upload a license key to unlock unlimited actions.
+4. If usage seems anomalous (e.g., automated loops), investigate the agent's activity via `GET /admin/tenants/:tenant_id/audit`.
+
+### Feature Gating Errors (SEV4)
+
+When free-tier users attempt to access gated features, the API returns `403` with `error: "FEATURE_NOT_AVAILABLE"`.
+
+1. This is expected behavior, not an incident — gated features require a paid license.
+2. If a paid-tier user receives this error, verify the license is valid: `GET /admin/license`.
+3. Check entitlements: `GET /admin/license/entitlements` — confirm the expected feature is `true`.
+
 ### Rate Limit Misconfiguration (SEV3)
 
 1. Check `rate_limit_exceeded_total` — labels `window` and `scope` identify the affected rule.

@@ -21,7 +21,9 @@ curl -X PUT http://localhost:8080/admin/settings/admin-write-lock \
 
 ## Database Migration
 
-rbitr uses [Goose](https://github.com/pressly/goose) for database migrations. Migrations are in the `migrations/` directory (29 migrations as of this writing, `00001_init.sql` through `00029_setup_bootstrap_hardening.sql`).
+rbitr uses [Goose](https://github.com/pressly/goose) for database migrations. Migrations are in the `migrations/` directory (34 migrations as of this writing, `00001_init.sql` through `00034_usage_meters.sql`).
+
+> **Note:** Migrations `00033` and `00034` introduce the `license_history` and `usage_meters` tables for the freemium tier system. These are additive schema changes with no impact on existing data.
 
 ### Run Migrations
 
