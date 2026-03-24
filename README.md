@@ -264,6 +264,64 @@ Signed provenance tokens track agent-to-agent request chains across tenant bound
 - Configurable max chain depth (default 5) prevents infinite loops
 - Enable: `RBTR_FEATURE_CROSS_TENANT_CHAIN=true`
 
+## Freemium Model & Tier System
+
+rbitr operates as a freemium self-hosted product. Installations start on the free tier with constrained but functional limits. Upgrading unlocks the full feature set.
+
+### Tier Comparison
+
+| Dimension | Free Tier | Paid Tier |
+|-----------|-----------|-----------|
+| Tenants | 1 | Unlimited |
+| Agents per tenant | 1 | Unlimited |
+| Active tenant keys | 1 | Unlimited |
+| Governed actions / month | 10,000 | Unlimited |
+| Audit log retention | 7 days | 90 days (configurable up to 1 year) |
+| Approval workflows | Not available | Full access |
+| Evidence export | Not available | Full access |
+| Integrations (Slack, Jira, etc.) | Not available | All channels |
+| Custom OPA policies | Not available | Full access |
+
+### Usage Metering
+
+Governed actions are metered per-tenant per-month. When the monthly action limit is reached, the gateway returns `429 Too Many Requests` with an upgrade prompt. Paid tier skips metering entirely (unlimited).
+
+Usage data is stored in the `usage_meters` table (migration `00034`). Counters are incremented atomically via PostgreSQL `ON CONFLICT ... DO UPDATE`.
+
+### Provisioning Limits
+
+Free-tier installations enforce resource creation limits:
+
+| Resource | Free Limit | Error |
+|----------|-----------|-------|
+| Tenants | 1 | `403 Tenant limit reached` |
+| Agents per tenant | 1 | `403 Agent limit reached` |
+| Active keys per tenant | 1 | `403 Active key limit reached` |
+
+Limits are checked before creation and return clear error messages with upgrade prompts.
+
+### Feature Gating
+
+Advanced features are gated behind entitlements. On the API side, gated endpoints return `403` with `FEATURE_NOT_AVAILABLE` when the entitlement is missing. On the UI side, gated features render with reduced opacity, a lock icon, and a tooltip CTA linking to the license settings page.
+
+Gated route groups:
+
+| Feature | Gated Routes | Entitlement |
+|---------|-------------|-------------|
+| Approval workflows | `/admin/tenants/:id/approvals/*` | `approval_workflows` |
+| Evidence export | `/admin/tenants/:id/audit/export` | `evidence_export` |
+| Integrations | `/admin/tenants/:id/notifications/*`, `/admin/tenants/:id/ticketing/*` | `integrations` |
+| Custom OPA policies | `/admin/tenants/:id/policies/*`, `/admin/tenants/:id/risk-overrides/*` | `custom_policies` |
+
+### Usage Dashboard
+
+The admin API exposes usage visibility endpoints:
+
+- `GET /admin/usage` — current period usage summary (governed actions, tenant count, feature availability, audit retention)
+- `GET /admin/usage/history?months=N` — historical usage aggregated across tenants (default 6 months, max 24)
+
+The UI dashboard shows progress bars with color-coded thresholds (green < 80%, amber 80–95%, red > 95%) and warning banners at 80% and 95% quota usage.
+
 ## Rate Limiting
 
 Per-request rate limiting with configurable scopes and windows:
@@ -591,6 +649,14 @@ azure-kv://myvault/slack-token
 | `PUT` | `/admin/settings/secret-provider-*` | Secret provider toggles |
 | `PUT` | `/admin/settings/sso-enabled` | Toggle SSO |
 | `PUT` | `/admin/settings/sso-config` | SSO configuration |
+
+**Entitlements & Usage**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/license/entitlements` | Current tier and feature entitlements |
+| `GET` | `/admin/usage` | Current period usage summary |
+| `GET` | `/admin/usage/history` | Historical usage (default 6 months, max 24) |
 
 **SSO**
 

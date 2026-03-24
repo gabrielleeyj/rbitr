@@ -109,7 +109,9 @@ After every restore, validate the database state:
 SELECT 'tenants' AS tbl, count(*) FROM tenants
 UNION ALL SELECT 'admin_keys', count(*) FROM admin_keys
 UNION ALL SELECT 'tools', count(*) FROM tools
-UNION ALL SELECT 'audit_events', count(*) FROM audit_events;
+UNION ALL SELECT 'audit_events', count(*) FROM audit_events
+UNION ALL SELECT 'usage_meters', count(*) FROM rbitr.usage_meters
+UNION ALL SELECT 'license_history', count(*) FROM rbitr.license_history;
 ```
 
 3. **Run the readiness check:**
@@ -139,6 +141,7 @@ The `audit_events` table is protected by the `block_audit_mutations` trigger (se
 - The `audit_retention_days` setting controls how long audit events are kept (default: 365 days).
 - The retention scheduler (`internal/retention/audit_retention.go`) runs every 24 hours, acquires a PostgreSQL advisory lock, and deletes events older than the cutoff.
 - Update retention via the admin API: `PUT /admin/settings/audit-retention` with `{"audit_retention_days": 90}`.
+- **Tier-aware retention:** Free-tier installations enforce 7-day audit retention. Paid-tier installations default to 90 days (configurable up to 1 year). The effective retention is resolved from the current license entitlements.
 
 ### Recovery Implications
 

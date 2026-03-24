@@ -119,6 +119,12 @@ SELECT tenant_id, active_policy_version FROM tenant_configs;
 
 -- Audit event count and latest timestamp
 SELECT count(*) AS event_count, max(created_at) AS latest_event FROM audit_events;
+
+-- Usage meters (freemium metering data)
+SELECT count(*) AS meter_count, max(updated_at) AS latest_update FROM rbitr.usage_meters;
+
+-- License activation history
+SELECT count(*) AS license_count, max(activated_at) AS latest_activation FROM rbitr.license_history;
 ```
 
 ### Audit Chain Integrity
