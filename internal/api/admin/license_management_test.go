@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
@@ -77,7 +78,7 @@ func TestHandleLicenseStatus_NilValidator(t *testing.T) {
 	e := echo.New()
 	e.GET("/license", deps.handleLicenseStatus)
 
-	req := httptest.NewRequest(http.MethodGet, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -96,7 +97,7 @@ func TestHandleLicenseStatus_FreeTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/license", deps.handleLicenseStatus)
 
-	req := httptest.NewRequest(http.MethodGet, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -117,7 +118,7 @@ func TestHandleLicenseStatus_PaidTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/license", deps.handleLicenseStatus)
 
-	req := httptest.NewRequest(http.MethodGet, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -149,7 +150,7 @@ func TestHandleLicenseUpload_RawBody(t *testing.T) {
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
 
-	req := httptest.NewRequest(http.MethodPost, "/license", bytes.NewReader(tokenBytes))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/license", bytes.NewReader(tokenBytes))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -196,7 +197,7 @@ func TestHandleLicenseUpload_MultipartForm(t *testing.T) {
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
 
-	req := httptest.NewRequest(http.MethodPost, "/license", &buf)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/license", &buf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -215,7 +216,7 @@ func TestHandleLicenseUpload_InvalidKey(t *testing.T) {
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
 
-	req := httptest.NewRequest(http.MethodPost, "/license", bytes.NewReader([]byte("garbage-data")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/license", bytes.NewReader([]byte("garbage-data")))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -234,7 +235,7 @@ func TestHandleLicenseUpload_EmptyBody(t *testing.T) {
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
 
-	req := httptest.NewRequest(http.MethodPost, "/license", bytes.NewReader([]byte{}))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/license", bytes.NewReader([]byte{}))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
@@ -248,7 +249,7 @@ func TestHandleLicenseUpload_NilValidator(t *testing.T) {
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
 
-	req := httptest.NewRequest(http.MethodPost, "/license", bytes.NewReader([]byte("data")))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/license", bytes.NewReader([]byte("data")))
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -271,7 +272,7 @@ func TestHandleLicenseRemove_WithExistingKey(t *testing.T) {
 	e := echo.New()
 	e.DELETE("/license", deps.handleLicenseRemove)
 
-	req := httptest.NewRequest(http.MethodDelete, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -298,7 +299,7 @@ func TestHandleLicenseRemove_NoExistingKey(t *testing.T) {
 	e := echo.New()
 	e.DELETE("/license", deps.handleLicenseRemove)
 
-	req := httptest.NewRequest(http.MethodDelete, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -312,7 +313,7 @@ func TestHandleLicenseRemove_NilValidator(t *testing.T) {
 	e := echo.New()
 	e.DELETE("/license", deps.handleLicenseRemove)
 
-	req := httptest.NewRequest(http.MethodDelete, "/license", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/license", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -347,7 +348,7 @@ func TestDaysRemaining(t *testing.T) {
 func TestReadLicenseBody_OversizeRejected(t *testing.T) {
 	e := echo.New()
 	bigBody := make([]byte, maxLicenseKeySize+1) //nolint:makezero // test needs zero-filled oversize buffer
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(bigBody))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(bigBody))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	rec := httptest.NewRecorder()
 

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +31,7 @@ func TestHandleUsageSummary_FreeTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -79,7 +80,7 @@ func TestHandleUsageSummary_PaidTier(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -116,7 +117,7 @@ func TestHandleUsageSummary_NilValidator(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -137,7 +138,7 @@ func TestHandleUsageSummary_NilStore(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -169,7 +170,7 @@ func TestHandleUsageHistory_DefaultMonths(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -200,7 +201,7 @@ func TestHandleUsageHistory_CustomMonths(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history?months=3", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history?months=3", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -224,7 +225,7 @@ func TestHandleUsageHistory_ClampMax(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history?months=100", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history?months=100", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -240,7 +241,7 @@ func TestHandleUsageHistory_EmptyData(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -259,7 +260,7 @@ func TestHandleUsageHistory_NilStore(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
@@ -284,7 +285,7 @@ func TestHandleUsageHistory_PaidTierUnlimited(t *testing.T) {
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/usage/history", http.NoBody)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/usage/history", http.NoBody)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
