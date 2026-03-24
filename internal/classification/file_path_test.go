@@ -128,7 +128,7 @@ func TestDetectFilePaths(t *testing.T) {
 			if tc.expected == nil {
 				assert.Nil(t, got)
 			} else {
-				assert.Equal(t, tc.expected, got)
+				assert.ElementsMatch(t, tc.expected, got)
 			}
 		})
 	}

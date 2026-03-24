@@ -863,6 +863,7 @@ func (d *Dependencies) handleAuditList(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
 	}
+	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -928,6 +929,7 @@ func (d *Dependencies) handleAuditExportResponse(c *echo.Context, tenantID strin
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
 	}
+	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEventsExport(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to export audit events"})
@@ -979,6 +981,7 @@ func (d *Dependencies) handleAuditListAll(c *echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
 	}
+	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
