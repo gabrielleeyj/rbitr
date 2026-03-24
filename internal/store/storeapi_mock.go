@@ -3252,6 +3252,72 @@ func (_c *MockStoreAPI_GetTool_Call) RunAndReturn(run func(ctx context.Context, 
 	return _c
 }
 
+// GetTotalUsageForPeriod provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetTotalUsageForPeriod(ctx context.Context, period string) (int64, error) {
+	ret := _mock.Called(ctx, period)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTotalUsageForPeriod")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int64, error)); ok {
+		return returnFunc(ctx, period)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int64); ok {
+		r0 = returnFunc(ctx, period)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, period)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetTotalUsageForPeriod_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTotalUsageForPeriod'
+type MockStoreAPI_GetTotalUsageForPeriod_Call struct {
+	*mock.Call
+}
+
+// GetTotalUsageForPeriod is a helper method to define mock.On call
+//   - ctx context.Context
+//   - period string
+func (_e *MockStoreAPI_Expecter) GetTotalUsageForPeriod(ctx interface{}, period interface{}) *MockStoreAPI_GetTotalUsageForPeriod_Call {
+	return &MockStoreAPI_GetTotalUsageForPeriod_Call{Call: _e.mock.On("GetTotalUsageForPeriod", ctx, period)}
+}
+
+func (_c *MockStoreAPI_GetTotalUsageForPeriod_Call) Run(run func(ctx context.Context, period string)) *MockStoreAPI_GetTotalUsageForPeriod_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTotalUsageForPeriod_Call) Return(n int64, err error) *MockStoreAPI_GetTotalUsageForPeriod_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetTotalUsageForPeriod_Call) RunAndReturn(run func(ctx context.Context, period string) (int64, error)) *MockStoreAPI_GetTotalUsageForPeriod_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetUsageMeter provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetUsageMeter(ctx context.Context, tenantID string, period string) (int64, error) {
 	ret := _mock.Called(ctx, tenantID, period)
@@ -3821,6 +3887,74 @@ func (_c *MockStoreAPI_InsertTicketLink_Call) Return(err error) *MockStoreAPI_In
 }
 
 func (_c *MockStoreAPI_InsertTicketLink_Call) RunAndReturn(run func(ctx context.Context, link *models.TicketLink) error) *MockStoreAPI_InsertTicketLink_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAggregatedUsageHistory provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListAggregatedUsageHistory(ctx context.Context, limit int) ([]PeriodUsageSummary, error) {
+	ret := _mock.Called(ctx, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAggregatedUsageHistory")
+	}
+
+	var r0 []PeriodUsageSummary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) ([]PeriodUsageSummary, error)); ok {
+		return returnFunc(ctx, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) []PeriodUsageSummary); ok {
+		r0 = returnFunc(ctx, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]PeriodUsageSummary)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, int) error); ok {
+		r1 = returnFunc(ctx, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListAggregatedUsageHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAggregatedUsageHistory'
+type MockStoreAPI_ListAggregatedUsageHistory_Call struct {
+	*mock.Call
+}
+
+// ListAggregatedUsageHistory is a helper method to define mock.On call
+//   - ctx context.Context
+//   - limit int
+func (_e *MockStoreAPI_Expecter) ListAggregatedUsageHistory(ctx interface{}, limit interface{}) *MockStoreAPI_ListAggregatedUsageHistory_Call {
+	return &MockStoreAPI_ListAggregatedUsageHistory_Call{Call: _e.mock.On("ListAggregatedUsageHistory", ctx, limit)}
+}
+
+func (_c *MockStoreAPI_ListAggregatedUsageHistory_Call) Run(run func(ctx context.Context, limit int)) *MockStoreAPI_ListAggregatedUsageHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAggregatedUsageHistory_Call) Return(periodUsageSummarys []PeriodUsageSummary, err error) *MockStoreAPI_ListAggregatedUsageHistory_Call {
+	_c.Call.Return(periodUsageSummarys, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListAggregatedUsageHistory_Call) RunAndReturn(run func(ctx context.Context, limit int) ([]PeriodUsageSummary, error)) *MockStoreAPI_ListAggregatedUsageHistory_Call {
 	_c.Call.Return(run)
 	return _c
 }

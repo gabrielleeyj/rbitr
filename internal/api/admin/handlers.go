@@ -175,6 +175,10 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	adminGroup.GET("/license", deps.handleLicenseStatus)
 	adminGroup.POST("/license", deps.handleLicenseUpload)
 	adminGroup.DELETE("/license", deps.handleLicenseRemove)
+
+	// Usage dashboard (Epic 13 Phase 6)
+	adminGroup.GET("/usage", deps.handleUsageSummary)
+	adminGroup.GET("/usage/history", deps.handleUsageHistory)
 }
 
 func (d *Dependencies) requireTenantVisible(next echo.HandlerFunc) echo.HandlerFunc {

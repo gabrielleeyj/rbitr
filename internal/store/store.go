@@ -172,6 +172,10 @@ type StoreAPI interface {
 	GetUsageMeter(ctx context.Context, tenantID, period string) (int64, error)
 	ListUsageMeters(ctx context.Context, tenantID string, limit int) ([]UsageMeterRecord, error)
 
+	// Usage dashboard (Epic 13 Phase 6)
+	GetTotalUsageForPeriod(ctx context.Context, period string) (int64, error)
+	ListAggregatedUsageHistory(ctx context.Context, limit int) ([]PeriodUsageSummary, error)
+
 	// Tenant management (Epic 7)
 	CreateTenant(ctx context.Context, tenantID, name string) error
 	SetTenantEnabled(ctx context.Context, tenantID string, enabled bool) error
@@ -204,6 +208,12 @@ type UsageMeterRecord struct {
 	Period      string    `json:"period"`
 	ActionCount int64     `json:"action_count"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PeriodUsageSummary holds aggregated action counts across all tenants for a billing period.
+type PeriodUsageSummary struct {
+	Period      string `json:"period"`
+	ActionCount int64  `json:"action_count"`
 }
 
 // SSOConfig holds SSO/OIDC configuration persisted in system_settings.
