@@ -535,24 +535,20 @@ Add usage dashboard endpoints and a UI component showing current consumption, li
 
 ---
 
-## Audit Log Retention Enforcement
+## Audit Log Retention Enforcement — DONE (2026-03-24)
 
-As part of the free-tier constraints, audit log retention must be enforced at 7 days. This requires a background job that prunes audit records older than the entitlement's `audit_retention_days`.
+Free-tier audit retention uses **soft retention** (visibility filtering) rather than physical deletion. This prevents data loss when a paid customer's license expires — their audit history is hidden from queries but not destroyed. Upgrading again restores full visibility.
 
 ### Implementation
 
-- Add a periodic cleanup job in `internal/audit/retention.go`
-- Job runs daily, deletes audit records where `created_at < now() - retention_days`
-- Retention period resolved from current entitlements (7 days free, 90+ days paid)
-- Job must be idempotent and use batch deletes to avoid lock contention
+- **Visibility filter** (`internal/api/admin/audit_visibility.go`): Computes a visibility floor based on the current license tier's `AuditRetentionDays`. Free tier = 7 days; paid tier = no restriction (nil).
+- **Applied to all audit endpoints**: `handleAuditList`, `handleAuditListAll`, and `handleAuditExportResponse` apply the visibility floor via `applyVisibilityFloor(from, floor)`. If the user supplies an explicit `from` parameter that is narrower than the floor, their value is preserved.
+- **Retention scheduler unchanged**: The existing `AuditRetentionScheduler` continues to delete based on the admin-configured `audit_retention_days` setting (default 365 days). It is not tier-aware — physical deletion only happens at the admin-configured boundary.
+- **No data loss on downgrade**: When a paid license expires, the visibility filter kicks in (7-day window) but no data is deleted. Renewing the license immediately restores full audit history.
 
-### Tasks
+### Design Decision
 
-- [ ] Implement retention cleanup job
-- [ ] Add retention period resolution from entitlements
-- [ ] Add configuration for cleanup schedule
-- [ ] Write unit tests for retention logic
-- [ ] Write integration test for cleanup job
+Option 2 ("never delete, only filter visibility") was chosen over physical deletion to avoid irreversible data loss during license transitions. The tradeoff is slightly higher storage usage for free-tier installations, which is acceptable given the low volume (10k actions/month cap).
 
 ---
 
