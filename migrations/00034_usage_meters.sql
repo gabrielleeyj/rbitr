@@ -2,7 +2,7 @@
 -- Used to enforce free-tier quota (10k actions/month).
 -- +goose Up
 CREATE TABLE IF NOT EXISTS rbitr.usage_meters (
-    tenant_id    UUID NOT NULL,
+    tenant_id    TEXT NOT NULL REFERENCES rbitr.tenants(tenant_id),
     period       TEXT NOT NULL CHECK (period ~ '^\d{4}-\d{2}$'),
     action_count BIGINT NOT NULL DEFAULT 0,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -120,6 +120,69 @@ func (_c *MockStoreAPI_ApproveApprovalRequest_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// ArchiveTool provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ArchiveTool(ctx context.Context, tenantID string, toolID string) error {
+	ret := _mock.Called(ctx, tenantID, toolID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ArchiveTool")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, toolID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_ArchiveTool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ArchiveTool'
+type MockStoreAPI_ArchiveTool_Call struct {
+	*mock.Call
+}
+
+// ArchiveTool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - toolID string
+func (_e *MockStoreAPI_Expecter) ArchiveTool(ctx interface{}, tenantID interface{}, toolID interface{}) *MockStoreAPI_ArchiveTool_Call {
+	return &MockStoreAPI_ArchiveTool_Call{Call: _e.mock.On("ArchiveTool", ctx, tenantID, toolID)}
+}
+
+func (_c *MockStoreAPI_ArchiveTool_Call) Run(run func(ctx context.Context, tenantID string, toolID string)) *MockStoreAPI_ArchiveTool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ArchiveTool_Call) Return(err error) *MockStoreAPI_ArchiveTool_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ArchiveTool_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string) error) *MockStoreAPI_ArchiveTool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ClaimApprovalExecution provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ClaimApprovalExecution(ctx context.Context, tenantID string, approvalRequestID string, tokenHash string, requestHash string, executingAt time.Time) error {
 	ret := _mock.Called(ctx, tenantID, approvalRequestID, tokenHash, requestHash, executingAt)
@@ -3891,6 +3954,63 @@ func (_c *MockStoreAPI_InsertTicketLink_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// InsertTool provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) InsertTool(ctx context.Context, tool *models.Tool) error {
+	ret := _mock.Called(ctx, tool)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertTool")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *models.Tool) error); ok {
+		r0 = returnFunc(ctx, tool)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_InsertTool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertTool'
+type MockStoreAPI_InsertTool_Call struct {
+	*mock.Call
+}
+
+// InsertTool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tool *models.Tool
+func (_e *MockStoreAPI_Expecter) InsertTool(ctx interface{}, tool interface{}) *MockStoreAPI_InsertTool_Call {
+	return &MockStoreAPI_InsertTool_Call{Call: _e.mock.On("InsertTool", ctx, tool)}
+}
+
+func (_c *MockStoreAPI_InsertTool_Call) Run(run func(ctx context.Context, tool *models.Tool)) *MockStoreAPI_InsertTool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *models.Tool
+		if args[1] != nil {
+			arg1 = args[1].(*models.Tool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertTool_Call) Return(err error) *MockStoreAPI_InsertTool_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_InsertTool_Call) RunAndReturn(run func(ctx context.Context, tool *models.Tool) error) *MockStoreAPI_InsertTool_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListAggregatedUsageHistory provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListAggregatedUsageHistory(ctx context.Context, limit int) ([]PeriodUsageSummary, error) {
 	ret := _mock.Called(ctx, limit)
@@ -5228,8 +5348,8 @@ func (_c *MockStoreAPI_ListTicketLinks_Call) RunAndReturn(run func(ctx context.C
 }
 
 // ListTools provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string) ([]models.Tool, error) {
-	ret := _mock.Called(ctx, tenantID)
+func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error) {
+	ret := _mock.Called(ctx, tenantID, includeArchived)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListTools")
@@ -5237,18 +5357,18 @@ func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string) ([]mo
 
 	var r0 []models.Tool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]models.Tool, error)); ok {
-		return returnFunc(ctx, tenantID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool) ([]models.Tool, error)); ok {
+		return returnFunc(ctx, tenantID, includeArchived)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []models.Tool); ok {
-		r0 = returnFunc(ctx, tenantID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool) []models.Tool); ok {
+		r0 = returnFunc(ctx, tenantID, includeArchived)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]models.Tool)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, tenantID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool) error); ok {
+		r1 = returnFunc(ctx, tenantID, includeArchived)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -5263,11 +5383,12 @@ type MockStoreAPI_ListTools_Call struct {
 // ListTools is a helper method to define mock.On call
 //   - ctx context.Context
 //   - tenantID string
-func (_e *MockStoreAPI_Expecter) ListTools(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListTools_Call {
-	return &MockStoreAPI_ListTools_Call{Call: _e.mock.On("ListTools", ctx, tenantID)}
+//   - includeArchived bool
+func (_e *MockStoreAPI_Expecter) ListTools(ctx interface{}, tenantID interface{}, includeArchived interface{}) *MockStoreAPI_ListTools_Call {
+	return &MockStoreAPI_ListTools_Call{Call: _e.mock.On("ListTools", ctx, tenantID, includeArchived)}
 }
 
-func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListTools_Call {
+func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantID string, includeArchived bool)) *MockStoreAPI_ListTools_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -5277,9 +5398,14 @@ func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantI
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 bool
+		if args[2] != nil {
+			arg2 = args[2].(bool)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -5290,7 +5416,7 @@ func (_c *MockStoreAPI_ListTools_Call) Return(tools []models.Tool, err error) *M
 	return _c
 }
 
-func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
+func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5761,6 +5887,69 @@ func (_c *MockStoreAPI_ReleaseAdvisoryLock_Call) Return(err error) *MockStoreAPI
 }
 
 func (_c *MockStoreAPI_ReleaseAdvisoryLock_Call) RunAndReturn(run func(ctx context.Context, key int64) error) *MockStoreAPI_ReleaseAdvisoryLock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RestoreTool provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) RestoreTool(ctx context.Context, tenantID string, toolID string) error {
+	ret := _mock.Called(ctx, tenantID, toolID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RestoreTool")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, toolID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_RestoreTool_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RestoreTool'
+type MockStoreAPI_RestoreTool_Call struct {
+	*mock.Call
+}
+
+// RestoreTool is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - toolID string
+func (_e *MockStoreAPI_Expecter) RestoreTool(ctx interface{}, tenantID interface{}, toolID interface{}) *MockStoreAPI_RestoreTool_Call {
+	return &MockStoreAPI_RestoreTool_Call{Call: _e.mock.On("RestoreTool", ctx, tenantID, toolID)}
+}
+
+func (_c *MockStoreAPI_RestoreTool_Call) Run(run func(ctx context.Context, tenantID string, toolID string)) *MockStoreAPI_RestoreTool_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_RestoreTool_Call) Return(err error) *MockStoreAPI_RestoreTool_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_RestoreTool_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string) error) *MockStoreAPI_RestoreTool_Call {
 	_c.Call.Return(run)
 	return _c
 }

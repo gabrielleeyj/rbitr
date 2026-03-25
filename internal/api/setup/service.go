@@ -128,6 +128,9 @@ decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 10
 } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
 	input.action_type
 	allow_actions[input.action_type]
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_mcp_tools", 15, "ALLOW_MCP", "Policy: allow MCP tool calls") if {
+	input.action_type
+	startswith(input.action_type, "MCP.")
 } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
 	input.action_risk == "HIGH"
 } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {

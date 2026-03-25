@@ -71,7 +71,7 @@ func TestFeatureGate_DifferentFeatures(t *testing.T) {
 	v := testLicenseValidator(t, "free", 1, 1)
 	deps := &Dependencies{LicenseValidator: v}
 
-	features := []string{"approval_workflows", "evidence_export", "integrations", "custom_policies"}
+	features := []string{"approval_workflows", "evidence_export", "integrations"}
 	for _, feature := range features {
 		t.Run(feature, func(t *testing.T) {
 			e := echo.New()

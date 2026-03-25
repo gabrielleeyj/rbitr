@@ -20,6 +20,7 @@ var (
 	ErrBootstrapComplete = errors.New("bootstrap already completed")
 	ErrAdminWriteLocked  = errors.New("admin writes locked")
 	ErrInvalidState      = errors.New("invalid state")
+	ErrDuplicate         = errors.New("duplicate")
 )
 
 const (
@@ -62,7 +63,10 @@ type StoreAPI interface {
 	GetTenant(ctx context.Context, tenantID string) (models.TenantSummary, error)
 	GetTenantKeyHash(ctx context.Context, tenantID string) (string, error)
 	GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error)
-	ListTools(ctx context.Context, tenantID string) ([]models.Tool, error)
+	ListTools(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error)
+	InsertTool(ctx context.Context, tool *models.Tool) error
+	ArchiveTool(ctx context.Context, tenantID, toolID string) error
+	RestoreTool(ctx context.Context, tenantID, toolID string) error
 	GetPolicy(ctx context.Context, tenantID string) (models.Policy, error)
 	GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error)
 	GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error)
@@ -335,10 +339,11 @@ func (s *Store) GetTenantKeyHash(ctx context.Context, tenantID string) (string, 
 func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error) {
 	var tool models.Tool
 	var mcpUpstreamURL, description sql.NullString
+	var archivedAt sql.NullTime
 	var inputSchemaJSON []byte
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, toolID)
-	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON); err != nil {
+	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Tool{}, ErrNotFound
 		}
@@ -353,11 +358,18 @@ func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.To
 	if len(inputSchemaJSON) > 0 {
 		tool.InputSchemaJSON = json.RawMessage(inputSchemaJSON)
 	}
+	if archivedAt.Valid {
+		tool.ArchivedAt = &archivedAt.Time
+	}
 	return tool, nil
 }
 
-func (s *Store) ListTools(ctx context.Context, tenantID string) ([]models.Tool, error) {
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`
+func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error) {
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1`
+	if !includeArchived {
+		query += ` AND archived_at IS NULL`
+	}
+	query += ` ORDER BY tool_id`
 	rows, err := s.db.QueryContext(ctx, query, tenantID)
 	if err != nil {
 		return nil, err
@@ -368,8 +380,9 @@ func (s *Store) ListTools(ctx context.Context, tenantID string) ([]models.Tool, 
 	for rows.Next() {
 		var tool models.Tool
 		var mcpUpstreamURL, description sql.NullString
+		var archivedAt sql.NullTime
 		var inputSchemaJSON []byte
-		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON); err != nil {
+		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt); err != nil {
 			return nil, err
 		}
 		if mcpUpstreamURL.Valid {
@@ -381,9 +394,75 @@ func (s *Store) ListTools(ctx context.Context, tenantID string) ([]models.Tool, 
 		if len(inputSchemaJSON) > 0 {
 			tool.InputSchemaJSON = json.RawMessage(inputSchemaJSON)
 		}
+		if archivedAt.Valid {
+			tool.ArchivedAt = &archivedAt.Time
+		}
 		tools = append(tools, tool)
 	}
 	return tools, rows.Err()
+}
+
+func (s *Store) InsertTool(ctx context.Context, tool *models.Tool) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())`,
+		tool.ToolID, tool.TenantID, tool.BaseURL, tool.AuthType, tool.AuthValue, tool.Transport,
+		sql.NullString{String: tool.MCPUpstreamURL, Valid: tool.MCPUpstreamURL != ""},
+		sql.NullString{String: tool.Description, Valid: tool.Description != ""},
+		[]byte(tool.InputSchemaJSON),
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key") {
+			return ErrDuplicate
+		}
+		return err
+	}
+
+	return s.bumpTenantConfigVersion(ctx, tool.TenantID)
+}
+
+func (s *Store) ArchiveTool(ctx context.Context, tenantID, toolID string) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE rbitr.tools SET archived_at = now()
+		WHERE tenant_id = $1 AND tool_id = $2 AND archived_at IS NULL`,
+		tenantID, toolID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+
+	return s.bumpTenantConfigVersion(ctx, tenantID)
+}
+
+func (s *Store) RestoreTool(ctx context.Context, tenantID, toolID string) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE rbitr.tools SET archived_at = NULL
+		WHERE tenant_id = $1 AND tool_id = $2 AND archived_at IS NOT NULL`,
+		tenantID, toolID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+
+	return s.bumpTenantConfigVersion(ctx, tenantID)
 }
 
 func (s *Store) GetPolicy(ctx context.Context, tenantID string) (models.Policy, error) {

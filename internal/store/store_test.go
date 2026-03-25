@@ -503,19 +503,19 @@ func TestStoreGetTenantKeyHash(t *testing.T) {
 }
 
 func TestStoreGetTool(t *testing.T) {
+	cols := []string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at"}
 	cases := []struct {
 		name      string
 		rows      *sqlmock.Rows
 		expectErr error
 	}{
 		{
-			name: "found",
-			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-				AddRow("jira", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil),
+			name:     "found",
+			rows:     sqlmock.NewRows(cols).AddRow("jira", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil, nil),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}),
+			rows:      sqlmock.NewRows(cols),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -525,7 +525,7 @@ func TestStoreGetTool(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer db.Close()
-			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)
+			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)
 			mock.ExpectQuery(query).WithArgs("t1", "jira").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -541,20 +541,20 @@ func TestStoreGetTool(t *testing.T) {
 }
 
 func TestStoreListTools(t *testing.T) {
+	cols := []string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at"}
 	cases := []struct {
 		name     string
 		rows     *sqlmock.Rows
 		expected int
 	}{
 		{
-			name: "found",
-			rows: sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-				AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil),
+			name:     "found",
+			rows:     sqlmock.NewRows(cols).AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil, nil),
 			expected: 1,
 		},
 		{
 			name:     "empty",
-			rows:     sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}),
+			rows:     sqlmock.NewRows(cols),
 			expected: 0,
 		},
 	}
@@ -565,11 +565,11 @@ func TestStoreListTools(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+			query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND archived_at IS NULL ORDER BY tool_id`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
-			tools, err := st.ListTools(context.Background(), "t1")
+			tools, err := st.ListTools(context.Background(), "t1", false)
 			require.NoError(t, err)
 			require.Len(t, tools, tc.expected)
 			require.NoError(t, mock.ExpectationsWereMet())
@@ -582,11 +582,11 @@ func TestStoreListToolsError(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND archived_at IS NULL ORDER BY tool_id`)
 	mock.ExpectQuery(query).WithArgs("t1").WillReturnError(errors.New("query failed"))
 
 	st := New(db)
-	_, err = st.ListTools(context.Background(), "t1")
+	_, err = st.ListTools(context.Background(), "t1", false)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -596,14 +596,14 @@ func TestStoreListToolsRowError(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 ORDER BY tool_id`)
-	rows := sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-		AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil).
+	query := regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND archived_at IS NULL ORDER BY tool_id`)
+	rows := sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at"}).
+		AddRow("tool1", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil, nil).
 		RowError(0, errors.New("row error"))
 	mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(rows)
 
 	st := New(db)
-	_, err = st.ListTools(context.Background(), "t1")
+	_, err = st.ListTools(context.Background(), "t1", false)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

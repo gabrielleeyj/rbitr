@@ -28,6 +28,7 @@ type Tool struct {
 	MCPUpstreamURL  string          `json:"mcp_upstream_url,omitempty"`
 	Description     string          `json:"description,omitempty"`
 	InputSchemaJSON json.RawMessage `json:"input_schema_json,omitempty"`
+	ArchivedAt      *time.Time      `json:"archived_at,omitempty"`
 }
 
 type RiskOverride struct {

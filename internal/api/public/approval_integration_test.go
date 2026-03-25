@@ -86,10 +86,10 @@ func TestHandleToolCallApprovedExecutionIntegration(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "t_demo", "ar_1", sqlmock.AnyArg(), utils.HashString("token123"), requestHash).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
-		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
+		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at"}).
+			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil, nil))
 
 	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
 		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL
@@ -465,10 +465,10 @@ func TestApprovalFlowEndToEnd(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "t_demo", approvalResp.ApprovalRequestID, sqlmock.AnyArg(), utils.HashString(approvalResp.ApprovalToken), requestHash).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+	sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 		WithArgs("t_demo", "mock_internal").
-		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json"}).
-			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil))
+		WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at"}).
+			AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil, nil))
 
 	sm.ExpectExec(regexp.QuoteMeta(`UPDATE rbitr.approval_requests
 		SET status = 'EXECUTED', executed_at = $1, executed_request_id = $2, executed_decision_id = $3, last_error_code = NULL

@@ -54,7 +54,7 @@ func FreeTierDefaults() Entitlements {
 		ApprovalWorkflows:  false,
 		EvidenceExport:     false,
 		Integrations:       false,
-		CustomPolicies:     false,
+		CustomPolicies:     true,
 	}
 }
 
