@@ -578,6 +578,44 @@ Monthly subscription customers on air-gapped or self-hosted installations curren
 
 ---
 
+## Follow-up: OpenTelemetry Trace Correlation
+
+rbitr governs the *execution* layer (tool calls, approvals, policy decisions) but has no way to link its decisions to the *reasoning* layer (LLM prompts, completions, token costs) captured by external observability tools. This follow-up adds lightweight trace correlation so rbitr's governance decisions appear in the same distributed traces as the LLM calls that triggered them.
+
+### Approach: W3C Trace Context Propagation + OTel Spans
+
+rbitr does not need to become an LLM observability tool. Instead, it should emit OpenTelemetry spans and propagate trace context so that purpose-built tools (Langfuse, Auditi, Datadog, etc.) can join the full picture: "agent reasoned X → called tool Y → rbitr decided Z."
+
+### Scope
+
+1. **Accept W3C Trace Context** — Parse `traceparent` / `tracestate` headers on incoming tool calls and MCP requests. Use the incoming trace/span as parent.
+2. **Emit OTel spans** — Create spans for key gateway operations: policy evaluation, approval creation, metering check, tool forwarding. Include attributes: `tenant_id`, `agent_id`, `tool_id`, `action_type`, `decision`, `approval_request_id`.
+3. **Propagate to upstream** — Forward `traceparent` to upstream tool backends so the full request chain is traceable.
+4. **Store `trace_id` in audit trail** — Add an optional `trace_id` column to `admin_audit_events` so governance decisions can be correlated with external traces after the fact.
+5. **OTel exporter configuration** — Support OTLP exporter via standard `OTEL_EXPORTER_OTLP_ENDPOINT` env var. Disabled by default.
+
+### Non-Goals
+
+- No LLM call tracing (prompts, completions, token costs) — that's the observability tool's job
+- No bundled tracing UI — customers use their existing backend (Jaeger, Grafana Tempo, Datadog, etc.)
+- No mandatory dependency — OTel integration is opt-in; zero overhead when disabled
+
+### Tasks
+
+- [ ] Add `go.opentelemetry.io/otel` dependency
+- [ ] Implement OTel tracer provider initialization in `cmd/gateway/main.go` (OTLP exporter, disabled by default)
+- [ ] Add W3C Trace Context extraction middleware (`traceparent` / `tracestate` headers)
+- [ ] Emit spans in policy evaluation, approval creation, metering, and tool forwarding paths
+- [ ] Propagate `traceparent` header to upstream tool call requests
+- [ ] Add `trace_id` column to `admin_audit_events` table (nullable, migration)
+- [ ] Populate `trace_id` in audit event creation when trace context is present
+- [ ] Add `RBTR_OTEL_ENABLED` env var (default `false`) and `OTEL_EXPORTER_OTLP_ENDPOINT` support
+- [ ] Expose `trace_id` in audit list/export API responses
+- [ ] Write unit tests for trace context extraction and span creation
+- [ ] Update docs and runbooks with OTel configuration
+
+---
+
 ## Dependencies
 
 | Dependency | Required By | Notes |
