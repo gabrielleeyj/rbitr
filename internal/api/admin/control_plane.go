@@ -209,6 +209,7 @@ type ToolResponse struct {
 	HTTP       *HTTPConfig `json:"http,omitempty"`
 	MCP        *MCPConfig  `json:"mcp,omitempty"`
 	ArchivedAt *time.Time  `json:"archived_at,omitempty"`
+	Source     string      `json:"source,omitempty"`
 }
 
 func (d *Dependencies) handleTenantList(c *echo.Context) error {
@@ -695,7 +696,7 @@ func (d *Dependencies) handleToolsList(c *echo.Context) error {
 
 	tenantID := c.Param("tenant_id")
 	includeArchived := c.QueryParam("include_archived") == "true"
-	tools, err := d.Store.ListTools(c.Request().Context(), tenantID, includeArchived)
+	tools, err := d.Store.ListTools(c.Request().Context(), tenantID, includeArchived, false)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list tools"})
 	}
@@ -705,6 +706,7 @@ func (d *Dependencies) handleToolsList(c *echo.Context) error {
 			ToolID:     tools[i].ToolID,
 			TenantID:   tools[i].TenantID,
 			ArchivedAt: tools[i].ArchivedAt,
+			Source:     tools[i].Source,
 		}
 
 		// Add HTTP config if base_url is set

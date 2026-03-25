@@ -210,6 +210,7 @@ func toolToResponse(t models.Tool) ToolResponse {
 		ToolID:     t.ToolID,
 		TenantID:   t.TenantID,
 		ArchivedAt: t.ArchivedAt,
+		Source:     t.Source,
 	}
 	if t.BaseURL != "" {
 		resp.HTTP = &HTTPConfig{

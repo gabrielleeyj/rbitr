@@ -76,12 +76,12 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 
 	t.Run("ListTools", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().ListTools(ctx, "t1", false)
-		call.Run(func(context.Context, string, bool) {})
-		call.RunAndReturn(func(context.Context, string, bool) ([]models.Tool, error) {
+		call := storeMock.EXPECT().ListTools(ctx, "t1", false, false)
+		call.Run(func(context.Context, string, bool, bool) {})
+		call.RunAndReturn(func(context.Context, string, bool, bool) ([]models.Tool, error) {
 			return []models.Tool{}, nil
 		})
-		_, _ = storeMock.ListTools(ctx, "t1", false)
+		_, _ = storeMock.ListTools(ctx, "t1", false, false)
 	})
 
 	t.Run("GetPolicy", func(t *testing.T) {
