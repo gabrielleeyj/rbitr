@@ -774,7 +774,7 @@ func TestHandleToolsList(t *testing.T) {
 			adminKey: "key",
 			scopes:   []string{"admin:read"},
 			storeSetup: func(storeMock *store.MockStoreAPI) {
-				storeMock.On("ListTools", context.Background(), "t1").
+				storeMock.On("ListTools", context.Background(), "t1", false).
 					Return([]models.Tool{{ToolID: "tool", TenantID: "t1"}}, nil)
 			},
 			expectedCode: http.StatusOK,

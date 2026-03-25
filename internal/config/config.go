@@ -39,6 +39,7 @@ type Config struct {
 	SSODefaultScopes        []string
 	LicenseKeyPath          string
 	DevAutoTools            bool
+	OutboundAllowPrivate    bool
 	DevMockInternalURL      string
 	DevJiraURL              string
 	SetupTokenRequired      bool
@@ -90,6 +91,7 @@ func Load() Config {
 		SSODefaultScopes:        getEnvCSVDefault("RBTR_SSO_DEFAULT_SCOPES", []string{"admin:read", "admin:write"}),
 		LicenseKeyPath:          getEnv("RBTR_LICENSE_KEY_PATH", "/etc/rbitr/license.key"),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
+		OutboundAllowPrivate:    getEnvBool("RBTR_OUTBOUND_ALLOW_PRIVATE"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
 		DevJiraURL:              getEnv("RBTR_DEV_JIRA_URL", "http://localhost:8081"),
 		SetupTokenRequired:      getEnvBool("RBTR_SETUP_TOKEN_REQUIRED"),

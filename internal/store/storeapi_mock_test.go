@@ -54,8 +54,8 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 
 	t.Run("ListTools", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		storeMock.EXPECT().ListTools(ctx, "t1").Return([]models.Tool{}, nil)
-		_, _ = storeMock.ListTools(ctx, "t1")
+		storeMock.EXPECT().ListTools(ctx, "t1", false).Return(nil, nil)
+		_, _ = storeMock.ListTools(ctx, "t1", false)
 	})
 
 	t.Run("GetPolicy", func(t *testing.T) {

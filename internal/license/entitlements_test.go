@@ -17,7 +17,7 @@ func TestFreeTierDefaults(t *testing.T) {
 	assert.False(t, e.ApprovalWorkflows)
 	assert.False(t, e.EvidenceExport)
 	assert.False(t, e.Integrations)
-	assert.False(t, e.CustomPolicies)
+	assert.True(t, e.CustomPolicies)
 }
 
 func TestPaidTierDefaults(t *testing.T) {
@@ -52,7 +52,7 @@ func TestHasFeature(t *testing.T) {
 		{"approval_workflows", true, false},
 		{"evidence_export", true, false},
 		{"integrations", true, false},
-		{"custom_policies", true, false},
+		{"custom_policies", true, true},
 		{"nonexistent", false, false},
 	}
 

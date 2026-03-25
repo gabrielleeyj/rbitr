@@ -268,7 +268,7 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 	configuredToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
 
 	// List tenant tools for explicit upstream selection or fallback.
-	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID)
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false)
 	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
@@ -417,7 +417,7 @@ func (d *Dependencies) handleToolsList(c *echo.Context, tenant models.Tenant, re
 	ctx := c.Request().Context()
 
 	// List all tools for the tenant
-	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID)
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false)
 	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
@@ -935,66 +935,24 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		}), nil
 
 	case string(decisionAllow):
-		// Forward to upstream MCP server
-		if tool.MCPUpstreamURL == "" {
-			if d.Metrics != nil {
-				d.Metrics.ErrorsTotal.Inc()
-			}
-			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
-				Code:    mcp.ErrorInternalError,
-				Message: "tool not configured for MCP",
-				Data: mustMarshalJSON(map[string]any{
-					"tool_id": toolID,
-				}),
-			}), nil
+		// Forward to upstream — prefer MCP, fall back to HTTP REST connector.
+		if tool.MCPUpstreamURL != "" {
+			return d.forwardViaMCP(ctx, c, req, tool, forwardReq, &adr, classificationResult)
 		}
-
-		// Create MCP client and forward request
-		mcpClient := connector.NewMCPClient(mcpClientTimeout)
-		toolStart := time.Now()
-		upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
-		toolLatencyMs := time.Since(toolStart).Milliseconds()
-
+		if tool.BaseURL != "" {
+			return d.forwardViaHTTP(ctx, c, req, tool, argumentsMap, &adr, classificationResult)
+		}
+		// Neither MCP nor HTTP configured.
 		if d.Metrics != nil {
-			d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
+			d.Metrics.ErrorsTotal.Inc()
 		}
-
-		if err != nil {
-			// Update ADR with error (no response hash)
-			if storeErr := d.Store.InsertADR(ctx, &adr); storeErr != nil {
-				c.Logger().Error("failed to persist ADR after upstream error", "error", storeErr)
-			}
-
-			if d.Metrics != nil {
-				d.Metrics.ErrorsTotal.Inc()
-			}
-			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
-				Code:    mcp.ErrorInternalError,
-				Message: "upstream tool execution failed",
-				Data: mustMarshalJSON(map[string]any{
-					"reason": "upstream_error",
-				}),
-			}), nil
-		}
-
-		// Compute response hash for audit trail
-		responseBytes, _ := json.Marshal(upstreamResp.Result)
-		responseHash := utils.HashBody(responseBytes)
-		adr.ResponseHash = responseHash
-
-		// Persist ADR with response hash
-		if err := d.Store.InsertADR(ctx, &adr); err != nil {
-			c.Logger().Error("failed to persist ADR after successful execution", "error", err)
-			return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
-		}
-
-		if d.Metrics != nil {
-			d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), classificationResult.ActionType).Inc()
-			d.Metrics.ToolExecTotal.Inc()
-		}
-
-		// Return upstream response directly
-		return upstreamResp, nil
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorInternalError,
+			Message: "tool not configured for MCP or HTTP",
+			Data: mustMarshalJSON(map[string]any{
+				"tool_id": toolID,
+			}),
+		}), nil
 
 	default:
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
@@ -1255,15 +1213,15 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to lookup tool")), nil
 	}
 
-	// Check if tool is configured for MCP upstream
-	if tool.MCPUpstreamURL == "" {
+	// Check if tool is configured for MCP or HTTP upstream
+	if tool.MCPUpstreamURL == "" && tool.BaseURL == "" {
 		_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, "UPSTREAM_ERROR", now)
 		if d.Metrics != nil {
 			d.Metrics.ErrorsTotal.Inc()
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorInternalError,
-			Message: "tool not configured for MCP",
+			Message: "tool not configured for MCP or HTTP",
 			Data: mustMarshalJSON(map[string]any{
 				"tool_id":             tool.ToolID,
 				"approval_request_id": approval.ApprovalRequestID,
@@ -1271,11 +1229,32 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		}), nil
 	}
 
-	// Execute tool call via upstream MCP server
-	mcpClient := connector.NewMCPClient(mcpClientTimeout)
+	// Execute tool call via upstream MCP server or HTTP fallback.
+	var upstreamResp *mcp.Response
 	toolStart := time.Now()
+
+	if tool.MCPUpstreamURL != "" {
+		mcpClient := connector.NewMCPClient(mcpClientTimeout)
+		upstreamResp, err = mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
+	} else {
+		// HTTP fallback for approved calls — extract arguments from the forward request.
+		var callParams mcp.ToolsCallParams
+		paramBytes, _ := json.Marshal(forwardReq.Params)
+		if unmarshalErr := json.Unmarshal(paramBytes, &callParams); unmarshalErr != nil {
+			_ = d.Store.MarkApprovalExecutionFailed(ctx, tenant.TenantID, approval.ApprovalRequestID, "UPSTREAM_ERROR", now)
+			return mcp.NewErrorResponse(forwardReq.ID, mcp.NewInternalError("failed to parse tool arguments")), nil
+		}
+		var argsMap map[string]any
+		if callParams.Arguments != nil {
+			_ = json.Unmarshal(callParams.Arguments, &argsMap)
+		}
+		if argsMap == nil {
+			argsMap = make(map[string]any)
+		}
+		upstreamResp, err = d.executeHTTPFallback(ctx, forwardReq, tool, argsMap)
+	}
+
 	toolLatencyMs := time.Since(toolStart).Milliseconds()
-	upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
 
 	if d.Metrics != nil {
 		d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
@@ -1511,6 +1490,153 @@ func (d *Dependencies) authenticateViaSession(c *echo.Context, tenantID string) 
 		Name:     summary.Name,
 		Enabled:  true, // existence in store implies enabled for session scope
 	}, claims.AgentID, true, nil
+}
+
+// forwardViaMCP forwards an allowed tool call to an upstream MCP server.
+func (d *Dependencies) forwardViaMCP(
+	ctx context.Context, c *echo.Context, req *mcp.Request,
+	tool models.Tool, forwardReq *mcp.Request, adr *models.ActionDecisionRecord, cr classification.Result,
+) (*mcp.Response, error) {
+	mcpClient := connector.NewMCPClient(mcpClientTimeout)
+	toolStart := time.Now()
+	upstreamResp, err := mcpClient.ForwardRequest(ctx, tool.MCPUpstreamURL, forwardReq)
+	toolLatencyMs := time.Since(toolStart).Milliseconds()
+
+	if d.Metrics != nil {
+		d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
+	}
+
+	if err != nil {
+		if storeErr := d.Store.InsertADR(ctx, adr); storeErr != nil {
+			c.Logger().Error("failed to persist ADR after upstream error", "error", storeErr)
+		}
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+		}
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorInternalError,
+			Message: "upstream tool execution failed",
+			Data: mustMarshalJSON(map[string]any{
+				"reason": "upstream_error",
+			}),
+		}), nil
+	}
+
+	responseBytes, _ := json.Marshal(upstreamResp.Result)
+	adr.ResponseHash = utils.HashBody(responseBytes)
+
+	if err := d.Store.InsertADR(ctx, adr); err != nil {
+		c.Logger().Error("failed to persist ADR after successful execution", "error", err)
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
+	}
+
+	if d.Metrics != nil {
+		d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), cr.ActionType).Inc()
+		d.Metrics.ToolExecTotal.Inc()
+	}
+
+	return upstreamResp, nil
+}
+
+// forwardViaHTTP forwards an allowed MCP tool call to an HTTP upstream using
+// the REST connector. This is the fallback for tools that have a base_url but
+// no mcp_upstream_url — the MCP arguments are mapped to an HTTP request.
+func (d *Dependencies) forwardViaHTTP(
+	ctx context.Context, c *echo.Context, req *mcp.Request,
+	tool models.Tool, arguments map[string]any, adr *models.ActionDecisionRecord, cr classification.Result,
+) (*mcp.Response, error) {
+	toolStart := time.Now()
+	upstreamResp, err := d.executeHTTPFallback(ctx, req, tool, arguments)
+	toolLatencyMs := time.Since(toolStart).Milliseconds()
+
+	if d.Metrics != nil {
+		d.Metrics.ToolLatencyMs.Observe(float64(toolLatencyMs))
+	}
+
+	if err != nil {
+		if storeErr := d.Store.InsertADR(ctx, adr); storeErr != nil {
+			c.Logger().Error("failed to persist ADR after HTTP error", "error", storeErr)
+		}
+		if d.Metrics != nil {
+			d.Metrics.ErrorsTotal.Inc()
+		}
+		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+			Code:    mcp.ErrorInternalError,
+			Message: "upstream tool execution failed",
+			Data: mustMarshalJSON(map[string]any{
+				"reason": "upstream_error",
+			}),
+		}), nil
+	}
+
+	// Compute response hash from the upstream result for audit.
+	responseBytes, _ := json.Marshal(upstreamResp.Result)
+	adr.ResponseHash = utils.HashBody(responseBytes)
+
+	if err := d.Store.InsertADR(ctx, adr); err != nil {
+		c.Logger().Error("failed to persist ADR after successful HTTP execution", "error", err)
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to persist decision")), nil
+	}
+
+	if d.Metrics != nil {
+		d.Metrics.DecisionsTotal.WithLabelValues(string(decisionAllow), cr.ActionType).Inc()
+		d.Metrics.ToolExecTotal.Inc()
+	}
+
+	return upstreamResp, nil
+}
+
+// executeHTTPFallback executes a tool call via the REST connector and returns
+// an MCP-shaped response. Used by both the direct and approved-call paths.
+func (d *Dependencies) executeHTTPFallback(
+	ctx context.Context, req *mcp.Request, tool models.Tool, arguments map[string]any,
+) (*mcp.Response, error) {
+	if d.Connector == nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("HTTP connector not configured")), nil
+	}
+
+	path, _ := arguments["path"].(string)
+	if path == "" {
+		path = "/"
+	}
+	method, _ := arguments["method"].(string)
+	if method == "" {
+		method = http.MethodPost
+	}
+
+	url := strings.TrimRight(tool.BaseURL, "/") + path
+
+	bodyArgs := make(map[string]any, len(arguments))
+	for k, v := range arguments {
+		if k == "path" || k == "method" || k == "_rbitr_approval_token" || k == "_rbitr_approval_request_id" {
+			continue
+		}
+		bodyArgs[k] = v
+	}
+	bodyBytes, err := json.Marshal(bodyArgs)
+	if err != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to serialize arguments")), nil
+	}
+
+	headers := map[string]string{"Content-Type": "application/json"}
+	applyToolAuth(headers, &tool)
+
+	resp, err := d.Connector.Execute(ctx, connector.Request{
+		Method:  method,
+		URL:     url,
+		Headers: headers,
+		Body:    bodyBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return mcp.NewSuccessResponse(req.ID, mcp.ToolsCallResult{
+		Content: []mcp.Content{{
+			Type: "text",
+			Text: string(resp.Body),
+		}},
+	})
 }
 
 // extractClientIP returns the client IP address from the echo context.

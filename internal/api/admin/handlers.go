@@ -96,6 +96,10 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	approvalGroup.POST("/approvals/:approval_request_id/revoke", deps.handleApprovalRevoke)
 
 	tenantGroup.GET("/tools", deps.handleToolsList)
+	tenantGroup.POST("/tools", deps.handleToolCreate)
+	tenantGroup.GET("/tools/:tool_id", deps.handleToolGet)
+	tenantGroup.DELETE("/tools/:tool_id", deps.handleToolArchive)
+	tenantGroup.POST("/tools/:tool_id/restore", deps.handleToolRestore)
 	tenantGroup.PUT("/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
 
 	tenantGroup.GET("/audit", deps.handleAuditList)
