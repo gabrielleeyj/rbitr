@@ -338,12 +338,12 @@ func (s *Store) GetTenantKeyHash(ctx context.Context, tenantID string) (string, 
 
 func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error) {
 	var tool models.Tool
-	var mcpUpstreamURL, description sql.NullString
+	var mcpUpstreamURL, description, openapiSpecURL, openapiOperationID sql.NullString
 	var archivedAt sql.NullTime
 	var inputSchemaJSON []byte
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, toolID)
-	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source); err != nil {
+	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Tool{}, ErrNotFound
 		}
@@ -361,11 +361,17 @@ func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.To
 	if archivedAt.Valid {
 		tool.ArchivedAt = &archivedAt.Time
 	}
+	if openapiSpecURL.Valid {
+		tool.OpenAPISpecURL = openapiSpecURL.String
+	}
+	if openapiOperationID.Valid {
+		tool.OpenAPIOperationID = openapiOperationID.String
+	}
 	return tool, nil
 }
 
 func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error) {
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source FROM rbitr.tools WHERE tenant_id = $1`
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1`
 	if !includeArchived {
 		query += ` AND archived_at IS NULL`
 	}
@@ -382,10 +388,10 @@ func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived 
 	var tools []models.Tool
 	for rows.Next() {
 		var tool models.Tool
-		var mcpUpstreamURL, description sql.NullString
+		var mcpUpstreamURL, description, openapiSpecURL, openapiOperationID sql.NullString
 		var archivedAt sql.NullTime
 		var inputSchemaJSON []byte
-		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source); err != nil {
+		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID); err != nil {
 			return nil, err
 		}
 		if mcpUpstreamURL.Valid {
@@ -399,6 +405,12 @@ func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived 
 		}
 		if archivedAt.Valid {
 			tool.ArchivedAt = &archivedAt.Time
+		}
+		if openapiSpecURL.Valid {
+			tool.OpenAPISpecURL = openapiSpecURL.String
+		}
+		if openapiOperationID.Valid {
+			tool.OpenAPIOperationID = openapiOperationID.String
 		}
 		tools = append(tools, tool)
 	}
@@ -415,13 +427,15 @@ func (s *Store) InsertTool(ctx context.Context, tool *models.Tool) error {
 		source = "admin"
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, source, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())`,
+		INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, source, openapi_spec_url, openapi_operation_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())`,
 		tool.ToolID, tool.TenantID, tool.BaseURL, tool.AuthType, tool.AuthValue, tool.Transport,
 		sql.NullString{String: tool.MCPUpstreamURL, Valid: tool.MCPUpstreamURL != ""},
 		sql.NullString{String: tool.Description, Valid: tool.Description != ""},
 		[]byte(tool.InputSchemaJSON),
 		source,
+		sql.NullString{String: tool.OpenAPISpecURL, Valid: tool.OpenAPISpecURL != ""},
+		sql.NullString{String: tool.OpenAPIOperationID, Valid: tool.OpenAPIOperationID != ""},
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key") {

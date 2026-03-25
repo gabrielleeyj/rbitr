@@ -28,8 +28,10 @@ type Tool struct {
 	MCPUpstreamURL  string          `json:"mcp_upstream_url,omitempty"`
 	Description     string          `json:"description,omitempty"`
 	InputSchemaJSON json.RawMessage `json:"input_schema_json,omitempty"`
-	ArchivedAt      *time.Time      `json:"archived_at,omitempty"`
-	Source          string          `json:"source,omitempty"`
+	ArchivedAt         *time.Time      `json:"archived_at,omitempty"`
+	Source             string          `json:"source,omitempty"`
+	OpenAPISpecURL     string          `json:"openapi_spec_url,omitempty"`
+	OpenAPIOperationID string          `json:"openapi_operation_id,omitempty"`
 }
 
 type RiskOverride struct {
