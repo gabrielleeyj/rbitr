@@ -841,17 +841,19 @@ func (s *dbService) insertDevTools(ctx context.Context, tx *sql.Tx, tenantID str
 	}
 	for _, tool := range devToolSeeds {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, created_at)
-			 VALUES ($1, $2, $3, $4, $5, $6)
+			`INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, source, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
 			 ON CONFLICT (tool_id, tenant_id) DO UPDATE
 			 SET base_url = EXCLUDED.base_url,
 			     auth_type = EXCLUDED.auth_type,
-			     auth_value = EXCLUDED.auth_value`,
+			     auth_value = EXCLUDED.auth_value,
+			     source = EXCLUDED.source`,
 			tool.toolID,
 			tenantID,
 			tool.baseURL,
 			tool.authType,
 			tool.authValue,
+			"dev_seed",
 			createdAt,
 		); err != nil {
 			return err

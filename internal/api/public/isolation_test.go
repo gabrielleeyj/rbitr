@@ -100,7 +100,7 @@ func TestCrossTenantMCPIsolation(t *testing.T) {
 			mockStore.On("GetTenantByKeyHash", mock.Anything, mock.Anything).
 				Return(models.Tenant{TenantID: tc.authTenant, Name: "Test", Enabled: true}, nil)
 			if tc.authTenant == tc.pathTenant {
-				mockStore.On("ListTools", mock.Anything, tc.pathTenant, false).
+				mockStore.On("ListTools", mock.Anything, tc.pathTenant, false, mock.Anything).
 					Return([]models.Tool{}, nil)
 			}
 

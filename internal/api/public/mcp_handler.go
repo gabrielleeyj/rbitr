@@ -268,7 +268,8 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 	configuredToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
 
 	// List tenant tools for explicit upstream selection or fallback.
-	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false)
+	// Exclude dev-seeded tools unless dev mode is active.
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false, !d.Config.DevAutoTools)
 	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}
@@ -416,8 +417,8 @@ func (d *Dependencies) handleInitializedNotification(req *mcp.Request) (*mcp.Res
 func (d *Dependencies) handleToolsList(c *echo.Context, tenant models.Tenant, req *mcp.Request) (*mcp.Response, error) {
 	ctx := c.Request().Context()
 
-	// List all tools for the tenant
-	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false)
+	// List all tools for the tenant, excluding dev-seeded tools in production.
+	tools, listErr := d.Store.ListTools(ctx, tenant.TenantID, false, !d.Config.DevAutoTools)
 	if listErr != nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to list tools")), nil
 	}

@@ -5348,8 +5348,8 @@ func (_c *MockStoreAPI_ListTicketLinks_Call) RunAndReturn(run func(ctx context.C
 }
 
 // ListTools provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error) {
-	ret := _mock.Called(ctx, tenantID, includeArchived)
+func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error) {
+	ret := _mock.Called(ctx, tenantID, includeArchived, excludeDevSeeds)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListTools")
@@ -5357,18 +5357,18 @@ func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, inclu
 
 	var r0 []models.Tool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool) ([]models.Tool, error)); ok {
-		return returnFunc(ctx, tenantID, includeArchived)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, bool) ([]models.Tool, error)); ok {
+		return returnFunc(ctx, tenantID, includeArchived, excludeDevSeeds)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool) []models.Tool); ok {
-		r0 = returnFunc(ctx, tenantID, includeArchived)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, bool, bool) []models.Tool); ok {
+		r0 = returnFunc(ctx, tenantID, includeArchived, excludeDevSeeds)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]models.Tool)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool) error); ok {
-		r1 = returnFunc(ctx, tenantID, includeArchived)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, bool, bool) error); ok {
+		r1 = returnFunc(ctx, tenantID, includeArchived, excludeDevSeeds)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -5384,11 +5384,12 @@ type MockStoreAPI_ListTools_Call struct {
 //   - ctx context.Context
 //   - tenantID string
 //   - includeArchived bool
-func (_e *MockStoreAPI_Expecter) ListTools(ctx interface{}, tenantID interface{}, includeArchived interface{}) *MockStoreAPI_ListTools_Call {
-	return &MockStoreAPI_ListTools_Call{Call: _e.mock.On("ListTools", ctx, tenantID, includeArchived)}
+//   - excludeDevSeeds bool
+func (_e *MockStoreAPI_Expecter) ListTools(ctx interface{}, tenantID interface{}, includeArchived interface{}, excludeDevSeeds interface{}) *MockStoreAPI_ListTools_Call {
+	return &MockStoreAPI_ListTools_Call{Call: _e.mock.On("ListTools", ctx, tenantID, includeArchived, excludeDevSeeds)}
 }
 
-func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantID string, includeArchived bool)) *MockStoreAPI_ListTools_Call {
+func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool)) *MockStoreAPI_ListTools_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -5402,10 +5403,15 @@ func (_c *MockStoreAPI_ListTools_Call) Run(run func(ctx context.Context, tenantI
 		if args[2] != nil {
 			arg2 = args[2].(bool)
 		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -5416,7 +5422,7 @@ func (_c *MockStoreAPI_ListTools_Call) Return(tools []models.Tool, err error) *M
 	return _c
 }
 
-func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string, includeArchived bool) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
+func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
 	_c.Call.Return(run)
 	return _c
 }

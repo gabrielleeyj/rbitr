@@ -29,6 +29,7 @@ type Tool struct {
 	Description     string          `json:"description,omitempty"`
 	InputSchemaJSON json.RawMessage `json:"input_schema_json,omitempty"`
 	ArchivedAt      *time.Time      `json:"archived_at,omitempty"`
+	Source          string          `json:"source,omitempty"`
 }
 
 type RiskOverride struct {
