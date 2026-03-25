@@ -66,6 +66,7 @@ admin-api
 *.yml
 !docker-compose.yml
 !docker-compose.dev.yml
+!docker-compose.demo.yml
 !.github/
 !.github/workflows/
 !.github/workflows/*.yml
@@ -94,4 +95,8 @@ Claude.md
 # License private keys (NEVER commit)
 **/devkey.pem
 **/private.pem
+**/license-gen
 license.key
+
+# env for demo
+.env.demo
