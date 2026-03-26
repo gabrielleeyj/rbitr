@@ -193,8 +193,8 @@ func TestMockStoreAPIExpectations(t *testing.T) {
 
 	t.Run("UpdateToolConfig", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		storeMock.EXPECT().UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token").Return(nil)
-		_ = storeMock.UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token")
+		storeMock.EXPECT().UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token", mock.Anything).Return(nil)
+		_ = storeMock.UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token", nil)
 	})
 
 	t.Run("UpdatePolicy", func(t *testing.T) {

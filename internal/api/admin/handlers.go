@@ -10,6 +10,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/auth"
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
+	"github.com/gabrielleeyj/rbitr/internal/credential"
 	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
@@ -20,17 +21,18 @@ import (
 )
 
 type Dependencies struct {
-	Store            store.StoreAPI
-	Notifications    *notifications.Service
-	Metrics          *telemetry.Metrics
-	Config           config.Config
-	ToolCache        *cache.TTLCache[models.Tool]
-	RiskCache        *cache.TTLCache[string]
-	OIDCProvider     *auth.OIDCProvider
-	AdminSessionMgr  *auth.AdminSessionManager
-	SecretResolver   notifications.SecretResolver
-	TicketingService *ticketing.Service
-	LicenseValidator *license.Validator
+	Store              store.StoreAPI
+	Notifications      *notifications.Service
+	Metrics            *telemetry.Metrics
+	Config             config.Config
+	ToolCache          *cache.TTLCache[models.Tool]
+	RiskCache          *cache.TTLCache[string]
+	OIDCProvider       *auth.OIDCProvider
+	AdminSessionMgr    *auth.AdminSessionManager
+	SecretResolver     notifications.SecretResolver
+	TicketingService   *ticketing.Service
+	LicenseValidator   *license.Validator
+	CredentialResolver *credential.Resolver
 }
 
 type TenantConfigRequest struct {
@@ -39,9 +41,10 @@ type TenantConfigRequest struct {
 }
 
 type ToolConfigRequest struct {
-	BaseURL   string `json:"base_url"`
-	AuthType  string `json:"auth_type"`
-	AuthValue string `json:"auth_value"`
+	BaseURL          string          `json:"base_url"`
+	AuthType         string          `json:"auth_type"`
+	AuthValue        string          `json:"auth_value"`
+	CredentialConfig json.RawMessage `json:"credential_config,omitempty"`
 }
 
 type ToolMetadataRequest struct {
@@ -100,6 +103,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.GET("/tools/:tool_id", deps.handleToolGet)
 	tenantGroup.DELETE("/tools/:tool_id", deps.handleToolArchive)
 	tenantGroup.POST("/tools/:tool_id/restore", deps.handleToolRestore)
+	tenantGroup.GET("/tools/:tool_id/credential/status", deps.handleCredentialStatus)
 	tenantGroup.POST("/tools/import/openapi", deps.handleOpenAPIImportPreview)
 	tenantGroup.POST("/tools/import/openapi/confirm", deps.handleOpenAPIImportConfirm)
 	tenantGroup.PUT("/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
@@ -296,24 +300,37 @@ func (d *Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "base_url required"})
 	}
 
+	// Validate credential_config if provided.
+	if len(payload.CredentialConfig) > 0 {
+		cfg, cfgErr := credential.ParseConfig(payload.CredentialConfig)
+		if cfgErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": cfgErr.Error()})
+		}
+		if cfgErr = cfg.Validate(); cfgErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": cfgErr.Error()})
+		}
+	}
+
 	tenantID := c.Param("tenant_id")
 	toolID := c.Param("tool_id")
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 	beforeTool, _ := d.Store.GetTool(c.Request().Context(), tenantID, toolID)
-	if err := d.Store.UpdateToolConfig(c.Request().Context(), tenantID, toolID, payload.BaseURL, payload.AuthType, payload.AuthValue); err != nil {
+	if err := d.Store.UpdateToolConfig(c.Request().Context(), tenantID, toolID, payload.BaseURL, payload.AuthType, payload.AuthValue, payload.CredentialConfig); err != nil {
 		return handleBootstrapError(c, err)
 	}
 	d.invalidateTenantCaches(tenantID)
 	beforeAudit := map[string]any{
-		"base_url":  beforeTool.BaseURL,
-		"auth_type": beforeTool.AuthType,
-		"auth_set":  beforeTool.AuthValue != "",
+		"base_url":            beforeTool.BaseURL,
+		"auth_type":           beforeTool.AuthType,
+		"auth_set":            beforeTool.AuthValue != "",
+		"credential_provider": credential.ProviderName(beforeTool.CredentialConfig),
 	}
 	afterAudit := map[string]any{
-		"base_url":  payload.BaseURL,
-		"auth_type": payload.AuthType,
-		"auth_set":  payload.AuthValue != "",
+		"base_url":            payload.BaseURL,
+		"auth_type":           payload.AuthType,
+		"auth_set":            payload.AuthValue != "",
+		"credential_provider": credential.ProviderName(payload.CredentialConfig),
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.CONFIG.UPDATE", "TOOL", toolID, beforeAudit, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{

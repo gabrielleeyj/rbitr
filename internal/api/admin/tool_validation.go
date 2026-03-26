@@ -6,10 +6,12 @@ import (
 	"regexp"
 )
 
+const authTypeNone = "none"
+
 var toolIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{2,63}$`)
 
 var validAuthTypes = map[string]bool{ //nolint:gochecknoglobals // intentional lookup map
-	"none":                      true,
+	authTypeNone:                true,
 	"bearer":                    true,
 	"api_key":                   true,
 	"oauth2_client_credentials": true,

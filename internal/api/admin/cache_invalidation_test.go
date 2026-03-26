@@ -49,7 +49,7 @@ func TestHandleToolConfigUpdateInvalidatesCaches(t *testing.T) {
 		Return(modelsAdminKey([]string{"admin:write"}), nil)
 	storeMock.On("GetTool", context.Background(), "t1", "tool").
 		Return(models.Tool{ToolID: "tool", TenantID: "t1", BaseURL: "http://old", AuthType: "bearer", AuthValue: "old"}, nil)
-	storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").
+	storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token", mock.Anything).
 		Return(nil)
 	storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 

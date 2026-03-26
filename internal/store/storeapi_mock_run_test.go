@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/mock"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
 )
@@ -306,12 +309,12 @@ func TestMockStoreAPIRunAndReturn(t *testing.T) {
 
 	t.Run("UpdateToolConfig", func(t *testing.T) {
 		storeMock := NewMockStoreAPI(t)
-		call := storeMock.EXPECT().UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token")
-		call.Run(func(context.Context, string, string, string, string, string) {})
-		call.RunAndReturn(func(context.Context, string, string, string, string, string) error {
+		call := storeMock.EXPECT().UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token", mock.Anything)
+		call.Run(func(context.Context, string, string, string, string, string, json.RawMessage) {})
+		call.RunAndReturn(func(context.Context, string, string, string, string, string, json.RawMessage) error {
 			return nil
 		})
-		_ = storeMock.UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token")
+		_ = storeMock.UpdateToolConfig(ctx, "t1", "tool", "http://example", "bearer", "token", nil)
 	})
 
 	t.Run("UpdatePolicy", func(t *testing.T) {

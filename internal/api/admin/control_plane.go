@@ -192,9 +192,11 @@ type SettingsResponse struct {
 }
 
 type HTTPConfig struct {
-	BaseURL  string `json:"base_url"`
-	AuthType string `json:"auth_type"`
-	AuthSet  bool   `json:"auth_set"`
+	BaseURL            string          `json:"base_url"`
+	AuthType           string          `json:"auth_type"`
+	AuthSet            bool            `json:"auth_set"`
+	CredentialProvider string          `json:"credential_provider,omitempty"`
+	CredentialConfig   json.RawMessage `json:"credential_config,omitempty"`
 }
 
 type MCPConfig struct {

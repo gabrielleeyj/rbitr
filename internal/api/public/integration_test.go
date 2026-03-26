@@ -126,10 +126,10 @@ func TestHandleToolCall_ConnectorAndADR(t *testing.T) {
 					AddRow("p_v1", "t_demo", integrationPolicy, time.Now()))
 
 			if tc.expectedDecision == "ALLOW" {
-				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
+				sm.ExpectQuery(regexp.QuoteMeta(`SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id, credential_config FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`)).
 					WithArgs("t_demo", "mock_internal").
-					WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at", "source", "openapi_spec_url", "openapi_operation_id"}).
-						AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil, nil, "admin", nil, nil))
+					WillReturnRows(sqlmock.NewRows([]string{"tool_id", "tenant_id", "base_url", "auth_type", "auth_value", "transport", "mcp_upstream_url", "description", "input_schema_json", "archived_at", "source", "openapi_spec_url", "openapi_operation_id", "credential_config"}).
+						AddRow("mock_internal", "t_demo", "http://mock.local", "", "", "http", nil, nil, nil, nil, "admin", nil, nil, nil))
 			}
 
 			if tc.expectApproval {

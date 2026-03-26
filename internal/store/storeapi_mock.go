@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/gabrielleeyj/rbitr/internal/models"
@@ -5348,7 +5349,7 @@ func (_c *MockStoreAPI_ListTicketLinks_Call) RunAndReturn(run func(ctx context.C
 }
 
 // ListTools provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived, excludeDevSeeds bool) ([]models.Tool, error) {
+func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error) {
 	ret := _mock.Called(ctx, tenantID, includeArchived, excludeDevSeeds)
 
 	if len(ret) == 0 {
@@ -7716,16 +7717,16 @@ func (_c *MockStoreAPI_UpdateTicketLinkStatus_Call) RunAndReturn(run func(ctx co
 }
 
 // UpdateToolConfig provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) UpdateToolConfig(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string) error {
-	ret := _mock.Called(ctx, tenantID, toolID, baseURL, authType, authValue)
+func (_mock *MockStoreAPI) UpdateToolConfig(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string, credentialConfig json.RawMessage) error {
+	ret := _mock.Called(ctx, tenantID, toolID, baseURL, authType, authValue, credentialConfig)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateToolConfig")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string) error); ok {
-		r0 = returnFunc(ctx, tenantID, toolID, baseURL, authType, authValue)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, json.RawMessage) error); ok {
+		r0 = returnFunc(ctx, tenantID, toolID, baseURL, authType, authValue, credentialConfig)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -7744,11 +7745,12 @@ type MockStoreAPI_UpdateToolConfig_Call struct {
 //   - baseURL string
 //   - authType string
 //   - authValue string
-func (_e *MockStoreAPI_Expecter) UpdateToolConfig(ctx interface{}, tenantID interface{}, toolID interface{}, baseURL interface{}, authType interface{}, authValue interface{}) *MockStoreAPI_UpdateToolConfig_Call {
-	return &MockStoreAPI_UpdateToolConfig_Call{Call: _e.mock.On("UpdateToolConfig", ctx, tenantID, toolID, baseURL, authType, authValue)}
+//   - credentialConfig json.RawMessage
+func (_e *MockStoreAPI_Expecter) UpdateToolConfig(ctx interface{}, tenantID interface{}, toolID interface{}, baseURL interface{}, authType interface{}, authValue interface{}, credentialConfig interface{}) *MockStoreAPI_UpdateToolConfig_Call {
+	return &MockStoreAPI_UpdateToolConfig_Call{Call: _e.mock.On("UpdateToolConfig", ctx, tenantID, toolID, baseURL, authType, authValue, credentialConfig)}
 }
 
-func (_c *MockStoreAPI_UpdateToolConfig_Call) Run(run func(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string)) *MockStoreAPI_UpdateToolConfig_Call {
+func (_c *MockStoreAPI_UpdateToolConfig_Call) Run(run func(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string, credentialConfig json.RawMessage)) *MockStoreAPI_UpdateToolConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -7774,6 +7776,10 @@ func (_c *MockStoreAPI_UpdateToolConfig_Call) Run(run func(ctx context.Context, 
 		if args[5] != nil {
 			arg5 = args[5].(string)
 		}
+		var arg6 json.RawMessage
+		if args[6] != nil {
+			arg6 = args[6].(json.RawMessage)
+		}
 		run(
 			arg0,
 			arg1,
@@ -7781,6 +7787,7 @@ func (_c *MockStoreAPI_UpdateToolConfig_Call) Run(run func(ctx context.Context, 
 			arg3,
 			arg4,
 			arg5,
+			arg6,
 		)
 	})
 	return _c
@@ -7791,7 +7798,7 @@ func (_c *MockStoreAPI_UpdateToolConfig_Call) Return(err error) *MockStoreAPI_Up
 	return _c
 }
 
-func (_c *MockStoreAPI_UpdateToolConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string) error) *MockStoreAPI_UpdateToolConfig_Call {
+func (_c *MockStoreAPI_UpdateToolConfig_Call) RunAndReturn(run func(ctx context.Context, tenantID string, toolID string, baseURL string, authType string, authValue string, credentialConfig json.RawMessage) error) *MockStoreAPI_UpdateToolConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
