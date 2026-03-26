@@ -43,7 +43,7 @@ func detectFilePathsRecursive(v any, paths *[]string) {
 }
 
 // IsFilePath returns true if value looks like a filesystem path.
-// Excludes URLs, email addresses, and other non-path strings.
+// Excludes URLs, email addresses, HTTP API paths, and other non-path strings.
 func IsFilePath(value string) bool {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -57,6 +57,12 @@ func IsFilePath(value string) bool {
 
 	// Exclude email-like strings.
 	if strings.Contains(trimmed, "@") {
+		return false
+	}
+
+	// Exclude short HTTP API paths (common pattern: /resource or /resource/id)
+	// These are typically API endpoints, not filesystem paths.
+	if isLikelyHTTPPath(trimmed) {
 		return false
 	}
 
@@ -152,4 +158,45 @@ func isURIScheme(s string) bool {
 		}
 	}
 	return false
+}
+
+const (
+	maxHTTPPathLength   = 50
+	maxHTTPPathSegments = 3
+)
+
+// isLikelyHTTPPath returns true if the path looks like an HTTP API endpoint
+// rather than a filesystem path. HTTP paths are short, have few segments,
+// and don't contain filesystem indicators like file extensions or system directories.
+func isLikelyHTTPPath(path string) bool {
+	if !strings.HasPrefix(path, "/") || strings.Contains(path, "..") {
+		return false
+	}
+
+	// Short paths with few segments are likely HTTP API paths
+	if len(path) >= maxHTTPPathLength {
+		return false
+	}
+
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) > maxHTTPPathSegments {
+		return false
+	}
+
+	// Check if any segment contains filesystem indicators
+	filesystemDirs := []string{"data", "tmp", "etc", "var", "opt", "home", "usr"}
+	for _, seg := range segments {
+		// Look for file extensions
+		if strings.Contains(seg, ".") {
+			return false
+		}
+		// Look for system directories
+		for _, dir := range filesystemDirs {
+			if seg == dir {
+				return false
+			}
+		}
+	}
+
+	return true // Likely an HTTP API path
 }

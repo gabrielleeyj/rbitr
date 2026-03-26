@@ -128,9 +128,14 @@ decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 10
 } else := decision_obj("ALLOW", input.action_risk, "rule_allow_basic_actions_v1", 10, "ALLOW_BASIC", "Policy: allow basic actions") if {
 	input.action_type
 	allow_actions[input.action_type]
-} else := decision_obj("ALLOW", input.action_risk, "rule_allow_mcp_tools", 15, "ALLOW_MCP", "Policy: allow MCP tool calls") if {
+} else := decision_obj("ALLOW", input.action_risk, "rule_allow_low_risk_mcp", 15, "ALLOW_MCP", "Policy: allow low-risk MCP tool calls") if {
 	input.action_type
 	startswith(input.action_type, "MCP.")
+	input.action_risk == "LOW"
+} else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_mcp_medium_risk", 40, "APPROVAL_MCP_MEDIUM", "Policy: approval required for medium-risk MCP tools") if {
+	input.action_type
+	startswith(input.action_type, "MCP.")
+	input.action_risk == "MEDIUM"
 } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_high_risk_unknown", 80, "HIGH_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
 	input.action_risk == "HIGH"
 } else := decision_obj("REQUIRE_APPROVAL", input.action_risk, "rule_critical_risk_unknown", 80, "CRITICAL_RISK_UNKNOWN", "Policy: approval required for high/critical risk") if {
@@ -599,11 +604,11 @@ func (s *dbService) Initialize(ctx context.Context, req *InitializeRequest) (_ I
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		 VALUES ($1, $2, $3, $4, 1)
+		`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		 VALUES ($1, $2, $3, $4, 1, $5)
 		 ON CONFLICT (tenant_id) DO UPDATE
 		 SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`,
-		normalized.tenantID, defaultPolicyVersion, now, now,
+		normalized.tenantID, defaultPolicyVersion, now, now, now,
 	)
 	if err != nil {
 		_ = s.writeSetupState(ctx, setupStateFailed, err.Error(), req, ptrTime(started), nil)

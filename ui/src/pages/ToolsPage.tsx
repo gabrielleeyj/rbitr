@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { listTools, updateTool, updateToolMetadata, type ToolConfig } from "@/lib/api";
+import { listTools, updateTool, updateToolMetadata, createTool, archiveTool, restoreTool, type ToolConfig } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import { toast } from "sonner";
@@ -26,6 +26,16 @@ export function ToolsPage() {
   // HTTP tool editing
   const [httpEdits, setHttpEdits] = useState<Record<string, { baseUrl: string; authType: string; authValue: string }>>({});
 
+  // HTTP tool create dialog
+  const [httpCreateDialogOpen, setHttpCreateDialogOpen] = useState(false);
+  const [httpCreateForm, setHttpCreateForm] = useState({
+    tool_id: "",
+    base_url: "",
+    auth_type: "none",
+    auth_value: "",
+    description: "",
+  });
+
   // MCP dialog state
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
   const [mcpCreateMode, setMcpCreateMode] = useState(false);
@@ -37,6 +47,12 @@ export function ToolsPage() {
     input_schema_json: "",
   });
   const [schemaError, setSchemaError] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Archive confirmation dialog
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [toolToArchive, setToolToArchive] = useState<string | null>(null);
+
   const canReadTools = hasScope(scopeToolsRead);
   const canWriteTools = hasScope(scopeToolsWrite);
 
@@ -60,9 +76,11 @@ export function ToolsPage() {
     }
   };
 
-  const httpTools = tools.filter(t => t.http);
+  const activeTools = tools.filter(t => !t.archived_at);
+  const archivedTools = tools.filter(t => t.archived_at);
+  const httpTools = activeTools.filter(t => t.http);
   // Show only tools with MCP configuration that have an upstream URL configured
-  const mcpTools = tools.filter(t => t.mcp && t.mcp.upstream_url && t.mcp.upstream_url.trim() !== "");
+  const mcpTools = activeTools.filter(t => t.mcp && t.mcp.upstream_url && t.mcp.upstream_url.trim() !== "");
 
   const handleHttpEdit = (toolId: string, field: "baseUrl" | "authType" | "authValue", value: string) => {
     setHttpEdits((prev) => ({
@@ -118,6 +136,73 @@ export function ToolsPage() {
     });
     setSchemaError("");
     setMcpDialogOpen(true);
+  };
+
+  const handleHttpCreate = async () => {
+    if (!adminKey || !tenantId || !canWriteTools) return;
+
+    if (!httpCreateForm.tool_id.trim()) {
+      toast.error("Tool ID is required");
+      return;
+    }
+    if (!httpCreateForm.base_url.trim()) {
+      toast.error("Base URL is required");
+      return;
+    }
+
+    try {
+      await createTool({ adminKey }, tenantId, {
+        tool_id: httpCreateForm.tool_id,
+        base_url: httpCreateForm.base_url,
+        auth_type: httpCreateForm.auth_type,
+        auth_value: httpCreateForm.auth_value,
+        description: httpCreateForm.description,
+        transport: "http",
+      });
+      toast.success("HTTP tool created", { description: httpCreateForm.tool_id });
+      setHttpCreateDialogOpen(false);
+      setHttpCreateForm({
+        tool_id: "",
+        base_url: "",
+        auth_type: "none",
+        auth_value: "",
+        description: "",
+      });
+      await loadTools();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create tool");
+    }
+  };
+
+  const openArchiveDialog = (toolId: string) => {
+    setToolToArchive(toolId);
+    setArchiveDialogOpen(true);
+  };
+
+  const handleArchive = async () => {
+    if (!adminKey || !tenantId || !canWriteTools || !toolToArchive) return;
+
+    try {
+      await archiveTool({ adminKey }, tenantId, toolToArchive);
+      toast.success("Tool archived", { description: toolToArchive });
+      setArchiveDialogOpen(false);
+      setToolToArchive(null);
+      await loadTools();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to archive tool");
+    }
+  };
+
+  const handleRestore = async (toolId: string) => {
+    if (!adminKey || !tenantId || !canWriteTools) return;
+
+    try {
+      await restoreTool({ adminKey }, tenantId, toolId);
+      toast.success("Tool restored", { description: toolId });
+      await loadTools();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore tool");
+    }
   };
 
   const handleMcpUpdate = async () => {
@@ -192,8 +277,15 @@ export function ToolsPage() {
         {/* HTTP Tools Section */}
         <Card>
           <CardHeader>
-            <CardTitle>HTTP Tools</CardTitle>
-            <CardDescription>Traditional HTTP API endpoints with authentication</CardDescription>
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle>HTTP Tools</CardTitle>
+                <CardDescription>Traditional HTTP API endpoints with authentication</CardDescription>
+              </div>
+              <Button variant="default" size="sm" onClick={() => setHttpCreateDialogOpen(true)} disabled={!canWriteTools}>
+                Create HTTP Tool
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {httpTools.length === 0 ? (
@@ -243,7 +335,10 @@ export function ToolsPage() {
                           />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" onClick={() => handleHttpUpdate(tool)} disabled={!canWriteTools}>Update</Button>
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" onClick={() => handleHttpUpdate(tool)} disabled={!canWriteTools}>Update</Button>
+                            <Button size="sm" variant="destructive" onClick={() => openArchiveDialog(tool.tool_id)} disabled={!canWriteTools}>Archive</Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -304,9 +399,14 @@ export function ToolsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => openMcpEditDialog(tool)} disabled={!canWriteTools}>
-                          Edit
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" variant="outline" onClick={() => openMcpEditDialog(tool)} disabled={!canWriteTools}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => openArchiveDialog(tool.tool_id)} disabled={!canWriteTools}>
+                            Archive
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -315,7 +415,138 @@ export function ToolsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Archived Tools Section */}
+        {archivedTools.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Archived Tools</CardTitle>
+                  <CardDescription>Soft-deleted tools that can be restored</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? "Hide" : "Show"} ({archivedTools.length})
+                </Button>
+              </div>
+            </CardHeader>
+            {showArchived && (
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tool ID</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Archived At</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {archivedTools.map((tool) => (
+                      <TableRow key={tool.tool_id}>
+                        <TableCell className="font-medium">{tool.tool_id}</TableCell>
+                        <TableCell>{tool.http ? "HTTP" : "MCP"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {tool.archived_at ? new Date(tool.archived_at).toLocaleString() : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" onClick={() => handleRestore(tool.tool_id)} disabled={!canWriteTools}>
+                            Restore
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            )}
+          </Card>
+        )}
       </div>
+
+      {/* Create HTTP Tool Dialog */}
+      <Dialog open={httpCreateDialogOpen} onOpenChange={setHttpCreateDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Create HTTP Tool</DialogTitle>
+            <DialogDescription>Configure a new HTTP API endpoint with authentication</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="http_tool_id">Tool ID</Label>
+              <Input
+                id="http_tool_id"
+                placeholder="e.g., stripe, github, custom-api"
+                value={httpCreateForm.tool_id}
+                onChange={(e) => setHttpCreateForm({ ...httpCreateForm, tool_id: e.target.value })}
+                disabled={!canWriteTools}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="http_base_url">Base URL</Label>
+              <Input
+                id="http_base_url"
+                placeholder="https://api.example.com"
+                value={httpCreateForm.base_url}
+                onChange={(e) => setHttpCreateForm({ ...httpCreateForm, base_url: e.target.value })}
+                disabled={!canWriteTools}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="http_auth_type">Auth Type</Label>
+              <Input
+                id="http_auth_type"
+                placeholder="none, bearer, api_key"
+                value={httpCreateForm.auth_type}
+                onChange={(e) => setHttpCreateForm({ ...httpCreateForm, auth_type: e.target.value })}
+                disabled={!canWriteTools}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="http_auth_value">Auth Value</Label>
+              <Input
+                id="http_auth_value"
+                type="password"
+                placeholder="API key or bearer token"
+                value={httpCreateForm.auth_value}
+                onChange={(e) => setHttpCreateForm({ ...httpCreateForm, auth_value: e.target.value })}
+                disabled={!canWriteTools}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="http_description">Description</Label>
+              <Textarea
+                id="http_description"
+                placeholder="Brief description of this API"
+                value={httpCreateForm.description}
+                onChange={(e) => setHttpCreateForm({ ...httpCreateForm, description: e.target.value })}
+                rows={2}
+                disabled={!canWriteTools}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHttpCreateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleHttpCreate} disabled={!canWriteTools}>Create Tool</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archive Confirmation Dialog */}
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Tool?</DialogTitle>
+            <DialogDescription>
+              This will hide "{toolToArchive}" from agents but preserve audit history. You can restore it later from the Archived Tools section.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchiveDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleArchive} disabled={!canWriteTools}>Archive Tool</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* MCP Create/Edit Dialog */}
       <Dialog open={mcpDialogOpen} onOpenChange={setMcpDialogOpen}>

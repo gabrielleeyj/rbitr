@@ -70,11 +70,28 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 		})
 	}
 
+	// Check if trial license can be uploaded (one-time-use enforcement).
+	if info.Tier == "trial" && d.Store != nil {
+		hasTrialBeenUsed, checkErr := d.Store.HasTrialLicenseBeenUsed(c.Request().Context())
+		if checkErr != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "failed to check trial license history",
+			})
+		}
+		if hasTrialBeenUsed {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error":  "TRIAL_ALREADY_USED",
+				"detail": "Trial license can only be used once per installation. This installation has already consumed its trial period.",
+			})
+		}
+	}
+
 	// Write to disk atomically (write tmp then rename).
 	keyPath := d.LicenseValidator.KeyPath()
 	if writeErr := atomicWriteFile(keyPath, data); writeErr != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": "failed to write license key file",
+			"error":  "failed to write license key file",
+			"detail": writeErr.Error(),
 		})
 	}
 

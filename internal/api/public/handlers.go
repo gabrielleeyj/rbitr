@@ -524,6 +524,17 @@ func (d *Dependencies) handleToolCall(c *echo.Context) error {
 			Reason:    firstReasonMessage(decisionResult.Reasons),
 		})
 	case "REQUIRE_APPROVAL":
+		// Check license access for approval workflows
+		if violation := d.checkFeatureAccess(c.Request().Context(), tenant.TenantID, "approval_workflows"); violation != "" {
+			if d.Metrics != nil {
+				d.Metrics.ErrorsTotal.Inc()
+			}
+			return c.JSON(http.StatusPaymentRequired, map[string]string{
+				"error":   "feature_locked",
+				"message": violation,
+			})
+		}
+
 		now := time.Now().UTC()
 		token, err := generateApprovalToken()
 		if err != nil {

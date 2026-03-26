@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, Upload, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  KeyRound,
+  Upload,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Lock,
+} from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +65,9 @@ export function LicensePage() {
       setLicense(data);
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load license status.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load license status.",
+      );
     } finally {
       setLoading(false);
     }
@@ -116,13 +126,17 @@ export function LicensePage() {
     setActionError("");
     setRemoving(true);
     try {
-      const result = await removeLicenseKey({ adminKey });
+      const result = await removeLicenseKey({ adminKey }, tenantId);
       setLicense(result);
       setConfirmOpen(false);
       refreshEntitlements();
-      toast.success("License removed", { description: "Reverted to free tier." });
+      toast.success("License removed", {
+        description: "Reverted to free tier.",
+      });
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to remove license.");
+      setActionError(
+        err instanceof Error ? err.message : "Failed to remove license.",
+      );
     } finally {
       setRemoving(false);
     }
@@ -131,7 +145,9 @@ export function LicensePage() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="text-sm text-muted-foreground">Loading license status...</div>
+        <div className="text-sm text-muted-foreground">
+          Loading license status...
+        </div>
       </div>
     );
   }
@@ -149,6 +165,7 @@ export function LicensePage() {
 
   const isValid = license?.valid ?? false;
   const tier = license?.tier ?? "free";
+  const isTrial = tier === "trial";
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -167,6 +184,22 @@ export function LicensePage() {
         </Alert>
       )}
 
+      {/* Trial license banner */}
+      {isTrial && license?.expires_at && (
+        <Alert variant="default">
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Trial License Active</strong> — Your trial license expires
+            in <strong>{license.days_remaining}</strong> day
+            {license.days_remaining !== 1 ? "s" : ""} (
+            {new Date(license.expires_at).toLocaleDateString()}). All premium
+            features are currently unlocked. Upload a paid license key to
+            continue after expiration.
+          </AlertDescription>
+        </Alert>
+      )}
+
+
       {/* Current license status */}
       <Card>
         <CardHeader>
@@ -175,7 +208,11 @@ export function LicensePage() {
               <KeyRound className="h-5 w-5 text-muted-foreground" />
               <CardTitle className="text-base">Current Plan</CardTitle>
             </div>
-            <Badge variant={isValid ? "default" : "secondary"}>
+            <Badge
+              variant={
+                isTrial ? "outline" : isValid ? "default" : "secondary"
+              }
+            >
               {tier}
             </Badge>
           </div>
@@ -212,7 +249,9 @@ export function LicensePage() {
               {license?.key_version !== undefined && (
                 <div>
                   <span className="text-muted-foreground">Key Version</span>
-                  <div className="mt-0.5 font-medium">v{license.key_version}</div>
+                  <div className="mt-0.5 font-medium">
+                    v{license.key_version}
+                  </div>
                 </div>
               )}
             </div>
@@ -230,12 +269,16 @@ export function LicensePage() {
                     <DialogHeader>
                       <DialogTitle>Remove License Key?</DialogTitle>
                       <DialogDescription>
-                        This will revert your installation to the free tier. All paid features
-                        will become unavailable. You can upload a new license key at any time.
+                        This will revert your installation to the free tier. All
+                        paid features will become unavailable. You can upload a
+                        new license key at any time.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfirmOpen(false)}
+                      >
                         Cancel
                       </Button>
                       <Button
@@ -276,7 +319,9 @@ export function LicensePage() {
             >
               <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
               <p className="text-sm font-medium">
-                {uploading ? "Uploading..." : "Drop license.key file here or click to browse"}
+                {uploading
+                  ? "Uploading..."
+                  : "Drop license.key file here or click to browse"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Ed25519-signed JWT file, max 8 KB
@@ -310,8 +355,9 @@ export function LicensePage() {
               <li>1 tenant, 1 agent, 1 active key</li>
               <li>10,000 governed actions per month</li>
               <li>7-day audit log retention</li>
-              <li>No approval workflows, integrations, or custom policies</li>
+              <li>No approval workflows or integrations</li>
               <li>No evidence export</li>
+              <li>Custom policies supported</li>
             </ul>
           </CardContent>
         </Card>

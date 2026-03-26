@@ -625,6 +625,47 @@ export function updateToolMetadata(
   });
 }
 
+export function createTool(
+  config: ApiConfig,
+  tenantId: string,
+  payload: {
+    tool_id: string;
+    base_url?: string;
+    auth_type?: string;
+    auth_value?: string;
+    description?: string;
+    transport?: string;
+    mcp_upstream_url?: string;
+    input_schema_json?: object;
+    credential_config?: object;
+  }
+): Promise<ToolConfig> {
+  return request<ToolConfig>(`/admin/tenants/${tenantId}/tools`, config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveTool(
+  config: ApiConfig,
+  tenantId: string,
+  toolId: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/tools/${toolId}`, config, {
+    method: "DELETE",
+  });
+}
+
+export function restoreTool(
+  config: ApiConfig,
+  tenantId: string,
+  toolId: string
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/tools/${toolId}/restore`, config, {
+    method: "POST",
+  });
+}
+
 export async function listRiskOverrides(config: ApiConfig, tenantId: string): Promise<RiskOverride[]> {
   const data = await request<RiskOverride[] | null>(`/admin/tenants/${tenantId}/risk-overrides`, config);
   return data ?? [];
@@ -1173,6 +1214,10 @@ export interface LicenseStatus {
   issued_at?: string;
   expires_at?: string;
   days_remaining?: number;
+  trial_active?: boolean;
+  trial_started_at?: string;
+  trial_expires_at?: string;
+  trial_days_remaining?: number;
 }
 
 export interface LicenseUploadResponse {
@@ -1201,6 +1246,7 @@ export interface EntitlementsResponse {
     monthly_action_limit: number;
     audit_retention_days: number;
   };
+  trial_active?: boolean;
 }
 
 export interface UsageGauge {

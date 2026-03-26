@@ -9,11 +9,25 @@ const (
 	// freeMonthlyActionLimit is the default monthly action quota for free tier.
 	freeMonthlyActionLimit = 10_000
 
-	// freeAuditRetentionDays is the default audit retention for free tier.
-	freeAuditRetentionDays = 7
+	// FreeAuditRetentionMax is the maximum audit retention for free tier.
+	FreeAuditRetentionMax = 7
 
-	// PaidAuditRetentionDays is the default audit retention for paid tier.
-	PaidAuditRetentionDays = 90
+	// PaidAuditRetentionMax is the maximum audit retention for paid tier.
+	// Unlimited (-1) means no enforced maximum.
+	PaidAuditRetentionMax = Unlimited
+
+	// TrialDurationDays is the number of days for the free trial period.
+	TrialDurationDays = 14
+
+	// DefaultAuditRetentionDays is the default setting when none is configured.
+	DefaultAuditRetentionDays = 365
+
+	// Tier constants
+	tierFree  = "free"
+	tierPaid  = "paid"
+	tierTrial = "trial"
+
+	hoursPerDay = 24
 )
 
 // Entitlements describes what the current installation is allowed to do.
@@ -23,7 +37,7 @@ type Entitlements struct {
 	MaxAgentsPerTenant int    `json:"max_agents_per_tenant"`
 	MaxActiveKeys      int    `json:"max_active_keys"`
 	MonthlyActionLimit int64  `json:"monthly_action_limit"`
-	AuditRetentionDays int    `json:"audit_retention_days"`
+	AuditRetentionDays int    `json:"audit_retention_days"` // Maximum allowed, not default
 	ApprovalWorkflows  bool   `json:"approval_workflows"`
 	EvidenceExport     bool   `json:"evidence_export"`
 	Integrations       bool   `json:"integrations"`
@@ -32,25 +46,26 @@ type Entitlements struct {
 
 // LicenseInfo contains the validated license metadata and resolved entitlements.
 type LicenseInfo struct {
-	Valid        bool         `json:"valid"`
-	Tier         string       `json:"tier"`
-	KeyVersion   int          `json:"key_version"`
-	Licensee     string       `json:"licensee"`
-	Email        string       `json:"email"`
-	IssuedAt     time.Time    `json:"issued_at"`
-	ExpiresAt    time.Time    `json:"expires_at"`
-	Entitlements Entitlements `json:"entitlements"`
+	Valid          bool         `json:"valid"`
+	Tier           string       `json:"tier"`
+	KeyVersion     int          `json:"key_version"`
+	Licensee       string       `json:"licensee"`
+	Email          string       `json:"email"`
+	IssuedAt       time.Time    `json:"issued_at"`
+	ExpiresAt      time.Time    `json:"expires_at"`
+	TrialExpiresAt time.Time    `json:"trial_expires_at"` // For free tier, when trial ends
+	Entitlements   Entitlements `json:"entitlements"`
 }
 
 // FreeTierDefaults returns the entitlements for an installation with no license key.
 func FreeTierDefaults() Entitlements {
 	return Entitlements{
-		Tier:               "free",
+		Tier:               tierFree,
 		MaxTenants:         1,
 		MaxAgentsPerTenant: 1,
 		MaxActiveKeys:      1,
 		MonthlyActionLimit: freeMonthlyActionLimit,
-		AuditRetentionDays: freeAuditRetentionDays,
+		AuditRetentionDays: FreeAuditRetentionMax,
 		ApprovalWorkflows:  false,
 		EvidenceExport:     false,
 		Integrations:       false,
@@ -61,12 +76,29 @@ func FreeTierDefaults() Entitlements {
 // PaidTierDefaults returns the entitlements for a valid paid license key.
 func PaidTierDefaults() Entitlements {
 	return Entitlements{
-		Tier:               "paid",
+		Tier:               tierPaid,
 		MaxTenants:         Unlimited,
 		MaxAgentsPerTenant: Unlimited,
 		MaxActiveKeys:      Unlimited,
 		MonthlyActionLimit: int64(Unlimited),
-		AuditRetentionDays: PaidAuditRetentionDays,
+		AuditRetentionDays: PaidAuditRetentionMax,
+		ApprovalWorkflows:  true,
+		EvidenceExport:     true,
+		Integrations:       true,
+		CustomPolicies:     true,
+	}
+}
+
+// TrialTierDefaults returns the entitlements for a trial license key.
+// Trial keys have same entitlements as paid tier but expire after 14 days.
+func TrialTierDefaults() Entitlements {
+	return Entitlements{
+		Tier:               tierTrial,
+		MaxTenants:         Unlimited,
+		MaxAgentsPerTenant: Unlimited,
+		MaxActiveKeys:      Unlimited,
+		MonthlyActionLimit: int64(Unlimited),
+		AuditRetentionDays: PaidAuditRetentionMax,
 		ApprovalWorkflows:  true,
 		EvidenceExport:     true,
 		Integrations:       true,
@@ -76,10 +108,14 @@ func PaidTierDefaults() Entitlements {
 
 // DefaultsForTier returns the default entitlements for the given tier string.
 func DefaultsForTier(tier string) Entitlements {
-	if tier == "paid" {
+	switch tier {
+	case tierPaid:
 		return PaidTierDefaults()
+	case tierTrial:
+		return TrialTierDefaults()
+	default:
+		return FreeTierDefaults()
 	}
-	return FreeTierDefaults()
 }
 
 // HasFeature reports whether the named boolean feature is enabled.
@@ -146,4 +182,48 @@ func MergeOverDefaults(tier string, claims *Entitlements) Entitlements {
 	merged.CustomPolicies = defaults.CustomPolicies || claims.CustomPolicies
 
 	return merged
+}
+
+// IsTrialActive returns true if the installation is in an active trial period.
+// For free tier, this checks if TrialExpiresAt is in the future.
+// For paid tier, always returns false (no trial needed).
+func (info *LicenseInfo) IsTrialActive() bool {
+	if info.Tier != tierFree {
+		return false // Paid tier has no trial
+	}
+	if info.TrialExpiresAt.IsZero() {
+		return false // No trial configured
+	}
+	return time.Now().Before(info.TrialExpiresAt)
+}
+
+// TrialDaysRemaining returns the number of days remaining in the trial.
+// Returns 0 if trial is expired or not applicable.
+func (info *LicenseInfo) TrialDaysRemaining() int {
+	if !info.IsTrialActive() {
+		return 0
+	}
+	duration := time.Until(info.TrialExpiresAt)
+	days := int(duration.Hours() / hoursPerDay)
+	if days < 0 {
+		return 0
+	}
+	return days
+}
+
+// HasFeatureAccess returns true if the feature is accessible, considering both
+// license entitlements and trial status.
+func (info *LicenseInfo) HasFeatureAccess(feature string) bool {
+	// Paid tier always has access to their entitled features
+	if info.Tier == tierPaid {
+		return info.Entitlements.HasFeature(feature)
+	}
+
+	// Free tier during active trial has access to all features
+	if info.IsTrialActive() {
+		return true
+	}
+
+	// Free tier after trial expires: only free tier features
+	return info.Entitlements.HasFeature(feature)
 }

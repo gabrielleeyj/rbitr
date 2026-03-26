@@ -170,6 +170,8 @@ type StoreAPI interface {
 	// License history (Epic 13)
 	InsertLicenseHistory(ctx context.Context, tier string, keyVersion int, licensee, email string, expiresAt time.Time, fingerprint string) error
 	GetLatestLicenseHistory(ctx context.Context) (LicenseHistoryRecord, error)
+	GetEarliestTrialStartDate(ctx context.Context) (*time.Time, error)
+	HasTrialLicenseBeenUsed(ctx context.Context) (bool, error)
 
 	// Usage metering (Epic 13 Phase 2)
 	IncrementUsageMeter(ctx context.Context, tenantID, period string) (int64, error)
@@ -520,10 +522,11 @@ func (s *Store) GetPolicy(ctx context.Context, tenantID string) (models.Policy, 
 }
 
 func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.TenantConfig, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
+	row := s.db.QueryRowContext(ctx, `SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version, trial_started_at FROM rbitr.tenant_config WHERE tenant_id = $1`, tenantID)
 	var config models.TenantConfig
 	var mcpUpstreamToolID sql.NullString
-	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode, &mcpUpstreamToolID, &config.Version); err != nil {
+	var trialStartedAt sql.NullTime
+	if err := row.Scan(&config.TenantID, &config.ActivePolicyVersion, &config.CreatedAt, &config.UpdatedAt, &config.EnforcementMode, &mcpUpstreamToolID, &config.Version, &trialStartedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.TenantConfig{}, ErrNotFound
 		}
@@ -534,6 +537,9 @@ func (s *Store) GetTenantConfig(ctx context.Context, tenantID string) (models.Te
 	}
 	if mcpUpstreamToolID.Valid {
 		config.MCPPassthroughUpstreamToolID = mcpUpstreamToolID.String
+	}
+	if trialStartedAt.Valid {
+		config.TrialStartedAt = &trialStartedAt.Time
 	}
 	return config, nil
 }
@@ -687,11 +693,12 @@ func (s *Store) PublishPolicyVersion(ctx context.Context, tenantID, policyVersio
 		return ErrNotFound
 	}
 
-	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, 1)
+	now := time.Now().UTC()
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		VALUES ($1, $2, $3, $4, 1, $5)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`,
-		tenantID, policyVersion, time.Now().UTC(), time.Now().UTC())
+		tenantID, policyVersion, now, now, now)
 	return err
 }
 

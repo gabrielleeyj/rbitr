@@ -282,6 +282,17 @@ rbitr operates as a freemium self-hosted product. Installations start on the fre
 | Integrations (Slack, Jira, etc.) | Not available | All channels |
 | Custom OPA policies | Not available | Full access |
 
+### Free Trial (14 Days)
+
+New installations include a **14-day free trial** that automatically starts when you create your first tenant. During the trial:
+- ✅ All premium features are unlocked (approval workflows, integrations, evidence export)
+- ✅ No license key required
+- ✅ Full feature evaluation before purchasing
+
+After the trial expires, premium features are locked until you upload a license key. The trial is **application-wide** (not per-tenant) and based on the earliest tenant creation date.
+
+**Trial Status:** Check your trial countdown in the UI at Settings > License or via `GET /admin/license`.
+
 ### Usage Metering
 
 Governed actions are metered per-tenant per-month. When the monthly action limit is reached, the gateway returns `429 Too Many Requests` with an upgrade prompt. Paid tier skips metering entirely (unlimited).

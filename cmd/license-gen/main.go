@@ -38,10 +38,10 @@ func main() {
 	flag.StringVar(&genKeypair, "gen-keypair", "", "generate a new Ed25519 keypair to the given directory")
 	flag.StringVar(&licensee, "licensee", "", "licensee organization name (required)")
 	flag.StringVar(&email, "email", "", "licensee contact email (required)")
-	flag.StringVar(&tier, "tier", "paid", "license tier: free or paid")
-	flag.StringVar(&expires, "expires", "", "expiry date in YYYY-MM-DD format (required)")
+	flag.StringVar(&tier, "tier", "paid", "license tier: free, paid, or trial")
+	flag.StringVar(&expires, "expires", "", "expiry date in YYYY-MM-DD format (required for free/paid, auto-set for trial)")
 	flag.IntVar(&keyVersion, "key-version", license.CurrentKeyVersion, "license key format version")
-	flag.IntVar(&retentionDays, "retention-days", license.PaidAuditRetentionDays, "audit retention days for paid tier")
+	flag.IntVar(&retentionDays, "retention-days", license.DefaultAuditRetentionDays, "audit retention days default")
 
 	flag.Parse()
 
@@ -50,14 +50,19 @@ func main() {
 		return
 	}
 
+	// For trial tier, expires is optional (auto-set to 14 days)
+	if tier == "trial" && expires == "" {
+		expires = time.Now().AddDate(0, 0, license.TrialDurationDays).Format(time.DateOnly)
+	}
+
 	if privateKeyPath == "" || licensee == "" || email == "" || expires == "" {
 		flag.Usage()
-		fmt.Fprintln(os.Stderr, "\nRequired: --private-key, --licensee, --email, --expires")
+		fmt.Fprintln(os.Stderr, "\nRequired: --private-key, --licensee, --email, --expires (or --tier=trial for auto-expiry)")
 		os.Exit(1)
 	}
 
-	if tier != "free" && tier != "paid" {
-		log.Fatalf("invalid tier %q: must be 'free' or 'paid'", tier)
+	if tier != "free" && tier != "paid" && tier != "trial" {
+		log.Fatalf("invalid tier %q: must be 'free', 'paid', or 'trial'", tier)
 	}
 
 	expiryTime, err := time.Parse(time.DateOnly, expires)
