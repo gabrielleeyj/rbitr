@@ -6,7 +6,7 @@
 |-------|--------|------|
 | **1** Tool CRUD API & UI | **DONE** | 2026-03-25 |
 | **2** Dev/Mock Tool Isolation | **DONE** | 2026-03-25 |
-| **3** OpenAPI Auto-Discovery | **TODO** | — |
+| **3** OpenAPI Auto-Discovery | **DONE** | 2026-03-26 |
 | **4** Credential Lifecycle (OAuth2, Vault) | **TODO** | — |
 | **5** Agent Tool Discovery via MCP | **TODO** | — |
 

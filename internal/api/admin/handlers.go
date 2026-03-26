@@ -100,6 +100,8 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.GET("/tools/:tool_id", deps.handleToolGet)
 	tenantGroup.DELETE("/tools/:tool_id", deps.handleToolArchive)
 	tenantGroup.POST("/tools/:tool_id/restore", deps.handleToolRestore)
+	tenantGroup.POST("/tools/import/openapi", deps.handleOpenAPIImportPreview)
+	tenantGroup.POST("/tools/import/openapi/confirm", deps.handleOpenAPIImportConfirm)
 	tenantGroup.PUT("/tools/:tool_id/metadata", deps.handleToolMetadataUpdate)
 
 	tenantGroup.GET("/audit", deps.handleAuditList)
