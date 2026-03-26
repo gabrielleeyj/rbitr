@@ -1011,7 +1011,7 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 		var req mcp.Request
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
-		assert.Equal(t, "resources/list", req.Method)
+		assert.Equal(t, "prompts/list", req.Method)
 
 		resultData, err := json.Marshal(map[string]any{
 			"resources": []any{},
@@ -1047,7 +1047,7 @@ func TestHandleMCP_PassThrough_WithUpstream(t *testing.T) {
 		Metrics: newTestMetrics(),
 	}
 
-	reqBody := `{"jsonrpc":"2.0","id":"pt-1","method":"resources/list","params":{}}`
+	reqBody := `{"jsonrpc":"2.0","id":"pt-1","method":"prompts/list","params":{}}`
 
 	ctx, req, rec := testhelpers.MakeRequestWithParams(
 		http.MethodPost,
@@ -1137,7 +1137,7 @@ func TestHandleMCP_PassThrough_UsesConfiguredUpstreamTool(t *testing.T) {
 		Metrics: newTestMetrics(),
 	}
 
-	reqBody := `{"jsonrpc":"2.0","id":"pt-configured","method":"resources/list","params":{}}`
+	reqBody := `{"jsonrpc":"2.0","id":"pt-configured","method":"prompts/list","params":{}}`
 	ctx, req, rec := testhelpers.MakeRequestWithParams(
 		http.MethodPost,
 		bytes.NewReader([]byte(reqBody)),
@@ -1190,7 +1190,7 @@ func TestHandleMCP_PassThrough_UpstreamFailure(t *testing.T) {
 		Metrics: newTestMetrics(),
 	}
 
-	reqBody := `{"jsonrpc":"2.0","id":"pt-2","method":"resources/list","params":{}}`
+	reqBody := `{"jsonrpc":"2.0","id":"pt-2","method":"prompts/list","params":{}}`
 
 	ctx, req, rec := testhelpers.MakeRequestWithParams(
 		http.MethodPost,
@@ -1336,7 +1336,7 @@ func TestHandleMCP_PassThrough_InvalidConfiguredToolReturnsInternalError(t *test
 		Metrics: newTestMetrics(),
 	}
 
-	reqBody := `{"jsonrpc":"2.0","id":"pt-invalid","method":"resources/list","params":{}}`
+	reqBody := `{"jsonrpc":"2.0","id":"pt-invalid","method":"prompts/list","params":{}}`
 	ctx, req, rec := testhelpers.MakeRequestWithParams(
 		http.MethodPost,
 		bytes.NewReader([]byte(reqBody)),
