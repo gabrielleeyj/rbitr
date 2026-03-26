@@ -168,6 +168,8 @@ const (
 	MethodNotificationsInitialized = "notifications/initialized"
 	MethodToolsList                = "tools/list"
 	MethodToolsCall                = "tools/call"
+	MethodResourcesList            = "resources/list"
+	MethodResourcesRead            = "resources/read"
 )
 
 // MCP protocol versions.
@@ -245,4 +247,34 @@ type DeniedData struct {
 	Risk          string   `json:"risk"`
 	Reasons       []string `json:"reasons"`
 	Tags          []string `json:"tags,omitempty"`
+}
+
+// Resource represents an MCP resource definition.
+type Resource struct {
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MIMEType    string `json:"mimeType,omitempty"`
+}
+
+// ResourcesListResult represents the result of a resources/list call.
+type ResourcesListResult struct {
+	Resources []Resource `json:"resources"`
+}
+
+// ResourcesReadParams represents the params for a resources/read request.
+type ResourcesReadParams struct {
+	URI string `json:"uri"`
+}
+
+// ResourceContent represents a single content item in a resource read response.
+type ResourceContent struct {
+	URI      string `json:"uri"`
+	MIMEType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
+// ResourcesReadResult represents the result of a resources/read call.
+type ResourcesReadResult struct {
+	Contents []ResourceContent `json:"contents"`
 }

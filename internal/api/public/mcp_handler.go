@@ -248,6 +248,12 @@ func (d *Dependencies) routeMCPMethod(c *echo.Context, tenant models.Tenant, age
 	case mcp.MethodToolsCall:
 		return d.handleToolsCall(c, tenant, agentID, req)
 
+	case mcp.MethodResourcesList:
+		return d.handleResourcesList(c, tenant, req)
+
+	case mcp.MethodResourcesRead:
+		return d.handleResourcesRead(c, tenant, req)
+
 	default:
 		// Unknown method - attempt pass-through to upstream MCP server
 		return d.handlePassThrough(c, tenant, req)
@@ -367,6 +373,9 @@ func (d *Dependencies) handleInitialize(c *echo.Context, tenant models.Tenant, a
 		"tools": map[string]any{
 			"listChanged": false,
 		},
+		"resources": map[string]any{
+			"listChanged": false,
+		},
 	}
 
 	result := mcp.InitializeResult{
@@ -426,23 +435,26 @@ func (d *Dependencies) handleToolsList(c *echo.Context, tenant models.Tenant, re
 	// Convert rbitr tools to MCP tool format
 	mcpTools := make([]mcp.Tool, 0, len(tools))
 	for i := range tools {
-		mcpTool := mcp.Tool{
-			Name:        tools[i].ToolID, // Use tool_id as the stable MCP tool name
-			Description: tools[i].Description,
-			InputSchema: tools[i].InputSchemaJSON,
+		schema := tools[i].InputSchemaJSON
+
+		// If no input schema is set, provide a permissive default.
+		if len(schema) == 0 {
+			schema = []byte(defaultInputSchemaStr)
 		}
 
-		// If no description is set, provide a default
-		if mcpTool.Description == "" {
-			mcpTool.Description = "No description available"
+		// Enrich HTTP tools with discovery metadata.
+		schema = enrichToolSchema(&tools[i], schema)
+
+		description := tools[i].Description
+		if description == "" {
+			description = "No description available"
 		}
 
-		// If no input schema is set, provide a permissive default
-		if len(mcpTool.InputSchema) == 0 {
-			mcpTool.InputSchema = []byte(`{"type":"object","additionalProperties":true}`)
-		}
-
-		mcpTools = append(mcpTools, mcpTool)
+		mcpTools = append(mcpTools, mcp.Tool{
+			Name:        tools[i].ToolID,
+			Description: description,
+			InputSchema: schema,
+		})
 	}
 
 	// Create result
