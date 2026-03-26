@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"github.com/gabrielleeyj/rbitr/internal/connector"
+	"github.com/gabrielleeyj/rbitr/internal/credential"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
@@ -17,14 +18,15 @@ const transportHTTP = "http"
 
 // CreateToolRequest is the request body for POST /admin/:tenant_id/tools.
 type CreateToolRequest struct {
-	ToolID          string          `json:"tool_id"`
-	BaseURL         string          `json:"base_url"`
-	AuthType        string          `json:"auth_type"`
-	AuthValue       string          `json:"auth_value"`
-	Description     string          `json:"description"`
-	Transport       string          `json:"transport"`
-	MCPUpstreamURL  string          `json:"mcp_upstream_url"`
-	InputSchemaJSON json.RawMessage `json:"input_schema_json"`
+	ToolID           string          `json:"tool_id"`
+	BaseURL          string          `json:"base_url"`
+	AuthType         string          `json:"auth_type"`
+	AuthValue        string          `json:"auth_value"`
+	Description      string          `json:"description"`
+	Transport        string          `json:"transport"`
+	MCPUpstreamURL   string          `json:"mcp_upstream_url"`
+	InputSchemaJSON  json.RawMessage `json:"input_schema_json"`
+	CredentialConfig json.RawMessage `json:"credential_config,omitempty"`
 }
 
 func (d *Dependencies) handleToolCreate(c *echo.Context) error {
@@ -51,7 +53,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	if payload.AuthType == "" {
-		payload.AuthType = "none"
+		payload.AuthType = authTypeNone
 	}
 	if err := validateAuthType(payload.AuthType); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -78,20 +80,32 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
+	// Validate credential_config if provided.
+	if len(payload.CredentialConfig) > 0 {
+		cfg, cfgErr := credential.ParseConfig(payload.CredentialConfig)
+		if cfgErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": cfgErr.Error()})
+		}
+		if cfgErr = cfg.Validate(); cfgErr != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": cfgErr.Error()})
+		}
+	}
+
 	tenantID := c.Param("tenant_id")
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, payload.ToolID)
 
 	tool := models.Tool{
-		ToolID:          payload.ToolID,
-		TenantID:        tenantID,
-		BaseURL:         payload.BaseURL,
-		AuthType:        payload.AuthType,
-		AuthValue:       payload.AuthValue,
-		Transport:       payload.Transport,
-		MCPUpstreamURL:  payload.MCPUpstreamURL,
-		Description:     payload.Description,
-		InputSchemaJSON: payload.InputSchemaJSON,
+		ToolID:           payload.ToolID,
+		TenantID:         tenantID,
+		BaseURL:          payload.BaseURL,
+		AuthType:         payload.AuthType,
+		AuthValue:        payload.AuthValue,
+		Transport:        payload.Transport,
+		MCPUpstreamURL:   payload.MCPUpstreamURL,
+		Description:      payload.Description,
+		InputSchemaJSON:  payload.InputSchemaJSON,
+		CredentialConfig: payload.CredentialConfig,
 	}
 
 	if err := d.Store.InsertTool(c.Request().Context(), &tool); err != nil {
@@ -104,11 +118,12 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 	d.invalidateTenantCaches(tenantID)
 
 	afterAudit := map[string]any{
-		"tool_id":   payload.ToolID,
-		"base_url":  payload.BaseURL,
-		"auth_type": payload.AuthType,
-		"auth_set":  payload.AuthValue != "",
-		"transport": payload.Transport,
+		"tool_id":             payload.ToolID,
+		"base_url":            payload.BaseURL,
+		"auth_type":           payload.AuthType,
+		"auth_set":            payload.AuthValue != "",
+		"transport":           payload.Transport,
+		"credential_provider": credential.ProviderName(payload.CredentialConfig),
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.CREATE", "TOOL", payload.ToolID, nil, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
@@ -216,9 +231,11 @@ func toolToResponse(t *models.Tool) ToolResponse {
 	}
 	if t.BaseURL != "" {
 		resp.HTTP = &HTTPConfig{
-			BaseURL:  t.BaseURL,
-			AuthType: t.AuthType,
-			AuthSet:  t.AuthValue != "",
+			BaseURL:            t.BaseURL,
+			AuthType:           t.AuthType,
+			AuthSet:            t.AuthValue != "" || len(t.CredentialConfig) > 0,
+			CredentialProvider: credential.ProviderName(t.CredentialConfig),
+			CredentialConfig:   credential.RedactConfig(t.CredentialConfig),
 		}
 	}
 	if t.MCPUpstreamURL != "" || t.Description != "" || len(t.InputSchemaJSON) > 0 {

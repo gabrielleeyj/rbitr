@@ -22,6 +22,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/classification"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
+	"github.com/gabrielleeyj/rbitr/internal/credential"
 	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
@@ -33,18 +34,19 @@ import (
 )
 
 type Dependencies struct {
-	Store             store.StoreAPI
-	Policy            policy.EvaluatorAPI
-	Connector         connector.Connector
-	Metrics           *telemetry.Metrics
-	Config            config.Config
-	Notifier          *notifications.Service
-	ToolCache         *cache.TTLCache[models.Tool]
-	RiskOverrideCache *cache.TTLCache[string]
-	SessionManager    *auth.SessionManager
-	ProvenanceManager *auth.ProvenanceManager
-	TicketingService  TicketingHook
-	LicenseValidator  *license.Validator
+	Store              store.StoreAPI
+	Policy             policy.EvaluatorAPI
+	Connector          connector.Connector
+	Metrics            *telemetry.Metrics
+	Config             config.Config
+	Notifier           *notifications.Service
+	ToolCache          *cache.TTLCache[models.Tool]
+	RiskOverrideCache  *cache.TTLCache[string]
+	SessionManager     *auth.SessionManager
+	ProvenanceManager  *auth.ProvenanceManager
+	TicketingService   TicketingHook
+	LicenseValidator   *license.Validator
+	CredentialResolver *credential.Resolver
 }
 
 // TicketingHook is called asynchronously when an approval is created.
@@ -961,7 +963,9 @@ func (d *Dependencies) executeToolCall(ctx context.Context, tenantID, toolID str
 
 	forwardHeaders := make(map[string]string)
 	maps.Copy(forwardHeaders, filteredHeaders)
-	applyToolAuth(forwardHeaders, &tool)
+	if err := d.resolveAndApplyAuth(ctx, forwardHeaders, &tool); err != nil {
+		return connector.Response{}, fmt.Errorf("upstream auth failed: %w", err)
+	}
 
 	return d.Connector.Execute(ctx, connector.Request{
 		Method:  payload.HTTPMethod,
@@ -1261,6 +1265,22 @@ func applyToolAuth(headers map[string]string, tool *models.Tool) {
 	if tool.AuthType == "api_key" && tool.AuthValue != "" {
 		headers["X-Api-Key"] = tool.AuthValue
 	}
+}
+
+// resolveAndApplyAuth uses the credential resolver if available, falling back to static applyToolAuth.
+func (d *Dependencies) resolveAndApplyAuth(ctx context.Context, headers map[string]string, tool *models.Tool) error {
+	if d.CredentialResolver == nil || len(tool.CredentialConfig) == 0 {
+		applyToolAuth(headers, tool)
+		return nil
+	}
+	cred, err := d.CredentialResolver.Resolve(ctx, tool.AuthType, tool.AuthValue, tool.CredentialConfig)
+	if err != nil {
+		return fmt.Errorf("credential resolution failed: %w", err)
+	}
+	if cred.HeaderName != "" {
+		headers[cred.HeaderName] = cred.HeaderValue
+	}
+	return nil
 }
 
 func firstReasonMessage(reasons []models.DecisionReason) string {

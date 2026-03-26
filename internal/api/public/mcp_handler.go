@@ -1620,7 +1620,9 @@ func (d *Dependencies) executeHTTPFallback(
 	}
 
 	headers := map[string]string{"Content-Type": "application/json"}
-	applyToolAuth(headers, tool)
+	if authErr := d.resolveAndApplyAuth(ctx, headers, tool); authErr != nil {
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("upstream auth failed")), authErr
+	}
 
 	resp, err := d.Connector.Execute(ctx, connector.Request{
 		Method:  method,

@@ -32,6 +32,7 @@ type Tool struct {
 	Source             string          `json:"source,omitempty"`
 	OpenAPISpecURL     string          `json:"openapi_spec_url,omitempty"`
 	OpenAPIOperationID string          `json:"openapi_operation_id,omitempty"`
+	CredentialConfig   json.RawMessage `json:"credential_config,omitempty"`
 }
 
 type RiskOverride struct {

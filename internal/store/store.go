@@ -94,7 +94,7 @@ type StoreAPI interface {
 	ListEvidence(ctx context.Context, tenantID string, limit int) ([]models.ActionDecisionRecord, error)
 	ListEvidenceFiltered(ctx context.Context, tenantID, decision, actionType, risk string, since *time.Time, limit int) ([]models.ActionDecisionRecord, error)
 	UpdateTenantConfig(ctx context.Context, tenantID, name, tenantKey string) error
-	UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error
+	UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string, credentialConfig json.RawMessage) error
 	UpdateToolMetadata(ctx context.Context, tenantID, toolID, description, mcpUpstreamURL string, inputSchemaJSON []byte) error
 	UpdatePolicy(ctx context.Context, tenantID, regoModule, policyVersion string) error
 	UpdateRiskOverride(ctx context.Context, tenantID, actionType, actionRisk string) error
@@ -340,10 +340,10 @@ func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.To
 	var tool models.Tool
 	var mcpUpstreamURL, description, openapiSpecURL, openapiOperationID sql.NullString
 	var archivedAt sql.NullTime
-	var inputSchemaJSON []byte
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
+	var inputSchemaJSON, credentialConfig []byte
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id, credential_config FROM rbitr.tools WHERE tenant_id = $1 AND tool_id = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, toolID)
-	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID); err != nil {
+	if err := row.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID, &credentialConfig); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Tool{}, ErrNotFound
 		}
@@ -367,11 +367,14 @@ func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.To
 	if openapiOperationID.Valid {
 		tool.OpenAPIOperationID = openapiOperationID.String
 	}
+	if len(credentialConfig) > 0 {
+		tool.CredentialConfig = json.RawMessage(credentialConfig)
+	}
 	return tool, nil
 }
 
 func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived, excludeDevSeeds bool) ([]models.Tool, error) {
-	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1`
+	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id, credential_config FROM rbitr.tools WHERE tenant_id = $1`
 	if !includeArchived {
 		query += ` AND archived_at IS NULL`
 	}
@@ -390,8 +393,8 @@ func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived,
 		var tool models.Tool
 		var mcpUpstreamURL, description, openapiSpecURL, openapiOperationID sql.NullString
 		var archivedAt sql.NullTime
-		var inputSchemaJSON []byte
-		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID); err != nil {
+		var inputSchemaJSON, credentialConfig []byte
+		if err := rows.Scan(&tool.ToolID, &tool.TenantID, &tool.BaseURL, &tool.AuthType, &tool.AuthValue, &tool.Transport, &mcpUpstreamURL, &description, &inputSchemaJSON, &archivedAt, &tool.Source, &openapiSpecURL, &openapiOperationID, &credentialConfig); err != nil {
 			return nil, err
 		}
 		if mcpUpstreamURL.Valid {
@@ -412,6 +415,9 @@ func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived,
 		if openapiOperationID.Valid {
 			tool.OpenAPIOperationID = openapiOperationID.String
 		}
+		if len(credentialConfig) > 0 {
+			tool.CredentialConfig = json.RawMessage(credentialConfig)
+		}
 		tools = append(tools, tool)
 	}
 	return tools, rows.Err()
@@ -426,9 +432,13 @@ func (s *Store) InsertTool(ctx context.Context, tool *models.Tool) error {
 	if source == "" {
 		source = "admin"
 	}
+	var credCfg []byte
+	if len(tool.CredentialConfig) > 0 {
+		credCfg = []byte(tool.CredentialConfig)
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, source, openapi_spec_url, openapi_operation_id, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())`,
+		INSERT INTO rbitr.tools (tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, source, openapi_spec_url, openapi_operation_id, credential_config, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())`,
 		tool.ToolID, tool.TenantID, tool.BaseURL, tool.AuthType, tool.AuthValue, tool.Transport,
 		sql.NullString{String: tool.MCPUpstreamURL, Valid: tool.MCPUpstreamURL != ""},
 		sql.NullString{String: tool.Description, Valid: tool.Description != ""},
@@ -436,6 +446,7 @@ func (s *Store) InsertTool(ctx context.Context, tool *models.Tool) error {
 		source,
 		sql.NullString{String: tool.OpenAPISpecURL, Valid: tool.OpenAPISpecURL != ""},
 		sql.NullString{String: tool.OpenAPIOperationID, Valid: tool.OpenAPIOperationID != ""},
+		credCfg,
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key") {
@@ -1376,13 +1387,17 @@ func (s *Store) SetTenantMCPPassthroughUpstreamToolID(ctx context.Context, tenan
 	return nil
 }
 
-func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string) error {
+func (s *Store) UpdateToolConfig(ctx context.Context, tenantID, toolID, baseURL, authType, authValue string, credentialConfig json.RawMessage) error {
 	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
 
-	if _, err := s.db.ExecContext(ctx, `UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3 WHERE tenant_id = $4 AND tool_id = $5`,
-		baseURL, authType, authValue, tenantID, toolID); err != nil {
+	var credCfg []byte
+	if len(credentialConfig) > 0 {
+		credCfg = []byte(credentialConfig)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE rbitr.tools SET base_url = $1, auth_type = $2, auth_value = $3, credential_config = $4 WHERE tenant_id = $5 AND tool_id = $6`,
+		baseURL, authType, authValue, credCfg, tenantID, toolID); err != nil {
 		return err
 	}
 

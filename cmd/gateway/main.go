@@ -22,6 +22,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/cache"
 	"github.com/gabrielleeyj/rbitr/internal/config"
 	"github.com/gabrielleeyj/rbitr/internal/connector"
+	"github.com/gabrielleeyj/rbitr/internal/credential"
 	"github.com/gabrielleeyj/rbitr/internal/db"
 	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
@@ -135,35 +136,38 @@ func main() {
 
 	sessionMgr := initSessionManager(&cfg)
 	provenanceMgr := initProvenanceManager(&cfg)
+	credResolver := credential.NewResolver(os.Getenv("VAULT_TOKEN"))
 
 	public.RegisterRoutes(e, &public.Dependencies{
-		Store:             st,
-		Policy:            policyEval,
-		Connector:         restConnector,
-		Metrics:           metrics,
-		Config:            cfg,
-		Notifier:          notificationService,
-		ToolCache:         toolCache,
-		RiskOverrideCache: riskOverrideCache,
-		SessionManager:    sessionMgr,
-		ProvenanceManager: provenanceMgr,
-		TicketingService:  ticketingService,
-		LicenseValidator:  licenseValidator,
+		Store:              st,
+		Policy:             policyEval,
+		Connector:          restConnector,
+		Metrics:            metrics,
+		Config:             cfg,
+		Notifier:           notificationService,
+		ToolCache:          toolCache,
+		RiskOverrideCache:  riskOverrideCache,
+		SessionManager:     sessionMgr,
+		ProvenanceManager:  provenanceMgr,
+		TicketingService:   ticketingService,
+		LicenseValidator:   licenseValidator,
+		CredentialResolver: credResolver,
 	})
 	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
 
 	admin.RegisterRoutes(e, &admin.Dependencies{
-		Store:            st,
-		Notifications:    notificationService,
-		Metrics:          metrics,
-		Config:           cfg,
-		ToolCache:        toolCache,
-		RiskCache:        riskOverrideCache,
-		OIDCProvider:     oidcProvider,
-		AdminSessionMgr:  adminSessionMgr,
-		SecretResolver:   secretResolver,
-		TicketingService: ticketingService,
-		LicenseValidator: licenseValidator,
+		Store:              st,
+		Notifications:      notificationService,
+		Metrics:            metrics,
+		Config:             cfg,
+		ToolCache:          toolCache,
+		RiskCache:          riskOverrideCache,
+		OIDCProvider:       oidcProvider,
+		AdminSessionMgr:    adminSessionMgr,
+		SecretResolver:     secretResolver,
+		TicketingService:   ticketingService,
+		LicenseValidator:   licenseValidator,
+		CredentialResolver: credResolver,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

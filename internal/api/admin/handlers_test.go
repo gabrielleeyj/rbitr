@@ -185,7 +185,7 @@ func TestHandleToolConfigUpdate(t *testing.T) {
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTool", context.Background(), "t1", "tool").
 					Return(models.Tool{ToolID: "tool", TenantID: "t1", BaseURL: "old", AuthType: "bearer", AuthValue: "old"}, nil)
-				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").Return(nil)
+				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token", mock.Anything).Return(nil)
 				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)
 			},
 			expectedCode: http.StatusNoContent,
@@ -198,7 +198,7 @@ func TestHandleToolConfigUpdate(t *testing.T) {
 			storeSetup: func(storeMock *store.MockStoreAPI) {
 				storeMock.On("GetTool", context.Background(), "t1", "tool").
 					Return(models.Tool{ToolID: "tool", TenantID: "t1", BaseURL: "old", AuthType: "bearer", AuthValue: "old"}, nil)
-				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token").Return(store.ErrAdminWriteLocked)
+				storeMock.On("UpdateToolConfig", context.Background(), "t1", "tool", "http://example", "bearer", "token", mock.Anything).Return(store.ErrAdminWriteLocked)
 			},
 			expectedCode: http.StatusForbidden,
 		},
