@@ -8,14 +8,14 @@ import (
 
 var toolIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{2,63}$`)
 
-var validAuthTypes = map[string]bool{
-	"none":                       true,
-	"bearer":                     true,
-	"api_key":                    true,
-	"oauth2_client_credentials":  true,
+var validAuthTypes = map[string]bool{ //nolint:gochecknoglobals // intentional lookup map
+	"none":                      true,
+	"bearer":                    true,
+	"api_key":                   true,
+	"oauth2_client_credentials": true,
 }
 
-var validTransports = map[string]bool{
+var validTransports = map[string]bool{ //nolint:gochecknoglobals // intentional lookup map
 	"http": true,
 	"mcp":  true,
 }

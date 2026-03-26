@@ -13,6 +13,8 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 )
 
+const transportHTTP = "http"
+
 // CreateToolRequest is the request body for POST /admin/:tenant_id/tools.
 type CreateToolRequest struct {
 	ToolID          string          `json:"tool_id"`
@@ -43,7 +45,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 	if payload.Transport == "" {
-		payload.Transport = "http"
+		payload.Transport = transportHTTP
 	}
 	if err := validateTransport(payload.Transport); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -56,7 +58,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 	}
 
 	switch payload.Transport {
-	case "http":
+	case transportHTTP:
 		if payload.BaseURL == "" {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "base_url required for http transport"})
 		}
@@ -115,7 +117,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusCreated, toolToResponse(tool))
+	return c.JSON(http.StatusCreated, toolToResponse(&tool))
 }
 
 func (d *Dependencies) handleToolGet(c *echo.Context) error {
@@ -134,7 +136,7 @@ func (d *Dependencies) handleToolGet(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to get tool"})
 	}
 
-	return c.JSON(http.StatusOK, toolToResponse(tool))
+	return c.JSON(http.StatusOK, toolToResponse(&tool))
 }
 
 func (d *Dependencies) handleToolArchive(c *echo.Context) error {
@@ -205,7 +207,7 @@ func (d *Dependencies) handleToolRestore(c *echo.Context) error {
 
 // toolToResponse converts a models.Tool to a ToolResponse, reusing the same
 // structure as handleToolsList in control_plane.go.
-func toolToResponse(t models.Tool) ToolResponse {
+func toolToResponse(t *models.Tool) ToolResponse {
 	resp := ToolResponse{
 		ToolID:     t.ToolID,
 		TenantID:   t.TenantID,

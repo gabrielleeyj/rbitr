@@ -3,6 +3,7 @@ package openapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -18,8 +19,9 @@ import (
 type ImportMode string
 
 const (
-	ModeSingle ImportMode = "single"
-	ModeMulti  ImportMode = "multi"
+	ModeSingle        ImportMode = "single"
+	ModeMulti         ImportMode = "multi"
+	httpClientTimeout            = 30 * time.Second
 )
 
 // ImportRequest contains the parameters for an OpenAPI import.
@@ -46,7 +48,7 @@ type GeneratedTool struct {
 }
 
 // ParseAndGenerate loads an OpenAPI spec and generates tool definitions.
-func ParseAndGenerate(ctx context.Context, req ImportRequest) ([]GeneratedTool, error) {
+func ParseAndGenerate(ctx context.Context, req *ImportRequest) ([]GeneratedTool, error) {
 	doc, err := loadSpec(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load OpenAPI spec: %w", err)
@@ -54,7 +56,7 @@ func ParseAndGenerate(ctx context.Context, req ImportRequest) ([]GeneratedTool, 
 
 	baseURL := resolveBaseURL(doc, req.BaseURLOverride)
 	if baseURL == "" {
-		return nil, fmt.Errorf("no base URL: set base_url_override or add servers to the spec")
+		return nil, errors.New("no base URL: set base_url_override or add servers to the spec")
 	}
 
 	authType := req.AuthType
@@ -75,7 +77,8 @@ func ParseAndGenerate(ctx context.Context, req ImportRequest) ([]GeneratedTool, 
 // ToModels converts generated tools into models.Tool structs ready for insertion.
 func ToModels(tools []GeneratedTool, tenantID, authValue string) []models.Tool {
 	result := make([]models.Tool, 0, len(tools))
-	for _, gt := range tools {
+	for i := range tools {
+		gt := &tools[i]
 		result = append(result, models.Tool{
 			ToolID:             gt.ToolID,
 			TenantID:           tenantID,
@@ -93,7 +96,7 @@ func ToModels(tools []GeneratedTool, tenantID, authValue string) []models.Tool {
 	return result
 }
 
-func loadSpec(ctx context.Context, req ImportRequest) (*openapi3.T, error) {
+func loadSpec(ctx context.Context, req *ImportRequest) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
 
@@ -102,11 +105,11 @@ func loadSpec(ctx context.Context, req ImportRequest) (*openapi3.T, error) {
 	}
 
 	if req.SpecURL == "" {
-		return nil, fmt.Errorf("spec_url or spec body required")
+		return nil, errors.New("spec_url or spec body required")
 	}
 
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodGet, req.SpecURL, nil)
+	httpClient := &http.Client{Timeout: httpClientTimeout}
+	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodGet, req.SpecURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("invalid spec_url: %w", err)
 	}
@@ -135,10 +138,10 @@ func resolveBaseURL(doc *openapi3.T, override string) string {
 
 // generateSingleTool creates one tool wrapping the entire API.
 // The agent chooses path and method via input arguments.
-func generateSingleTool(doc *openapi3.T, req ImportRequest, baseURL, authType string) ([]GeneratedTool, error) {
+func generateSingleTool(doc *openapi3.T, req *ImportRequest, baseURL, authType string) ([]GeneratedTool, error) {
 	paths, methods := collectPathsAndMethods(doc)
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("spec contains no operations")
+		return nil, errors.New("spec contains no operations")
 	}
 
 	toolID := req.Prefix
@@ -195,7 +198,7 @@ func generateSingleTool(doc *openapi3.T, req ImportRequest, baseURL, authType st
 }
 
 // generateMultiTools creates one tool per OpenAPI operation.
-func generateMultiTools(doc *openapi3.T, req ImportRequest, baseURL, authType string) ([]GeneratedTool, error) {
+func generateMultiTools(doc *openapi3.T, req *ImportRequest, baseURL, authType string) ([]GeneratedTool, error) {
 	var tools []GeneratedTool
 
 	sortedPaths := sortedPathKeys(doc.Paths)
@@ -230,7 +233,7 @@ func generateMultiTools(doc *openapi3.T, req ImportRequest, baseURL, authType st
 				desc = method + " " + path
 			}
 
-			schema := buildOperationSchema(pathItem, op, method, path)
+			schema := buildOperationSchema(pathItem, op)
 			schemaJSON, err := json.Marshal(schema)
 			if err != nil {
 				return nil, err
@@ -250,18 +253,20 @@ func generateMultiTools(doc *openapi3.T, req ImportRequest, baseURL, authType st
 	}
 
 	if len(tools) == 0 {
-		return nil, fmt.Errorf("spec contains no operations")
+		return nil, errors.New("spec contains no operations")
 	}
 
 	return tools, nil
 }
 
-func buildOperationSchema(pathItem *openapi3.PathItem, op *openapi3.Operation, method, path string) map[string]any {
+func buildOperationSchema(pathItem *openapi3.PathItem, op *openapi3.Operation) map[string]any {
 	properties := map[string]any{}
 	var required []string
 
 	// Merge path-level and operation-level parameters.
-	allParams := append(pathItem.Parameters, op.Parameters...)
+	allParams := make(openapi3.Parameters, 0, len(pathItem.Parameters)+len(op.Parameters))
+	allParams = append(allParams, pathItem.Parameters...)
+	allParams = append(allParams, op.Parameters...)
 
 	for _, paramRef := range allParams {
 		if paramRef == nil || paramRef.Value == nil {
@@ -348,7 +353,7 @@ func schemaType(ref *openapi3.SchemaRef) string {
 	return "string"
 }
 
-func collectPathsAndMethods(doc *openapi3.T) ([]string, []string) {
+func collectPathsAndMethods(doc *openapi3.T) (paths, methods []string) {
 	pathSet := map[string]bool{}
 	methodSet := map[string]bool{}
 
@@ -368,13 +373,13 @@ func collectPathsAndMethods(doc *openapi3.T) ([]string, []string) {
 		}
 	}
 
-	paths := make([]string, 0, len(pathSet))
+	paths = make([]string, 0, len(pathSet))
 	for p := range pathSet {
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
 
-	methods := make([]string, 0, len(methodSet))
+	methods = make([]string, 0, len(methodSet))
 	for m := range methodSet {
 		methods = append(methods, m)
 	}

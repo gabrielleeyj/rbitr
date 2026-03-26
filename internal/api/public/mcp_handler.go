@@ -938,10 +938,10 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 	case string(decisionAllow):
 		// Forward to upstream — prefer MCP, fall back to HTTP REST connector.
 		if tool.MCPUpstreamURL != "" {
-			return d.forwardViaMCP(ctx, c, req, tool, forwardReq, &adr, classificationResult)
+			return d.forwardViaMCP(ctx, c, req, &tool, forwardReq, &adr, classificationResult)
 		}
 		if tool.BaseURL != "" {
-			return d.forwardViaHTTP(ctx, c, req, tool, argumentsMap, &adr, classificationResult)
+			return d.forwardViaHTTP(ctx, c, req, &tool, argumentsMap, &adr, classificationResult)
 		}
 		// Neither MCP nor HTTP configured.
 		if d.Metrics != nil {
@@ -1252,7 +1252,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 		if argsMap == nil {
 			argsMap = make(map[string]any)
 		}
-		upstreamResp, err = d.executeHTTPFallback(ctx, forwardReq, tool, argsMap)
+		upstreamResp, err = d.executeHTTPFallback(ctx, forwardReq, &tool, argsMap)
 	}
 
 	toolLatencyMs := time.Since(toolStart).Milliseconds()
@@ -1496,7 +1496,7 @@ func (d *Dependencies) authenticateViaSession(c *echo.Context, tenantID string) 
 // forwardViaMCP forwards an allowed tool call to an upstream MCP server.
 func (d *Dependencies) forwardViaMCP(
 	ctx context.Context, c *echo.Context, req *mcp.Request,
-	tool models.Tool, forwardReq *mcp.Request, adr *models.ActionDecisionRecord, cr classification.Result,
+	tool *models.Tool, forwardReq *mcp.Request, adr *models.ActionDecisionRecord, cr classification.Result,
 ) (*mcp.Response, error) {
 	mcpClient := connector.NewMCPClient(mcpClientTimeout)
 	toolStart := time.Now()
@@ -1544,7 +1544,7 @@ func (d *Dependencies) forwardViaMCP(
 // no mcp_upstream_url — the MCP arguments are mapped to an HTTP request.
 func (d *Dependencies) forwardViaHTTP(
 	ctx context.Context, c *echo.Context, req *mcp.Request,
-	tool models.Tool, arguments map[string]any, adr *models.ActionDecisionRecord, cr classification.Result,
+	tool *models.Tool, arguments map[string]any, adr *models.ActionDecisionRecord, cr classification.Result,
 ) (*mcp.Response, error) {
 	toolStart := time.Now()
 	upstreamResp, err := d.executeHTTPFallback(ctx, req, tool, arguments)
@@ -1590,7 +1590,7 @@ func (d *Dependencies) forwardViaHTTP(
 // executeHTTPFallback executes a tool call via the REST connector and returns
 // an MCP-shaped response. Used by both the direct and approved-call paths.
 func (d *Dependencies) executeHTTPFallback(
-	ctx context.Context, req *mcp.Request, tool models.Tool, arguments map[string]any,
+	ctx context.Context, req *mcp.Request, tool *models.Tool, arguments map[string]any,
 ) (*mcp.Response, error) {
 	if d.Connector == nil {
 		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("HTTP connector not configured")), nil
@@ -1616,11 +1616,11 @@ func (d *Dependencies) executeHTTPFallback(
 	}
 	bodyBytes, err := json.Marshal(bodyArgs)
 	if err != nil {
-		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to serialize arguments")), nil
+		return mcp.NewErrorResponse(req.ID, mcp.NewInternalError("failed to serialize arguments")), err
 	}
 
 	headers := map[string]string{"Content-Type": "application/json"}
-	applyToolAuth(headers, &tool)
+	applyToolAuth(headers, tool)
 
 	resp, err := d.Connector.Execute(ctx, connector.Request{
 		Method:  method,

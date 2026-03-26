@@ -63,7 +63,7 @@ type StoreAPI interface {
 	GetTenant(ctx context.Context, tenantID string) (models.TenantSummary, error)
 	GetTenantKeyHash(ctx context.Context, tenantID string) (string, error)
 	GetTool(ctx context.Context, tenantID, toolID string) (models.Tool, error)
-	ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error)
+	ListTools(ctx context.Context, tenantID string, includeArchived, excludeDevSeeds bool) ([]models.Tool, error)
 	InsertTool(ctx context.Context, tool *models.Tool) error
 	ArchiveTool(ctx context.Context, tenantID, toolID string) error
 	RestoreTool(ctx context.Context, tenantID, toolID string) error
@@ -370,7 +370,7 @@ func (s *Store) GetTool(ctx context.Context, tenantID, toolID string) (models.To
 	return tool, nil
 }
 
-func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error) {
+func (s *Store) ListTools(ctx context.Context, tenantID string, includeArchived, excludeDevSeeds bool) ([]models.Tool, error) {
 	query := `SELECT tool_id, tenant_id, base_url, auth_type, auth_value, transport, mcp_upstream_url, description, input_schema_json, archived_at, source, openapi_spec_url, openapi_operation_id FROM rbitr.tools WHERE tenant_id = $1`
 	if !includeArchived {
 		query += ` AND archived_at IS NULL`
