@@ -22,7 +22,7 @@ const (
 	// DefaultAuditRetentionDays is the default setting when none is configured.
 	DefaultAuditRetentionDays = 365
 
-	// Tier constants
+	// Tier constants.
 	tierFree  = "free"
 	tierPaid  = "paid"
 	tierTrial = "trial"
