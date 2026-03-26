@@ -747,12 +747,12 @@ func TestStoreGetTenantConfig(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version"}).
-				AddRow("t1", "p_v1", time.Now(), time.Now(), "shadow", "mcp_tool", int64(3)),
+			rows: sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version", "trial_started_at"}).
+				AddRow("t1", "p_v1", time.Now(), time.Now(), "shadow", "mcp_tool", int64(3), nil),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version"}),
+			rows:      sqlmock.NewRows([]string{"tenant_id", "active_policy_version", "created_at", "updated_at", "enforcement_mode", "mcp_passthrough_upstream_tool_id", "version", "trial_started_at"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -763,7 +763,7 @@ func TestStoreGetTenantConfig(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version FROM rbitr.tenant_config WHERE tenant_id = $1`)
+			query := regexp.QuoteMeta(`SELECT tenant_id, active_policy_version, created_at, updated_at, enforcement_mode, mcp_passthrough_upstream_tool_id, version, trial_started_at FROM rbitr.tenant_config WHERE tenant_id = $1`)
 			mock.ExpectQuery(query).WithArgs("t1").WillReturnRows(tc.rows)
 
 			st := New(db)
@@ -872,11 +872,11 @@ func TestStorePublishPolicyVersion(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
 		WithArgs("t1", "p_v2").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, 1)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		VALUES ($1, $2, $3, $4, 1, $5)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`)).
-		WithArgs("t1", "p_v2", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("t1", "p_v2", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
@@ -916,11 +916,11 @@ func TestStoreRollbackPolicyVersionWithTarget(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
 		WithArgs("t1", "p_v1").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, 1)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		VALUES ($1, $2, $3, $4, 1, $5)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`)).
-		WithArgs("t1", "p_v1", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("t1", "p_v1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
@@ -997,11 +997,11 @@ func TestStoreRollbackPolicyVersionSuccess(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
 		WithArgs("t1", "p_v1").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, 1)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		VALUES ($1, $2, $3, $4, 1, $5)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`)).
-		WithArgs("t1", "p_v1", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("t1", "p_v1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
@@ -2183,11 +2183,11 @@ func TestStoreUpdatePolicy(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM rbitr.policy_versions WHERE tenant_id = $1 AND policy_version = $2)`)).
 		WithArgs("t1", "p_v2").
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, 1)
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.tenant_config (tenant_id, active_policy_version, created_at, updated_at, version, trial_started_at)
+		VALUES ($1, $2, $3, $4, 1, $5)
 		ON CONFLICT (tenant_id) DO UPDATE
 		SET active_policy_version = $2, updated_at = $4, version = rbitr.tenant_config.version + 1`)).
-		WithArgs("t1", "p_v2", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("t1", "p_v2", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)
