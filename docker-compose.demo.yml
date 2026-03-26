@@ -1,0 +1,102 @@
+## Demo: rbitr + OpenClaw + Telegram
+## Full documentation: docs/demo-setup.md
+##
+## Quick start:
+##   1. cp .env.demo.example .env.demo  (fill in TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY)
+##   2. docker compose -f docker-compose.demo.yml --env-file .env.demo up --build
+##   3. Initialize tenant via UI (localhost:5173) or POST /setup/initialize
+##   4. Pair Telegram: docker exec rbitr-openclaw-1 openclaw pairing approve <CODE>
+##   5. Tell bot to use MCP endpoint: POST /v1/mcp/<tenant_id> with Bearer + X-Agent-Id headers
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rbitr
+    ports:
+      - "2345:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rbitr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: golang:1.25.6
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/rbitr?sslmode=disable
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        'go install github.com/pressly/goose/v3/cmd/goose@v3.25.0 && goose -dir /migrations postgres "$$DATABASE_URL" up',
+      ]
+
+  gateway:
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@db:5432/rbitr?sslmode=disable"
+      RBTR_LICENSE_KEY_PATH: "/data/rbitr/license.key"
+      RBTR_DEV_AUTO_TOOLS: "true"
+      RBTR_DEV_MOCK_INTERNAL_URL: "http://mocktool:8090"
+    volumes:
+      - license-data:/data/rbitr
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
+
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    depends_on:
+      - gateway
+    environment:
+      # --- LLM provider (set at least one in .env.demo) ---
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      OPENCLAW_PRIMARY_MODEL: "${OPENCLAW_PRIMARY_MODEL:-anthropic/claude-sonnet-4-20250514}"
+
+      # --- Telegram ---
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+
+      # --- OpenClaw settings ---
+      OPENCLAW_GATEWAY_BIND: "all"
+      OPENCLAW_SANDBOX: "true"
+      OPENCLAW_TZ: "${TZ:-UTC}"
+    volumes:
+      - ./openclaw-config.json:/tmp/openclaw-config.json:ro
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "mkdir -p /home/node/.openclaw && cp /tmp/openclaw-config.json /home/node/.openclaw/openclaw.json && exec openclaw gateway",
+      ]
+    ports:
+      - "18789:18789"
+      - "18790:18790"
+
+  mocktool:
+    build:
+      context: .
+      dockerfile: Dockerfile.mocktool
+    ports:
+      - "8090:8090"
+
+volumes:
+  license-data:
