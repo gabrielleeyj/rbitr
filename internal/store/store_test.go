@@ -510,8 +510,8 @@ func TestStoreGetTool(t *testing.T) {
 		expectErr error
 	}{
 		{
-			name:     "found",
-			rows:     sqlmock.NewRows(cols).AddRow("jira", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil, nil, "admin", nil, nil),
+			name: "found",
+			rows: sqlmock.NewRows(cols).AddRow("jira", "t1", "http://example", "bearer", "token", "http_url", nil, nil, nil, nil, "admin", nil, nil),
 		},
 		{
 			name:      "not found",

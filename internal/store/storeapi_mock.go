@@ -5348,7 +5348,7 @@ func (_c *MockStoreAPI_ListTicketLinks_Call) RunAndReturn(run func(ctx context.C
 }
 
 // ListTools provides a mock function for the type MockStoreAPI
-func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error) {
+func (_mock *MockStoreAPI) ListTools(ctx context.Context, tenantID string, includeArchived, excludeDevSeeds bool) ([]models.Tool, error) {
 	ret := _mock.Called(ctx, tenantID, includeArchived, excludeDevSeeds)
 
 	if len(ret) == 0 {

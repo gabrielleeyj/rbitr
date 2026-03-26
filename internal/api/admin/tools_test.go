@@ -426,7 +426,7 @@ func TestToolToResponse(t *testing.T) {
 			AuthType:  "bearer",
 			AuthValue: "secret",
 		}
-		resp := toolToResponse(tool)
+		resp := toolToResponse(&tool)
 		require.Equal(t, "http_tool", resp.ToolID)
 		require.NotNil(t, resp.HTTP)
 		require.Equal(t, "https://api.example.com", resp.HTTP.BaseURL)
@@ -443,7 +443,7 @@ func TestToolToResponse(t *testing.T) {
 			MCPUpstreamURL: "https://mcp.example.com/sse",
 			Description:    "An MCP tool",
 		}
-		resp := toolToResponse(tool)
+		resp := toolToResponse(&tool)
 		require.Equal(t, "mcp_tool", resp.ToolID)
 		require.Nil(t, resp.HTTP)
 		require.NotNil(t, resp.MCP)
@@ -458,7 +458,7 @@ func TestToolToResponse(t *testing.T) {
 			BaseURL:  "https://api.example.com",
 			AuthType: "none",
 		}
-		resp := toolToResponse(tool)
+		resp := toolToResponse(&tool)
 		require.NotNil(t, resp.HTTP)
 		require.False(t, resp.HTTP.AuthSet)
 	})

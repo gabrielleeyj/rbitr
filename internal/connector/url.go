@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/url"
@@ -12,7 +13,7 @@ var (
 
 	// privateRanges contains CIDR blocks for private, loopback, link-local,
 	// and cloud metadata IP ranges that should be blocked to prevent SSRF.
-	privateRanges []*net.IPNet
+	privateRanges []*net.IPNet //nolint:gochecknoglobals // intentional SSRF block list initialized once
 )
 
 func init() {
@@ -59,6 +60,10 @@ func validateOutboundURL(rawURL string) error {
 // including DNS resolution and private IP blocking. Use this at tool
 // registration time (admin API), not on every request.
 func ValidateToolBaseURL(rawURL string, allowPrivate bool) error {
+	return validateToolBaseURLWithContext(context.Background(), rawURL, allowPrivate)
+}
+
+func validateToolBaseURLWithContext(ctx context.Context, rawURL string, allowPrivate bool) error {
 	if err := validateOutboundURL(rawURL); err != nil {
 		return err
 	}
@@ -78,7 +83,7 @@ func ValidateToolBaseURL(rawURL string, allowPrivate bool) error {
 	}
 
 	// Resolve hostname and check all returned IPs.
-	addrs, err := net.LookupHost(hostname)
+	addrs, err := net.DefaultResolver.LookupHost(ctx, hostname)
 	if err != nil {
 		return errors.New("failed to resolve hostname: " + hostname)
 	}

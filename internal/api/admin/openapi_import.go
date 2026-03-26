@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -13,12 +14,12 @@ import (
 
 // OpenAPIImportRequest is the request body for POST /admin/:tenant_id/tools/import/openapi.
 type OpenAPIImportRequest struct {
-	SpecURL         string            `json:"spec_url"`
-	Mode            oapkg.ImportMode  `json:"mode"`
-	BaseURLOverride string            `json:"base_url_override"`
-	AuthType        string            `json:"auth_type"`
-	AuthValue       string            `json:"auth_value"`
-	Prefix          string            `json:"prefix"`
+	SpecURL         string           `json:"spec_url"`
+	Mode            oapkg.ImportMode `json:"mode"`
+	BaseURLOverride string           `json:"base_url_override"`
+	AuthType        string           `json:"auth_type"`
+	AuthValue       string           `json:"auth_value"`
+	Prefix          string           `json:"prefix"`
 }
 
 // OpenAPIImportPreviewResponse is the response for the preview endpoint.
@@ -29,13 +30,13 @@ type OpenAPIImportPreviewResponse struct {
 
 // OpenAPIImportConfirmRequest selects which tools from the preview to actually create.
 type OpenAPIImportConfirmRequest struct {
-	SpecURL         string            `json:"spec_url"`
-	Mode            oapkg.ImportMode  `json:"mode"`
-	BaseURLOverride string            `json:"base_url_override"`
-	AuthType        string            `json:"auth_type"`
-	AuthValue       string            `json:"auth_value"`
-	Prefix          string            `json:"prefix"`
-	SelectedToolIDs []string          `json:"selected_tool_ids"`
+	SpecURL         string           `json:"spec_url"`
+	Mode            oapkg.ImportMode `json:"mode"`
+	BaseURLOverride string           `json:"base_url_override"`
+	AuthType        string           `json:"auth_type"`
+	AuthValue       string           `json:"auth_value"`
+	Prefix          string           `json:"prefix"`
+	SelectedToolIDs []string         `json:"selected_tool_ids"`
 }
 
 func (d *Dependencies) handleOpenAPIImportPreview(c *echo.Context) error {
@@ -70,7 +71,7 @@ func (d *Dependencies) handleOpenAPIImportPreview(c *echo.Context) error {
 		Prefix:          payload.Prefix,
 	}
 
-	tools, err := oapkg.ParseAndGenerate(c.Request().Context(), req)
+	tools, err := oapkg.ParseAndGenerate(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 	}
@@ -94,7 +95,7 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 	c.Set(telemetry.CtxTenantID, tenantID)
 
 	var payload OpenAPIImportConfirmRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
+	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 	}
 
@@ -114,7 +115,7 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 		Prefix:          payload.Prefix,
 	}
 
-	generated, err := oapkg.ParseAndGenerate(c.Request().Context(), req)
+	generated, err := oapkg.ParseAndGenerate(c.Request().Context(), &req)
 	if err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 	}
@@ -131,7 +132,7 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 	var skipped []string
 	for i := range models {
 		if err := d.Store.InsertTool(c.Request().Context(), &models[i]); err != nil {
-			if err == store.ErrDuplicate {
+			if errors.Is(err, store.ErrDuplicate) {
 				skipped = append(skipped, models[i].ToolID)
 				continue
 			}
@@ -140,7 +141,7 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 				"detail": models[i].ToolID,
 			})
 		}
-		created = append(created, toolToResponse(models[i]))
+		created = append(created, toolToResponse(&models[i]))
 	}
 
 	d.invalidateTenantCaches(tenantID)
@@ -175,9 +176,9 @@ func filterSelected(tools []oapkg.GeneratedTool, selectedIDs []string) []oapkg.G
 	}
 
 	result := make([]oapkg.GeneratedTool, 0, len(selectedIDs))
-	for _, t := range tools {
-		if selected[t.ToolID] {
-			result = append(result, t)
+	for i := range tools {
+		if selected[tools[i].ToolID] {
+			result = append(result, tools[i])
 		}
 	}
 	return result

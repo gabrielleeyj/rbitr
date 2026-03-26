@@ -8,7 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var petStoreSpec = []byte(`{
+func petStoreSpecBytes() []byte {
+	return []byte(`{
   "openapi": "3.0.0",
   "info": {
     "title": "Pet Store",
@@ -66,15 +67,16 @@ var petStoreSpec = []byte(`{
     }
   }
 }`)
+}
 
 func TestParseAndGenerate_SingleMode(t *testing.T) {
 	req := ImportRequest{
-		SpecBody: petStoreSpec,
+		SpecBody: petStoreSpecBytes(),
 		Mode:     ModeSingle,
 		Prefix:   "petstore",
 	}
 
-	tools, err := ParseAndGenerate(context.Background(), req)
+	tools, err := ParseAndGenerate(context.Background(), &req)
 	require.NoError(t, err)
 	require.Len(t, tools, 1)
 
@@ -89,26 +91,31 @@ func TestParseAndGenerate_SingleMode(t *testing.T) {
 	require.NoError(t, json.Unmarshal(tool.InputSchemaJSON, &schema))
 	require.Equal(t, "object", schema["type"])
 
-	props := schema["properties"].(map[string]any)
-	pathProp := props["path"].(map[string]any)
-	pathEnum := pathProp["enum"].([]any)
+	props, ok := schema["properties"].(map[string]any)
+	require.True(t, ok, "properties must be map[string]any")
+	pathProp, ok := props["path"].(map[string]any)
+	require.True(t, ok, "path property must be map[string]any")
+	pathEnum, ok := pathProp["enum"].([]any)
+	require.True(t, ok, "path enum must be []any")
 	require.Contains(t, pathEnum, "/pets")
 	require.Contains(t, pathEnum, "/pets/{petId}")
 
-	methodProp := props["method"].(map[string]any)
-	methodEnum := methodProp["enum"].([]any)
+	methodProp, ok := props["method"].(map[string]any)
+	require.True(t, ok, "method property must be map[string]any")
+	methodEnum, ok := methodProp["enum"].([]any)
+	require.True(t, ok, "method enum must be []any")
 	require.Contains(t, methodEnum, "GET")
 	require.Contains(t, methodEnum, "POST")
 }
 
 func TestParseAndGenerate_MultiMode(t *testing.T) {
 	req := ImportRequest{
-		SpecBody: petStoreSpec,
+		SpecBody: petStoreSpecBytes(),
 		Mode:     ModeMulti,
 		Prefix:   "ps",
 	}
 
-	tools, err := ParseAndGenerate(context.Background(), req)
+	tools, err := ParseAndGenerate(context.Background(), &req)
 	require.NoError(t, err)
 	require.Len(t, tools, 3)
 
@@ -120,57 +127,62 @@ func TestParseAndGenerate_MultiMode(t *testing.T) {
 	// Check listPets has query parameter.
 	var listSchema map[string]any
 	require.NoError(t, json.Unmarshal(tools[0].InputSchemaJSON, &listSchema))
-	props := listSchema["properties"].(map[string]any)
+	props, ok := listSchema["properties"].(map[string]any)
+	require.True(t, ok, "properties must be map[string]any")
 	require.Contains(t, props, "limit")
 
 	// Check createPet has required body.
 	var createSchema map[string]any
 	require.NoError(t, json.Unmarshal(tools[1].InputSchemaJSON, &createSchema))
-	createProps := createSchema["properties"].(map[string]any)
+	createProps, ok := createSchema["properties"].(map[string]any)
+	require.True(t, ok, "createPet properties must be map[string]any")
 	require.Contains(t, createProps, "body")
-	required := createSchema["required"].([]any)
+	required, ok := createSchema["required"].([]any)
+	require.True(t, ok, "required must be []any")
 	require.Contains(t, required, "body")
 
 	// Check getPet has required path param.
 	var getSchema map[string]any
 	require.NoError(t, json.Unmarshal(tools[2].InputSchemaJSON, &getSchema))
-	getProps := getSchema["properties"].(map[string]any)
+	getProps, ok := getSchema["properties"].(map[string]any)
+	require.True(t, ok, "getPet properties must be map[string]any")
 	require.Contains(t, getProps, "petId")
-	getRequired := getSchema["required"].([]any)
+	getRequired, ok := getSchema["required"].([]any)
+	require.True(t, ok, "getPet required must be []any")
 	require.Contains(t, getRequired, "petId")
 }
 
 func TestParseAndGenerate_BaseURLOverride(t *testing.T) {
 	req := ImportRequest{
-		SpecBody:        petStoreSpec,
+		SpecBody:        petStoreSpecBytes(),
 		Mode:            ModeSingle,
 		BaseURLOverride: "https://custom.example.com/api",
 	}
 
-	tools, err := ParseAndGenerate(context.Background(), req)
+	tools, err := ParseAndGenerate(context.Background(), &req)
 	require.NoError(t, err)
 	require.Equal(t, "https://custom.example.com/api", tools[0].BaseURL)
 }
 
 func TestParseAndGenerate_AuthType(t *testing.T) {
 	req := ImportRequest{
-		SpecBody: petStoreSpec,
+		SpecBody: petStoreSpecBytes(),
 		Mode:     ModeSingle,
 		AuthType: "bearer",
 	}
 
-	tools, err := ParseAndGenerate(context.Background(), req)
+	tools, err := ParseAndGenerate(context.Background(), &req)
 	require.NoError(t, err)
 	require.Equal(t, "bearer", tools[0].AuthType)
 }
 
 func TestParseAndGenerate_InvalidMode(t *testing.T) {
 	req := ImportRequest{
-		SpecBody: petStoreSpec,
+		SpecBody: petStoreSpecBytes(),
 		Mode:     "invalid",
 	}
 
-	_, err := ParseAndGenerate(context.Background(), req)
+	_, err := ParseAndGenerate(context.Background(), &req)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid mode")
 }
@@ -180,7 +192,7 @@ func TestParseAndGenerate_NoSpec(t *testing.T) {
 		Mode: ModeSingle,
 	}
 
-	_, err := ParseAndGenerate(context.Background(), req)
+	_, err := ParseAndGenerate(context.Background(), &req)
 	require.Error(t, err)
 }
 
@@ -197,7 +209,7 @@ func TestParseAndGenerate_EmptyPaths(t *testing.T) {
 		Mode:     ModeSingle,
 	}
 
-	_, err := ParseAndGenerate(context.Background(), req)
+	_, err := ParseAndGenerate(context.Background(), &req)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no operations")
 }
@@ -214,7 +226,7 @@ func TestParseAndGenerate_NoServersNoOverride(t *testing.T) {
 		Mode:     ModeSingle,
 	}
 
-	_, err := ParseAndGenerate(context.Background(), req)
+	_, err := ParseAndGenerate(context.Background(), &req)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no base URL")
 }
@@ -258,4 +270,3 @@ func TestSanitizeToolID(t *testing.T) {
 		require.Equal(t, tc.expected, sanitizeToolID(tc.input), "input: %q", tc.input)
 	}
 }
-
