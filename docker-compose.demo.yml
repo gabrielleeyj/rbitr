@@ -79,13 +79,17 @@ services:
       OPENCLAW_GATEWAY_BIND: "all"
       OPENCLAW_SANDBOX: "true"
       OPENCLAW_TZ: "${TZ:-UTC}"
+
+      # --- rbitr MCP server (set after tenant initialization) ---
+      RBITR_TENANT_ID: "${RBITR_TENANT_ID:-}"
+      RBITR_TENANT_KEY: "${RBITR_TENANT_KEY:-}"
     volumes:
-      - ./openclaw-config.json:/tmp/openclaw-config.json:ro
+      - ./openclaw-config.json:/tmp/openclaw-config-template.json:ro
     entrypoint:
       [
         "sh",
         "-c",
-        "mkdir -p /home/node/.openclaw && cp /tmp/openclaw-config.json /home/node/.openclaw/openclaw.json && exec openclaw gateway",
+        "mkdir -p /home/node/.openclaw && if [ -n \"$RBITR_TENANT_ID\" ] && [ -n \"$RBITR_TENANT_KEY\" ]; then sed \"s|\\$RBITR_TENANT_ID|$RBITR_TENANT_ID|g; s|\\$RBITR_TENANT_KEY|$RBITR_TENANT_KEY|g\" /tmp/openclaw-config-template.json > /home/node/.openclaw/openclaw.json; else cp /tmp/openclaw-config-template.json /home/node/.openclaw/openclaw.json; fi && exec openclaw gateway",
       ]
     ports:
       - "18789:18789"

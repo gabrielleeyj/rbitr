@@ -14,6 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -49,6 +54,7 @@ import {
 } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import { useEntitlements } from "@/lib/entitlements";
 import { toast } from "sonner";
 import {
   scopeNotificationsRead,
@@ -80,6 +86,7 @@ const emptyConfig = {
 export function NotificationsPage() {
   const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
+  const { hasFeature } = useEntitlements();
   const tenantId = selectedTenant?.tenant_id;
   const [config, setConfig] = useState(emptyConfig);
   const [status, setStatus] = useState({
@@ -131,6 +138,7 @@ export function NotificationsPage() {
   const canReadNotifications = hasScope(scopeNotificationsRead);
   const canWriteNotifications = hasScope(scopeNotificationsWrite);
   const canTestNotifications = hasScope(scopeNotificationsTest);
+  const hasIntegrations = hasFeature("integrations");
 
   const isEditingList = Boolean(listForm.mailing_list_id);
 
@@ -542,13 +550,34 @@ export function NotificationsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {!hasIntegrations && (
+            <Alert>
+              <AlertDescription>
+                Slack, Telegram, and WhatsApp integrations are not available on the free tier. Upload a license key to unlock these notification channels.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
+            <Collapsible
+              open={config.slack_webhook_enabled}
+              onOpenChange={(open) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  slack_webhook_enabled: open,
+                }))
+              }
+              className="space-y-4 border rounded-lg p-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">Slack webhook</div>
                   <div className="text-xs text-muted-foreground">
-                    Configured: {status.slack_webhook_configured ? "Yes" : "No"}
+                    {hasIntegrations ? (
+                      <>Configured: {status.slack_webhook_configured ? "Yes" : "No"}</>
+                    ) : (
+                      <>Requires paid license</>
+                    )}
                   </div>
                 </div>
                 <Switch
@@ -559,66 +588,81 @@ export function NotificationsPage() {
                       slack_webhook_enabled: checked,
                     }))
                   }
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="slack-webhook-channel">
-                  Default channel (optional)
-                </Label>
-                <Input
-                  id="slack-webhook-channel"
-                  value={config.slack_webhook_default_channel}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      slack_webhook_default_channel: event.target.value,
-                    }))
-                  }
-                  placeholder="#alerts"
-                  disabled={loading || !canWriteNotifications}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slack-secret-ref">Slack secret ref</Label>
-                <div className="flex flex-wrap gap-2">
+              <CollapsibleContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="slack-webhook-channel">
+                    Default channel (optional)
+                  </Label>
                   <Input
-                    id="slack-secret-ref"
-                    value={slackSecretRef}
+                    id="slack-webhook-channel"
+                    value={config.slack_webhook_default_channel}
                     onChange={(event) =>
-                      setSlackSecretRefInput(event.target.value)
+                      setConfig((prev) => ({
+                        ...prev,
+                        slack_webhook_default_channel: event.target.value,
+                      }))
                     }
-                    placeholder="env://RBTR_SLACK_WEBHOOK"
-                    disabled={!canWriteNotifications}
+                    placeholder="#alerts"
+                    disabled={loading || !canWriteNotifications || !hasIntegrations}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="slack-secret-ref">Slack secret ref</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      id="slack-secret-ref"
+                      value={slackSecretRef}
+                      onChange={(event) =>
+                        setSlackSecretRefInput(event.target.value)
+                      }
+                      placeholder="env://RBTR_SLACK_WEBHOOK"
+                      disabled={!canWriteNotifications || !hasIntegrations}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleSlackSecretSave}
+                      disabled={!slackSecretRef || !canWriteNotifications || !hasIntegrations}
+                    >
+                      Save ref
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={handleSlackSecretSave}
-                    disabled={!slackSecretRef || !canWriteNotifications}
+                    onClick={handleSlackTest}
+                    disabled={
+                      !status.slack_webhook_configured || !canTestNotifications || !hasIntegrations
+                    }
                   >
-                    Save ref
+                    Send Slack test
                   </Button>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleSlackTest}
-                  disabled={
-                    !status.slack_webhook_configured || !canTestNotifications
-                  }
-                >
-                  Send Slack test
-                </Button>
-              </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-            <div className="space-y-4">
+            <Collapsible
+              open={config.slack_bot_enabled}
+              onOpenChange={(open) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  slack_bot_enabled: open,
+                }))
+              }
+              className="space-y-4 border rounded-lg p-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">Slack bot</div>
                   <div className="text-xs text-muted-foreground">
-                    Configured: {status.slack_bot_configured ? "Yes" : "No"}
+                    {hasIntegrations ? (
+                      <>Configured: {status.slack_bot_configured ? "Yes" : "No"}</>
+                    ) : (
+                      <>Requires paid license</>
+                    )}
                   </div>
                 </div>
                 <Switch
@@ -629,40 +673,48 @@ export function NotificationsPage() {
                       slack_bot_enabled: checked,
                     }))
                   }
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="slack-bot-channel">Default channel ID</Label>
-                <Input
-                  id="slack-bot-channel"
-                  value={config.slack_bot_default_channel}
-                  onChange={(event) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      slack_bot_default_channel: event.target.value,
-                    }))
-                  }
-                  placeholder="C01234567"
-                  disabled={loading || !canWriteNotifications}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleSlackBotTest}
-                  disabled={
-                    !status.slack_bot_configured || !canTestNotifications
-                  }
-                >
-                  Send Slack bot test
-                </Button>
-              </div>
-            </div>
+              <CollapsibleContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="slack-bot-channel">Default channel ID</Label>
+                  <Input
+                    id="slack-bot-channel"
+                    value={config.slack_bot_default_channel}
+                    onChange={(event) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        slack_bot_default_channel: event.target.value,
+                      }))
+                    }
+                    placeholder="C01234567"
+                    disabled={loading || !canWriteNotifications || !hasIntegrations}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleSlackBotTest}
+                    disabled={
+                      !status.slack_bot_configured || !canTestNotifications || !hasIntegrations
+                    }
+                  >
+                    Send Slack bot test
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
+            <Collapsible
+              open={config.email_enabled}
+              onOpenChange={(open) =>
+                setConfig((prev) => ({ ...prev, email_enabled: open }))
+              }
+              className="space-y-4 border rounded-lg p-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">Email delivery</div>
@@ -678,6 +730,7 @@ export function NotificationsPage() {
                   disabled={loading || !canWriteNotifications}
                 />
               </div>
+              <CollapsibleContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Email provider</Label>
                 <Select
@@ -784,18 +837,19 @@ export function NotificationsPage() {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleEmailTest}
-                  disabled={!status.email_configured || !canTestNotifications}
-                >
-                  Send Email test
-                </Button>
-              </div>
-            </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleEmailTest}
+                    disabled={!status.email_configured || !canTestNotifications}
+                  >
+                    Send Email test
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-            <div className="space-y-4">
+            <div className="space-y-4 border rounded-lg p-4">
               <div className="text-sm font-semibold">Event routing</div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="notify-approval-expiring" className="text-sm">
@@ -857,12 +911,25 @@ export function NotificationsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
+            <Collapsible
+              open={config.telegram_enabled}
+              onOpenChange={(open) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  telegram_enabled: open,
+                }))
+              }
+              className="space-y-4 border rounded-lg p-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">Telegram</div>
                   <div className="text-xs text-muted-foreground">
-                    Configured: {status.telegram_configured ? "Yes" : "No"}
+                    {hasIntegrations ? (
+                      <>Configured: {status.telegram_configured ? "Yes" : "No"}</>
+                    ) : (
+                      <>Requires paid license</>
+                    )}
                   </div>
                 </div>
                 <Switch
@@ -873,9 +940,10 @@ export function NotificationsPage() {
                       telegram_enabled: checked,
                     }))
                   }
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
+              <CollapsibleContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="telegram-chat-id">Chat ID</Label>
                 <Input
@@ -888,7 +956,7 @@ export function NotificationsPage() {
                     }))
                   }
                   placeholder="-1001234567890"
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
               <div className="space-y-2">
@@ -903,36 +971,50 @@ export function NotificationsPage() {
                       setTelegramSecretRefInput(event.target.value)
                     }
                     placeholder="env://RBTR_TELEGRAM_BOT_TOKEN"
-                    disabled={!canWriteNotifications}
+                    disabled={!canWriteNotifications || !hasIntegrations}
                   />
                   <Button
                     variant="outline"
                     onClick={handleTelegramSecretSave}
-                    disabled={!telegramSecretRef || !canWriteNotifications}
+                    disabled={!telegramSecretRef || !canWriteNotifications || !hasIntegrations}
                   >
                     Save ref
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleTelegramTest}
-                  disabled={
-                    !status.telegram_configured || !canTestNotifications
-                  }
-                >
-                  Send Telegram test
-                </Button>
-              </div>
-            </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleTelegramTest}
+                    disabled={
+                      !status.telegram_configured || !canTestNotifications || !hasIntegrations
+                    }
+                  >
+                    Send Telegram test
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-            <div className="space-y-4">
+            <Collapsible
+              open={config.whatsapp_enabled}
+              onOpenChange={(open) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  whatsapp_enabled: open,
+                }))
+              }
+              className="space-y-4 border rounded-lg p-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold">WhatsApp</div>
                   <div className="text-xs text-muted-foreground">
-                    Configured: {status.whatsapp_configured ? "Yes" : "No"}
+                    {hasIntegrations ? (
+                      <>Configured: {status.whatsapp_configured ? "Yes" : "No"}</>
+                    ) : (
+                      <>Requires paid license</>
+                    )}
                   </div>
                 </div>
                 <Switch
@@ -943,9 +1025,10 @@ export function NotificationsPage() {
                       whatsapp_enabled: checked,
                     }))
                   }
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
+              <CollapsibleContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="whatsapp-phone-id">Phone number ID</Label>
                 <Input
@@ -958,7 +1041,7 @@ export function NotificationsPage() {
                     }))
                   }
                   placeholder="1234567890"
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
               <div className="space-y-2">
@@ -973,7 +1056,7 @@ export function NotificationsPage() {
                     }))
                   }
                   placeholder="+1234567890"
-                  disabled={loading || !canWriteNotifications}
+                  disabled={loading || !canWriteNotifications || !hasIntegrations}
                 />
               </div>
               <div className="space-y-2">
@@ -988,29 +1071,30 @@ export function NotificationsPage() {
                       setWhatsAppSecretRefInput(event.target.value)
                     }
                     placeholder="env://RBTR_WHATSAPP_TOKEN"
-                    disabled={!canWriteNotifications}
+                    disabled={!canWriteNotifications || !hasIntegrations}
                   />
                   <Button
                     variant="outline"
                     onClick={handleWhatsAppSecretSave}
-                    disabled={!whatsappSecretRef || !canWriteNotifications}
+                    disabled={!whatsappSecretRef || !canWriteNotifications || !hasIntegrations}
                   >
                     Save ref
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleWhatsAppTest}
-                  disabled={
-                    !status.whatsapp_configured || !canTestNotifications
-                  }
-                >
-                  Send WhatsApp test
-                </Button>
-              </div>
-            </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleWhatsAppTest}
+                    disabled={
+                      !status.whatsapp_configured || !canTestNotifications || !hasIntegrations
+                    }
+                  >
+                    Send WhatsApp test
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
 
           {!tenantId ? (

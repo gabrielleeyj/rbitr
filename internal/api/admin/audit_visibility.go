@@ -1,6 +1,11 @@
 package admin
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/gabrielleeyj/rbitr/internal/license"
+)
 
 // auditVisibilityFloor returns the earliest timestamp that audit events should
 // be visible for the current license tier. Free-tier installations are limited
@@ -39,4 +44,31 @@ func applyVisibilityFloor(from, floor *time.Time) *time.Time {
 		return floor
 	}
 	return from
+}
+
+// getEffectiveAuditRetentionDays returns the effective audit retention days
+// value, which is the configured setting value capped by the license tier's
+// maximum allowed retention. For paid/trial tiers with unlimited retention
+// (-1), the setting value is used as-is. For free tier, the setting is capped
+// at the license maximum (typically 7 days).
+func (d *Dependencies) getEffectiveAuditRetentionDays(ctx context.Context, ent license.Entitlements) int {
+	// Get configured retention from settings, default to DefaultAuditRetentionDays
+	settingValue := license.DefaultAuditRetentionDays
+	if d.Store != nil {
+		if val, err := d.Store.GetAuditRetentionDays(ctx); err == nil && val > 0 {
+			settingValue = val
+		}
+	}
+
+	// If license allows unlimited retention, return the setting value
+	if license.IsUnlimited(ent.AuditRetentionDays) {
+		return settingValue
+	}
+
+	// Otherwise, cap the setting value by the license maximum
+	if settingValue > ent.AuditRetentionDays {
+		return ent.AuditRetentionDays
+	}
+
+	return settingValue
 }

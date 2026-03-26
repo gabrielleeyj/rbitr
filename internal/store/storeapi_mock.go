@@ -1570,6 +1570,68 @@ func (_c *MockStoreAPI_GetDisableXTenantKey_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// GetEarliestTrialStartDate provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) GetEarliestTrialStartDate(ctx context.Context) (*time.Time, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetEarliestTrialStartDate")
+	}
+
+	var r0 *time.Time
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (*time.Time, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) *time.Time); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*time.Time)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_GetEarliestTrialStartDate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetEarliestTrialStartDate'
+type MockStoreAPI_GetEarliestTrialStartDate_Call struct {
+	*mock.Call
+}
+
+// GetEarliestTrialStartDate is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) GetEarliestTrialStartDate(ctx interface{}) *MockStoreAPI_GetEarliestTrialStartDate_Call {
+	return &MockStoreAPI_GetEarliestTrialStartDate_Call{Call: _e.mock.On("GetEarliestTrialStartDate", ctx)}
+}
+
+func (_c *MockStoreAPI_GetEarliestTrialStartDate_Call) Run(run func(ctx context.Context)) *MockStoreAPI_GetEarliestTrialStartDate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_GetEarliestTrialStartDate_Call) Return(time1 *time.Time, err error) *MockStoreAPI_GetEarliestTrialStartDate_Call {
+	_c.Call.Return(time1, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_GetEarliestTrialStartDate_Call) RunAndReturn(run func(ctx context.Context) (*time.Time, error)) *MockStoreAPI_GetEarliestTrialStartDate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetEffectiveRateLimitConfig provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string) (models.RateLimitConfig, error) {
 	ret := _mock.Called(ctx, tenantID)
@@ -3450,6 +3512,66 @@ func (_c *MockStoreAPI_GetUsageMeter_Call) Return(n int64, err error) *MockStore
 }
 
 func (_c *MockStoreAPI_GetUsageMeter_Call) RunAndReturn(run func(ctx context.Context, tenantID string, period string) (int64, error)) *MockStoreAPI_GetUsageMeter_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// HasTrialLicenseBeenUsed provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) HasTrialLicenseBeenUsed(ctx context.Context) (bool, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for HasTrialLicenseBeenUsed")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_HasTrialLicenseBeenUsed_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HasTrialLicenseBeenUsed'
+type MockStoreAPI_HasTrialLicenseBeenUsed_Call struct {
+	*mock.Call
+}
+
+// HasTrialLicenseBeenUsed is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockStoreAPI_Expecter) HasTrialLicenseBeenUsed(ctx interface{}) *MockStoreAPI_HasTrialLicenseBeenUsed_Call {
+	return &MockStoreAPI_HasTrialLicenseBeenUsed_Call{Call: _e.mock.On("HasTrialLicenseBeenUsed", ctx)}
+}
+
+func (_c *MockStoreAPI_HasTrialLicenseBeenUsed_Call) Run(run func(ctx context.Context)) *MockStoreAPI_HasTrialLicenseBeenUsed_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_HasTrialLicenseBeenUsed_Call) Return(b bool, err error) *MockStoreAPI_HasTrialLicenseBeenUsed_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_HasTrialLicenseBeenUsed_Call) RunAndReturn(run func(ctx context.Context) (bool, error)) *MockStoreAPI_HasTrialLicenseBeenUsed_Call {
 	_c.Call.Return(run)
 	return _c
 }

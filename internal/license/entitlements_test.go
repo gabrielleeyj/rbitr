@@ -27,7 +27,7 @@ func TestPaidTierDefaults(t *testing.T) {
 	assert.Equal(t, Unlimited, e.MaxAgentsPerTenant)
 	assert.Equal(t, Unlimited, e.MaxActiveKeys)
 	assert.True(t, IsUnlimited64(e.MonthlyActionLimit))
-	assert.Equal(t, 90, e.AuditRetentionDays)
+	assert.Equal(t, Unlimited, e.AuditRetentionDays) // Paid tier has unlimited retention
 	assert.True(t, e.ApprovalWorkflows)
 	assert.True(t, e.EvidenceExport)
 	assert.True(t, e.Integrations)

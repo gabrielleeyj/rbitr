@@ -39,6 +39,7 @@ import {
 import type { TicketingConfig, TicketLink } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import { useEntitlements } from "@/lib/entitlements";
 import { toast } from "sonner";
 import {
   scopeTicketingRead,
@@ -58,11 +59,13 @@ const emptyConfig = {
 export function TicketingPage() {
   const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
+  const { hasFeature } = useEntitlements();
   const tenantId = selectedTenant?.tenant_id;
 
   const canRead = hasScope(scopeTicketingRead);
   const canWrite = hasScope(scopeTicketingWrite);
   const canTest = hasScope(scopeTicketingTest);
+  const hasIntegrations = hasFeature("integrations");
 
   const [config, setConfig] = useState(emptyConfig);
   const [secretConfigured, setSecretConfigured] = useState(false);
@@ -185,6 +188,24 @@ export function TicketingPage() {
       setTesting(false);
     }
   };
+
+  if (!hasIntegrations) {
+    return (
+      <div className="p-6 space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Ticketing & ITSM</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure bidirectional ticketing integration with Jira, ServiceNow, or Linear.
+          </p>
+        </div>
+        <Alert>
+          <AlertDescription>
+            Ticketing integrations are not available on the free tier. Upload a license key to unlock this feature.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   if (!tenantId) {
     return (

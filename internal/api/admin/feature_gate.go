@@ -7,9 +7,7 @@ import (
 )
 
 // featureGate returns middleware that blocks requests when the named feature
-// is not enabled by the current license entitlements. Read-only GET requests
-// are allowed through so operators can still view configuration; only mutating
-// operations are gated.
+// is not enabled by the current license entitlements.
 func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
@@ -25,7 +23,7 @@ func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 			return c.JSON(http.StatusForbidden, map[string]string{
 				"error":   "FEATURE_NOT_AVAILABLE",
 				"feature": feature,
-				"message": feature + " requires a paid license. Upload a license key in Settings > License to unlock.",
+				"message": feature + " requires a paid or trial license. Upload a license key in Settings > License to unlock.",
 			})
 		}
 	}
@@ -40,12 +38,13 @@ func (d *Dependencies) handleEntitlements(c *echo.Context) error {
 				"approval_workflows": false,
 				"evidence_export":    false,
 				"integrations":       false,
-				"custom_policies":    false,
+				"custom_policies":    true,
 			},
 		})
 	}
 
 	ent := d.LicenseValidator.Entitlements()
+
 	return c.JSON(http.StatusOK, map[string]any{
 		"tier": ent.Tier,
 		"features": map[string]bool{

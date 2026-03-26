@@ -238,7 +238,7 @@ func (v *Validator) buildInfo(tok jwt.Token, claims *licenseClaims) (LicenseInfo
 	}
 
 	// Validate tier.
-	if claims.Tier != "free" && claims.Tier != "paid" {
+	if claims.Tier != "free" && claims.Tier != "paid" && claims.Tier != "trial" {
 		return LicenseInfo{}, fmt.Errorf("%w: unknown tier %q", ErrMalformedLicense, claims.Tier)
 	}
 

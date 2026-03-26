@@ -60,13 +60,14 @@ type PolicyVersion struct {
 }
 
 type TenantConfig struct {
-	TenantID                     string    `json:"tenant_id"`
-	ActivePolicyVersion          string    `json:"active_policy_version"`
-	EnforcementMode              string    `json:"enforcement_mode"`
-	MCPPassthroughUpstreamToolID string    `json:"mcp_passthrough_upstream_tool_id,omitempty"`
-	Version                      int64     `json:"version"`
-	CreatedAt                    time.Time `json:"created_at"`
-	UpdatedAt                    time.Time `json:"updated_at"`
+	TenantID                     string     `json:"tenant_id"`
+	ActivePolicyVersion          string     `json:"active_policy_version"`
+	EnforcementMode              string     `json:"enforcement_mode"`
+	MCPPassthroughUpstreamToolID string     `json:"mcp_passthrough_upstream_tool_id,omitempty"`
+	Version                      int64      `json:"version"`
+	TrialStartedAt               *time.Time `json:"trial_started_at,omitempty"`
+	CreatedAt                    time.Time  `json:"created_at"`
+	UpdatedAt                    time.Time  `json:"updated_at"`
 }
 
 type RateLimitConfig struct {

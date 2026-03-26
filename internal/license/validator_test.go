@@ -217,8 +217,8 @@ func TestValidateBytes_MergeOverDefaults(t *testing.T) {
 	info, err := v.ValidateBytes(token)
 	require.NoError(t, err)
 
-	// Should fall back to paid default (90 days).
-	assert.Equal(t, 90, info.Entitlements.AuditRetentionDays)
+	// Should fall back to paid default (unlimited).
+	assert.Equal(t, Unlimited, info.Entitlements.AuditRetentionDays)
 }
 
 func TestLoadAndValidate_MissingFile(t *testing.T) {

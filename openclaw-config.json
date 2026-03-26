@@ -1,0 +1,30 @@
+{
+  "gateway": {
+    "mode": "local"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    }
+  },
+  "mcp": {
+    "servers": {
+      "rbitr": {
+        "transport": {
+          "type": "streamableHTTP",
+          "url": "http://gateway:8080/v1/mcp/$RBITR_TENANT_ID",
+          "headers": {
+            "Authorization": "Bearer $RBITR_TENANT_KEY",
+            "X-Agent-Id": "openclaw-telegram"
+          }
+        }
+      }
+    }
+  }
+}

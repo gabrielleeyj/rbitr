@@ -72,6 +72,9 @@ func (d *Dependencies) handleUsageSummary(c *echo.Context) error {
 		tenantCount = count
 	}
 
+	// Get effective audit retention days (from settings, capped by license)
+	effectiveRetention := d.getEffectiveAuditRetentionDays(ctx, ent)
+
 	return c.JSON(http.StatusOK, map[string]any{
 		"tier":   ent.Tier,
 		"period": period,
@@ -85,8 +88,9 @@ func (d *Dependencies) handleUsageSummary(c *echo.Context) error {
 			"integrations":       ent.Integrations,
 			"custom_policies":    ent.CustomPolicies,
 		},
-		"audit_retention_days": ent.AuditRetentionDays,
-		"license":              licenseResp,
+		"audit_retention_days":     effectiveRetention,
+		"audit_retention_days_max": ent.AuditRetentionDays,
+		"license":                  licenseResp,
 	})
 }
 

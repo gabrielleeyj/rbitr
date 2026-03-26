@@ -19,6 +19,7 @@ import (
 
 	"github.com/gabrielleeyj/rbitr/internal/audit"
 	"github.com/gabrielleeyj/rbitr/internal/classification"
+	"github.com/gabrielleeyj/rbitr/internal/license"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
@@ -166,6 +167,7 @@ type SettingsResponse struct {
 	AdminWriteLock               bool   `json:"admin_write_lock"`
 	DefaultApprovalTTLSeconds    int    `json:"default_approval_ttl_seconds"`
 	AuditRetentionDays           int    `json:"audit_retention_days"`
+	AuditRetentionDaysMax        int    `json:"audit_retention_days_max"` // Maximum allowed by license tier
 	DisableXTenantKey            bool   `json:"disable_x_tenant_key"`
 	FeatureRateLimiting          bool   `json:"feature_rate_limiting"`
 	FeatureArgConstraints        bool   `json:"feature_arg_constraints"`
@@ -801,6 +803,13 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	}
 	ssoConfig, _ := d.Store.GetSSOConfig(c.Request().Context())
 
+	// Get license tier's maximum allowed audit retention
+	retentionDaysMax := license.DefaultAuditRetentionDays
+	if d.LicenseValidator != nil {
+		ent := d.LicenseValidator.Entitlements()
+		retentionDaysMax = ent.AuditRetentionDays
+	}
+
 	enforcementMode := enforcementModeEnforce
 	mcpPassthroughUpstreamToolID := ""
 	if tenantID != "" {
@@ -820,6 +829,7 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 		AdminWriteLock:               locked,
 		DefaultApprovalTTLSeconds:    defaultTTL,
 		AuditRetentionDays:           retentionDays,
+		AuditRetentionDaysMax:        retentionDaysMax,
 		DisableXTenantKey:            disableXTenantKey,
 		FeatureRateLimiting:          featureRateLimiting,
 		FeatureArgConstraints:        featureArgConstraints,
@@ -1689,6 +1699,19 @@ func (d *Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	if payload.Days < 30 || payload.Days > 3650 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "days must be between 30 and 3650"})
 	}
+
+	// Validate against license tier maximum
+	if d.LicenseValidator != nil {
+		ent := d.LicenseValidator.Entitlements()
+		maxAllowed := ent.AuditRetentionDays
+		if !license.IsUnlimited(maxAllowed) && payload.Days > maxAllowed {
+			return c.JSON(http.StatusForbidden, map[string]string{
+				"error":       "audit retention exceeds license tier maximum",
+				"max_allowed": strconv.Itoa(maxAllowed),
+			})
+		}
+	}
+
 	beforeValue, _ := d.Store.GetAuditRetentionDays(c.Request().Context())
 	if err := d.Store.SetAuditRetentionDays(c.Request().Context(), payload.Days); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update audit retention"})

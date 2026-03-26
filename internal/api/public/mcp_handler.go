@@ -882,6 +882,18 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 		}), nil
 
 	case "REQUIRE_APPROVAL":
+		// Check license access for approval workflows
+		if violation := d.checkFeatureAccess(ctx, tenant.TenantID, "approval_workflows"); violation != "" {
+			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
+				Code:    mcp.ErrorUnauthorized,
+				Message: violation,
+				Data: mustMarshalJSON(map[string]any{
+					"feature_locked": true,
+					"feature":        "approval_workflows",
+				}),
+			}), nil
+		}
+
 		now := time.Now().UTC()
 		token, err := generateApprovalToken()
 		if err != nil {

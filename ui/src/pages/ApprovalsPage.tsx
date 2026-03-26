@@ -19,6 +19,7 @@ import {
 import { approveApproval, denyApproval, listApprovals, revokeApproval } from "@/lib/api";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
+import { useEntitlements } from "@/lib/entitlements";
 import type { ApprovalRequest } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -29,6 +30,7 @@ const statusTabs = ["PENDING", "APPROVED", "EXECUTING", "EXECUTED", "FAILED", "D
 export function ApprovalsPage() {
   const { adminKey, hasScope } = useAdminKey();
   const { selectedTenant } = useTenant();
+  const { hasFeature } = useEntitlements();
   const tenantId = selectedTenant?.tenant_id;
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [status, setStatus] = useState("PENDING");
@@ -44,6 +46,7 @@ export function ApprovalsPage() {
   const [submitting, setSubmitting] = useState(false);
   const canReadApprovals = hasScope(scopeApprovalsRead);
   const canDecideApprovals = hasScope(scopeApprovalsDecide);
+  const hasApprovalWorkflows = hasFeature("approval_workflows");
 
   const pageNumber = Math.floor(offset / limit) + 1;
   const canPrev = offset > 0;
@@ -154,6 +157,24 @@ export function ApprovalsPage() {
   };
 
   const selectedStatusLabel = status.toLowerCase().replace("_", " ");
+
+  if (!hasApprovalWorkflows) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Approvals</CardTitle>
+          <CardDescription>Resolve pending approvals and review execution history.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertDescription>
+              Approval workflows are not available on the free tier. Upload a license key to unlock this feature.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

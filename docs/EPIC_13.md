@@ -10,6 +10,7 @@
 | **4** Feature Gating (API) | **DONE** | 2026-03-23 |
 | **5** License Management UI | **DONE** | 2026-03-23 |
 | **6** Admin Dashboard & Usage Visibility | **DONE** | 2026-03-23 |
+| **7** Free Trial Period (14 Days) | **DONE** | 2026-03-26 |
 
 ## Summary
 
@@ -549,6 +550,136 @@ Free-tier audit retention uses **soft retention** (visibility filtering) rather 
 ### Design Decision
 
 Option 2 ("never delete, only filter visibility") was chosen over physical deletion to avoid irreversible data loss during license transitions. The tradeoff is slightly higher storage usage for free-tier installations, which is acceptable given the low volume (10k actions/month cap).
+
+---
+
+## Phase 7 — Free Trial Period (14 Days) — DONE (2026-03-26)
+
+### Problem
+
+Free-tier users have no way to evaluate premium features (approval workflows, integrations, evidence export) before purchasing a license. This creates friction in the sales funnel — users can't validate value before committing.
+
+### Solution
+
+Implement an **application-wide 14-day free trial** that unlocks all premium features during the trial period. After expiration, premium features are locked until a license is uploaded.
+
+### Design Decisions
+
+**Application-Wide Trial (Not Per-Tenant)**
+- License is global for the entire rbitr installation, not per-tenant
+- Trial start is determined by the **earliest** `trial_started_at` across all tenants
+- This simplifies the model: one trial period for the entire application
+
+**Trial Lifecycle**
+1. **First tenant created** → `trial_started_at` recorded in `tenant_config` table
+2. **Days 0-13** → All premium features unlocked (approval workflows, integrations, evidence export)
+3. **Day 14+** → Premium features locked, only free tier features available
+4. **License uploaded** → Premium features permanently unlocked (paid tier)
+
+### Implementation
+
+#### Database Schema
+**Migration:** `00040_tenant_trial_tracking.sql`
+```sql
+ALTER TABLE rbitr.tenant_config
+    ADD COLUMN trial_started_at TIMESTAMPTZ NULL;
+
+-- Backfill existing tenants with their created_at
+UPDATE rbitr.tenant_config tc
+SET trial_started_at = t.created_at
+FROM rbitr.tenants t
+WHERE tc.tenant_id = t.tenant_id
+  AND tc.trial_started_at IS NULL;
+```
+
+#### Store Layer
+**`internal/store/store_license.go`**
+- Added `GetEarliestTrialStartDate()` - returns earliest trial start across all tenants
+- This represents the application-wide trial start
+
+#### License Layer
+**`internal/license/entitlements.go`**
+- Added `TrialExpiresAt` field to `LicenseInfo`
+- Added `IsTrialActive()` - checks if trial period is still valid
+- Added `TrialDaysRemaining()` - calculates days left
+- Modified `HasFeatureAccess(feature)` - checks **both** license entitlements **and** trial status
+
+```go
+func (info LicenseInfo) HasFeatureAccess(feature string) bool {
+    // Paid license - check entitlements
+    if info.Valid && info.Tier != "free" {
+        return info.Entitlements.HasFeature(feature)
+    }
+
+    // Free tier with active trial - all features unlocked
+    if info.Tier == "free" && info.IsTrialActive() {
+        return true
+    }
+
+    // Free tier after trial - only free features
+    return info.Entitlements.HasFeature(feature)
+}
+```
+
+#### API Layer
+**`internal/api/admin/license_management.go`**
+- `handleLicenseStatus()` enriched with global trial info:
+  - `trial_active` - boolean
+  - `trial_started_at` - timestamp
+  - `trial_expires_at` - calculated expiration
+  - `trial_days_remaining` - countdown
+
+**`internal/api/admin/feature_gate.go`**
+- `featureGate()` middleware now checks trial status via `HasFeatureAccess()`
+- `handleEntitlements()` returns trial-aware feature availability
+
+**`internal/api/setup/service.go`**
+- Sets `trial_started_at = now()` when creating new tenants
+
+**`internal/api/public/license_check.go`**
+- Removed (consolidated into admin feature gate)
+
+#### UI Layer
+**`ui/src/pages/LicensePage.tsx`**
+- Trial countdown banner shows:
+  - **During trial:** "Free trial active — Your trial expires in X days"
+  - **After expiry:** "Your trial has expired. Premium features are now locked."
+- Icon changes: Clock icon (active) / Lock icon (expired)
+
+**`ui/src/lib/api.ts`**
+- `LicenseStatus` interface includes trial fields
+- `EntitlementsResponse` includes `trial_active` flag
+
+**`ui/src/lib/entitlements.tsx`**
+- Entitlements provider fetches trial-aware feature access
+
+### User Experience
+
+**New Installation:**
+1. User starts rbitr → no license
+2. Creates first tenant → trial begins (14 days)
+3. Approval workflows, integrations, evidence export **all work**
+4. License page shows: "Trial expires in 13 days"
+5. After 14 days → premium features locked
+6. Upload license → features permanently unlocked
+
+**Existing Installation (Backfill):**
+- Existing tenants get `trial_started_at = created_at`
+- If tenant is older than 14 days, trial is expired
+- No disruption to existing workflows
+
+### Testing Checklist
+- [x] New tenant gets `trial_started_at` populated
+- [x] Approval workflows accessible during active trial
+- [x] Approval workflows blocked after trial expires
+- [x] Admin license API returns trial info
+- [x] UI displays trial countdown banner
+- [x] Existing tenants backfilled correctly
+- [x] Paid tier tenants unaffected by trial logic
+
+### Related Documentation
+- [Trial Implementation Summary](./trial-implementation.md)
+- [Demo Setup with OpenClaw](./demo-setup.md)
 
 ---
 

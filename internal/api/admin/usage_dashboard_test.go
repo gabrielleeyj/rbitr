@@ -25,6 +25,7 @@ func TestHandleUsageSummary_FreeTier(t *testing.T) {
 	period := currentPeriod()
 	storeMock.EXPECT().GetTotalUsageForPeriod(mock.Anything, period).Return(int64(4521), nil)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(1, nil)
+	storeMock.EXPECT().GetAuditRetentionDays(mock.Anything).Return(7, nil)
 
 	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
 
@@ -74,6 +75,7 @@ func TestHandleUsageSummary_PaidTier(t *testing.T) {
 	period := currentPeriod()
 	storeMock.EXPECT().GetTotalUsageForPeriod(mock.Anything, period).Return(int64(50000), nil)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(5, nil)
+	storeMock.EXPECT().GetAuditRetentionDays(mock.Anything).Return(365, nil)
 
 	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
 
@@ -111,6 +113,7 @@ func TestHandleUsageSummary_NilValidator(t *testing.T) {
 	period := currentPeriod()
 	storeMock.EXPECT().GetTotalUsageForPeriod(mock.Anything, period).Return(int64(0), nil)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(0, nil)
+	storeMock.EXPECT().GetAuditRetentionDays(mock.Anything).Return(365, nil)
 
 	deps := &Dependencies{Store: storeMock}
 
