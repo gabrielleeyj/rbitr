@@ -10,6 +10,7 @@ data:
   RBTR_SETUP_ALLOWED_CIDRS: {{ join "," .Values.setup.allowedCIDRs | quote }}
   {{- end }}
   RBTR_LICENSE_KEY_PATH: {{ .Values.license.keyPath | quote }}
+  RBTR_LICENSE_PROVIDER: {{ .Values.license.provider | default "self-managed" | quote }}
   RBTR_FEATURE_RATE_LIMITING: {{ .Values.features.rateLimiting | quote }}
   RBTR_FEATURE_ARG_CONSTRAINTS: {{ .Values.features.argConstraints | quote }}
   RBTR_FEATURE_SHADOW_MODE: {{ .Values.features.shadowMode | quote }}

@@ -28,11 +28,11 @@ func currentPeriod() string {
 //
 //nolint:nilnil // nil violation with nil error means request is allowed.
 func (d *Dependencies) enforceUsageQuota(ctx context.Context, tenantID string) (*usageQuotaViolation, error) {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return nil, nil
 	}
 
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 
 	// Paid tier: unlimited actions, skip metering entirely.
 	if license.IsUnlimited64(ent.MonthlyActionLimit) {

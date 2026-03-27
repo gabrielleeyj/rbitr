@@ -20,11 +20,11 @@ type provisioningViolation struct {
 //
 //nolint:nilnil // nil means allowed.
 func (d *Dependencies) checkTenantLimit(ctx context.Context) (*provisioningViolation, error) {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return nil, nil
 	}
 
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 	if license.IsUnlimited(ent.MaxTenants) {
 		return nil, nil
 	}
@@ -51,11 +51,11 @@ func (d *Dependencies) checkTenantLimit(ctx context.Context) (*provisioningViola
 //
 //nolint:nilnil // nil means allowed.
 func (d *Dependencies) checkActiveKeyLimit(ctx context.Context, tenantID string) (*provisioningViolation, error) {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return nil, nil
 	}
 
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 	if license.IsUnlimited(ent.MaxActiveKeys) {
 		return nil, nil
 	}

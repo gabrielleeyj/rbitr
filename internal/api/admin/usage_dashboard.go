@@ -30,9 +30,9 @@ func (d *Dependencies) handleUsageSummary(c *echo.Context) error {
 
 	ent := license.FreeTierDefaults()
 	var licenseResp map[string]any
-	if d.LicenseValidator != nil {
-		ent = d.LicenseValidator.Entitlements()
-		info := d.LicenseValidator.Info()
+	if d.LicenseProvider != nil {
+		ent = d.LicenseProvider.Entitlements()
+		info := d.LicenseProvider.Info()
 		licenseResp = map[string]any{
 			"valid":      info.Valid,
 			"tier":       info.Tier,
@@ -124,8 +124,8 @@ func (d *Dependencies) handleUsageHistory(c *echo.Context) error {
 
 	// Determine the action limit for percentage calculations.
 	var actionLimit int64
-	if d.LicenseValidator != nil {
-		actionLimit = d.LicenseValidator.Entitlements().MonthlyActionLimit
+	if d.LicenseProvider != nil {
+		actionLimit = d.LicenseProvider.Entitlements().MonthlyActionLimit
 	} else {
 		actionLimit = license.FreeTierDefaults().MonthlyActionLimit
 	}

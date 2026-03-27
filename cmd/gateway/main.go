@@ -63,9 +63,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("license: %v", err)
 	}
-	licenseValidator := license.NewValidator(pubKey, cfg.LicenseKeyPath)
-	licenseValidator.LoadAndValidate()
-	licenseWatcher := license.NewWatcher(licenseValidator, cfg.LicenseKeyPath)
+	licenseProvider, usageReporter, err := license.NewProvider(cfg.LicenseProvider, pubKey, cfg.LicenseKeyPath)
+	if err != nil {
+		log.Fatalf("license provider: %v", err)
+	}
 
 	dbConn, err := db.Connect(cfg.DatabaseURL, db.PoolConfig{
 		MaxOpenConns:    cfg.DBMaxOpenConns,
@@ -150,7 +151,7 @@ func main() {
 		SessionManager:     sessionMgr,
 		ProvenanceManager:  provenanceMgr,
 		TicketingService:   ticketingService,
-		LicenseValidator:   licenseValidator,
+		LicenseProvider:    licenseProvider,
 		CredentialResolver: credResolver,
 	})
 	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
@@ -166,7 +167,7 @@ func main() {
 		AdminSessionMgr:    adminSessionMgr,
 		SecretResolver:     secretResolver,
 		TicketingService:   ticketingService,
-		LicenseValidator:   licenseValidator,
+		LicenseProvider:    licenseProvider,
 		CredentialResolver: credResolver,
 	})
 
@@ -174,7 +175,8 @@ func main() {
 	defer stop()
 	go expiryScheduler.Start(ctx)
 	go auditRetention.Start(ctx)
-	go licenseWatcher.Start(ctx)
+	go licenseProvider.Start(ctx)
+	go usageReporter.Start(ctx)
 
 	sc := echo.StartConfig{
 		Address:         cfg.ListenAddr,

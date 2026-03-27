@@ -805,8 +805,8 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 
 	// Get license tier's maximum allowed audit retention
 	retentionDaysMax := license.DefaultAuditRetentionDays
-	if d.LicenseValidator != nil {
-		ent := d.LicenseValidator.Entitlements()
+	if d.LicenseProvider != nil {
+		ent := d.LicenseProvider.Entitlements()
 		retentionDaysMax = ent.AuditRetentionDays
 	}
 
@@ -1701,8 +1701,8 @@ func (d *Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 	}
 
 	// Validate against license tier maximum
-	if d.LicenseValidator != nil {
-		ent := d.LicenseValidator.Entitlements()
+	if d.LicenseProvider != nil {
+		ent := d.LicenseProvider.Entitlements()
 		maxAllowed := ent.AuditRetentionDays
 		if !license.IsUnlimited(maxAllowed) && payload.Days > maxAllowed {
 			return c.JSON(http.StatusForbidden, map[string]string{

@@ -19,7 +19,7 @@ import (
 // --- handleUsageSummary ---
 
 func TestHandleUsageSummary_FreeTier(t *testing.T) {
-	v, _ := newValidatorWithoutKey(t)
+	v, _ := newProviderWithoutKey(t)
 	storeMock := store.NewMockStoreAPI(t)
 
 	period := currentPeriod()
@@ -27,7 +27,7 @@ func TestHandleUsageSummary_FreeTier(t *testing.T) {
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(1, nil)
 	storeMock.EXPECT().GetAuditRetentionDays(mock.Anything).Return(7, nil)
 
-	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
+	deps := &Dependencies{LicenseProvider: v, Store: storeMock}
 
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
@@ -69,7 +69,7 @@ func TestHandleUsageSummary_FreeTier(t *testing.T) {
 }
 
 func TestHandleUsageSummary_PaidTier(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
 	storeMock := store.NewMockStoreAPI(t)
 
 	period := currentPeriod()
@@ -77,7 +77,7 @@ func TestHandleUsageSummary_PaidTier(t *testing.T) {
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(5, nil)
 	storeMock.EXPECT().GetAuditRetentionDays(mock.Anything).Return(365, nil)
 
-	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
+	deps := &Dependencies{LicenseProvider: v, Store: storeMock}
 
 	e := echo.New()
 	e.GET("/usage", deps.handleUsageSummary)
@@ -277,13 +277,13 @@ func TestHandleUsageHistory_NilStore(t *testing.T) {
 }
 
 func TestHandleUsageHistory_PaidTierUnlimited(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().ListAggregatedUsageHistory(mock.Anything, defaultUsageHistoryMonths).Return([]store.PeriodUsageSummary{
 		{Period: "2026-03", ActionCount: 100000},
 	}, nil)
 
-	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
+	deps := &Dependencies{LicenseProvider: v, Store: storeMock}
 
 	e := echo.New()
 	e.GET("/usage/history", deps.handleUsageHistory)
