@@ -21,7 +21,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
-func testLicenseValidator(t *testing.T, tier string, maxTenants, maxActiveKeys int) *license.Validator {
+func testLicenseProvider(t *testing.T, tier string, maxTenants, maxActiveKeys int) *license.SelfManagedProvider {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -61,7 +61,8 @@ func testLicenseValidator(t *testing.T, tier string, maxTenants, maxActiveKeys i
 
 	v := license.NewValidator(pub, keyPath)
 	v.LoadAndValidate()
-	return v
+	w := license.NewWatcher(v, keyPath)
+	return license.NewSelfManagedProvider(v, w)
 }
 
 // --- checkTenantLimit ---
@@ -74,12 +75,12 @@ func TestCheckTenantLimit_NilValidator(t *testing.T) {
 }
 
 func TestCheckTenantLimit_Unlimited(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
 	storeMock := store.NewMockStoreAPI(t)
 	// Store should NOT be called for unlimited tier.
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkTenantLimit(context.Background())
@@ -88,13 +89,13 @@ func TestCheckTenantLimit_Unlimited(t *testing.T) {
 }
 
 func TestCheckTenantLimit_UnderLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(0, nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkTenantLimit(context.Background())
@@ -103,13 +104,13 @@ func TestCheckTenantLimit_UnderLimit(t *testing.T) {
 }
 
 func TestCheckTenantLimit_AtLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(1, nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkTenantLimit(context.Background())
@@ -122,13 +123,13 @@ func TestCheckTenantLimit_AtLimit(t *testing.T) {
 }
 
 func TestCheckTenantLimit_StoreError(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountTenants(mock.Anything).Return(0, errors.New("db error"))
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkTenantLimit(context.Background())
@@ -146,11 +147,11 @@ func TestCheckActiveKeyLimit_NilValidator(t *testing.T) {
 }
 
 func TestCheckActiveKeyLimit_Unlimited(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
 	storeMock := store.NewMockStoreAPI(t)
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkActiveKeyLimit(context.Background(), "tenant-1")
@@ -159,13 +160,13 @@ func TestCheckActiveKeyLimit_Unlimited(t *testing.T) {
 }
 
 func TestCheckActiveKeyLimit_UnderLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountActiveKeysByTenant(mock.Anything, "tenant-1").Return(0, nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkActiveKeyLimit(context.Background(), "tenant-1")
@@ -174,13 +175,13 @@ func TestCheckActiveKeyLimit_UnderLimit(t *testing.T) {
 }
 
 func TestCheckActiveKeyLimit_AtLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountActiveKeysByTenant(mock.Anything, "tenant-1").Return(1, nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkActiveKeyLimit(context.Background(), "tenant-1")
@@ -193,13 +194,13 @@ func TestCheckActiveKeyLimit_AtLimit(t *testing.T) {
 }
 
 func TestCheckActiveKeyLimit_StoreError(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
+	v := testLicenseProvider(t, "free", 1, 1)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().CountActiveKeysByTenant(mock.Anything, "tenant-1").Return(0, errors.New("db error"))
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.checkActiveKeyLimit(context.Background(), "tenant-1")

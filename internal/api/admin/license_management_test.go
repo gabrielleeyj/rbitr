@@ -58,8 +58,8 @@ func signValidLicenseKey(t *testing.T, priv ed25519.PrivateKey, tier string) []b
 	return signed
 }
 
-// newValidatorWithoutKey creates a validator with no existing key file.
-func newValidatorWithoutKey(t *testing.T) (*license.Validator, ed25519.PrivateKey) {
+// newProviderWithoutKey creates a self-managed provider with no existing key file.
+func newProviderWithoutKey(t *testing.T) (*license.SelfManagedProvider, ed25519.PrivateKey) {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -67,7 +67,8 @@ func newValidatorWithoutKey(t *testing.T) (*license.Validator, ed25519.PrivateKe
 	keyPath := filepath.Join(t.TempDir(), "license.key")
 	v := license.NewValidator(pub, keyPath)
 	v.LoadAndValidate()
-	return v, priv
+	w := license.NewWatcher(v, keyPath)
+	return license.NewSelfManagedProvider(v, w), priv
 }
 
 // --- handleLicenseStatus ---
@@ -91,8 +92,8 @@ func TestHandleLicenseStatus_NilValidator(t *testing.T) {
 }
 
 func TestHandleLicenseStatus_FreeTier(t *testing.T) {
-	v, _ := newValidatorWithoutKey(t)
-	deps := &Dependencies{LicenseValidator: v}
+	v, _ := newProviderWithoutKey(t)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/license", deps.handleLicenseStatus)
@@ -112,8 +113,8 @@ func TestHandleLicenseStatus_FreeTier(t *testing.T) {
 }
 
 func TestHandleLicenseStatus_PaidTier(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/license", deps.handleLicenseStatus)
@@ -136,14 +137,14 @@ func TestHandleLicenseStatus_PaidTier(t *testing.T) {
 // --- handleLicenseUpload ---
 
 func TestHandleLicenseUpload_RawBody(t *testing.T) {
-	v, priv := newValidatorWithoutKey(t)
+	v, priv := newProviderWithoutKey(t)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().InsertLicenseHistory(
 		mock.Anything, "paid", 1, "Test Corp", "test@example.com",
 		mock.AnythingOfType("time.Time"), mock.AnythingOfType("string"),
 	).Return(nil)
 
-	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
+	deps := &Dependencies{LicenseProvider: v, Store: storeMock}
 
 	tokenBytes := signValidLicenseKey(t, priv, "paid")
 
@@ -175,14 +176,14 @@ func TestHandleLicenseUpload_RawBody(t *testing.T) {
 }
 
 func TestHandleLicenseUpload_MultipartForm(t *testing.T) {
-	v, priv := newValidatorWithoutKey(t)
+	v, priv := newProviderWithoutKey(t)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().InsertLicenseHistory(
 		mock.Anything, mock.Anything, mock.Anything, mock.Anything,
 		mock.Anything, mock.Anything, mock.Anything,
 	).Return(nil)
 
-	deps := &Dependencies{LicenseValidator: v, Store: storeMock}
+	deps := &Dependencies{LicenseProvider: v, Store: storeMock}
 
 	tokenBytes := signValidLicenseKey(t, priv, "paid")
 
@@ -210,8 +211,8 @@ func TestHandleLicenseUpload_MultipartForm(t *testing.T) {
 }
 
 func TestHandleLicenseUpload_InvalidKey(t *testing.T) {
-	v, _ := newValidatorWithoutKey(t)
-	deps := &Dependencies{LicenseValidator: v}
+	v, _ := newProviderWithoutKey(t)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
@@ -229,8 +230,8 @@ func TestHandleLicenseUpload_InvalidKey(t *testing.T) {
 }
 
 func TestHandleLicenseUpload_EmptyBody(t *testing.T) {
-	v, _ := newValidatorWithoutKey(t)
-	deps := &Dependencies{LicenseValidator: v}
+	v, _ := newProviderWithoutKey(t)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.POST("/license", deps.handleLicenseUpload)
@@ -253,13 +254,13 @@ func TestHandleLicenseUpload_NilValidator(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
 }
 
 // --- handleLicenseRemove ---
 
 func TestHandleLicenseRemove_WithExistingKey(t *testing.T) {
-	v, priv := newValidatorWithoutKey(t)
+	v, priv := newProviderWithoutKey(t)
 
 	// Write a valid key first.
 	tokenBytes := signValidLicenseKey(t, priv, "paid")
@@ -267,7 +268,7 @@ func TestHandleLicenseRemove_WithExistingKey(t *testing.T) {
 	v.LoadAndValidate()
 	require.True(t, v.Info().Valid)
 
-	deps := &Dependencies{LicenseValidator: v}
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.DELETE("/license", deps.handleLicenseRemove)
@@ -293,8 +294,8 @@ func TestHandleLicenseRemove_WithExistingKey(t *testing.T) {
 }
 
 func TestHandleLicenseRemove_NoExistingKey(t *testing.T) {
-	v, _ := newValidatorWithoutKey(t)
-	deps := &Dependencies{LicenseValidator: v}
+	v, _ := newProviderWithoutKey(t)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.DELETE("/license", deps.handleLicenseRemove)
@@ -317,7 +318,7 @@ func TestHandleLicenseRemove_NilValidator(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, http.StatusNotImplemented, rec.Code)
 }
 
 // --- atomicWriteFile ---

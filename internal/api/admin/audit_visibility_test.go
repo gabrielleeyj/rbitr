@@ -16,16 +16,16 @@ func TestAuditVisibilityFloor_NilValidator(t *testing.T) {
 }
 
 func TestAuditVisibilityFloor_PaidTier(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
+	deps := &Dependencies{LicenseProvider: v}
 
 	floor := deps.auditVisibilityFloor()
 	assert.Nil(t, floor, "paid tier should return nil floor (no restriction)")
 }
 
 func TestAuditVisibilityFloor_FreeTier(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "free", 1, 1)
+	deps := &Dependencies{LicenseProvider: v}
 
 	floor := deps.auditVisibilityFloor()
 	assert.NotNil(t, floor, "free tier should return a visibility floor")

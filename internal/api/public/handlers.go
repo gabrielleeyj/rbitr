@@ -45,7 +45,7 @@ type Dependencies struct {
 	SessionManager     *auth.SessionManager
 	ProvenanceManager  *auth.ProvenanceManager
 	TicketingService   TicketingHook
-	LicenseValidator   *license.Validator
+	LicenseProvider    license.LicenseProvider
 	CredentialResolver *credential.Resolver
 }
 

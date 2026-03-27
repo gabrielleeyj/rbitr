@@ -16,11 +16,11 @@ import (
 // only hidden from query results. Upgrading to paid tier restores full
 // visibility without data loss.
 func (d *Dependencies) auditVisibilityFloor() *time.Time {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return nil
 	}
 
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 	if ent.Tier != "free" {
 		return nil
 	}

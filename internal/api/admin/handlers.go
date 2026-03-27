@@ -31,7 +31,7 @@ type Dependencies struct {
 	AdminSessionMgr    *auth.AdminSessionManager
 	SecretResolver     notifications.SecretResolver
 	TicketingService   *ticketing.Service
-	LicenseValidator   *license.Validator
+	LicenseProvider    license.LicenseProvider
 	CredentialResolver *credential.Resolver
 }
 

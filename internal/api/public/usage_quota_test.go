@@ -21,7 +21,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
-func testLicenseValidator(t *testing.T, tier string, monthlyLimit int64) *license.Validator {
+func testLicenseProvider(t *testing.T, tier string, monthlyLimit int64) *license.SelfManagedProvider {
 	t.Helper()
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -60,7 +60,8 @@ func testLicenseValidator(t *testing.T, tier string, monthlyLimit int64) *licens
 
 	v := license.NewValidator(pub, keyPath)
 	v.LoadAndValidate()
-	return v
+	w := license.NewWatcher(v, keyPath)
+	return license.NewSelfManagedProvider(v, w)
 }
 
 func TestEnforceUsageQuota_NilValidator(t *testing.T) {
@@ -71,12 +72,12 @@ func TestEnforceUsageQuota_NilValidator(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_UnlimitedSkipsMetering(t *testing.T) {
-	v := testLicenseValidator(t, "paid", int64(license.Unlimited))
+	v := testLicenseProvider(t, "paid", int64(license.Unlimited))
 	storeMock := store.NewMockStoreAPI(t)
 	// Store should NOT be called for unlimited tier.
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.enforceUsageQuota(context.Background(), "tenant-1")
@@ -86,7 +87,7 @@ func TestEnforceUsageQuota_UnlimitedSkipsMetering(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_UnderLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 10_000)
+	v := testLicenseProvider(t, "free", 10_000)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().IncrementUsageMeter(
 		mock.Anything,
@@ -95,8 +96,8 @@ func TestEnforceUsageQuota_UnderLimit(t *testing.T) {
 	).Return(int64(5000), nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.enforceUsageQuota(context.Background(), "tenant-1")
@@ -105,7 +106,7 @@ func TestEnforceUsageQuota_UnderLimit(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_AtLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 10_000)
+	v := testLicenseProvider(t, "free", 10_000)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().IncrementUsageMeter(
 		mock.Anything,
@@ -114,8 +115,8 @@ func TestEnforceUsageQuota_AtLimit(t *testing.T) {
 	).Return(int64(10_000), nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	// At exactly the limit is still allowed (count == limit, not count > limit).
@@ -125,7 +126,7 @@ func TestEnforceUsageQuota_AtLimit(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_OverLimit(t *testing.T) {
-	v := testLicenseValidator(t, "free", 10_000)
+	v := testLicenseProvider(t, "free", 10_000)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().IncrementUsageMeter(
 		mock.Anything,
@@ -134,8 +135,8 @@ func TestEnforceUsageQuota_OverLimit(t *testing.T) {
 	).Return(int64(10_001), nil)
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.enforceUsageQuota(context.Background(), "tenant-1")
@@ -148,7 +149,7 @@ func TestEnforceUsageQuota_OverLimit(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_StoreError(t *testing.T) {
-	v := testLicenseValidator(t, "free", 10_000)
+	v := testLicenseProvider(t, "free", 10_000)
 	storeMock := store.NewMockStoreAPI(t)
 	storeMock.EXPECT().IncrementUsageMeter(
 		mock.Anything,
@@ -157,8 +158,8 @@ func TestEnforceUsageQuota_StoreError(t *testing.T) {
 	).Return(int64(0), errors.New("db connection failed"))
 
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            storeMock,
+		LicenseProvider: v,
+		Store:           storeMock,
 	}
 
 	violation, err := deps.enforceUsageQuota(context.Background(), "tenant-1")
@@ -167,10 +168,10 @@ func TestEnforceUsageQuota_StoreError(t *testing.T) {
 }
 
 func TestEnforceUsageQuota_NilStore(t *testing.T) {
-	v := testLicenseValidator(t, "free", 10_000)
+	v := testLicenseProvider(t, "free", 10_000)
 	deps := &Dependencies{
-		LicenseValidator: v,
-		Store:            nil,
+		LicenseProvider: v,
+		Store:           nil,
 	}
 
 	violation, err := deps.enforceUsageQuota(context.Background(), "tenant-1")

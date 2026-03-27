@@ -30,8 +30,8 @@ func TestFeatureGate_NilValidator_AllowsThrough(t *testing.T) {
 }
 
 func TestFeatureGate_FeatureEnabled_AllowsThrough(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/test", func(c *echo.Context) error {
@@ -46,8 +46,8 @@ func TestFeatureGate_FeatureEnabled_AllowsThrough(t *testing.T) {
 }
 
 func TestFeatureGate_FeatureDisabled_Returns403(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "free", 1, 1)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/test", func(c *echo.Context) error {
@@ -68,8 +68,8 @@ func TestFeatureGate_FeatureDisabled_Returns403(t *testing.T) {
 }
 
 func TestFeatureGate_DifferentFeatures(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "free", 1, 1)
+	deps := &Dependencies{LicenseProvider: v}
 
 	features := []string{"approval_workflows", "evidence_export", "integrations"}
 	for _, feature := range features {
@@ -111,8 +111,8 @@ func TestHandleEntitlements_NilValidator(t *testing.T) {
 }
 
 func TestHandleEntitlements_PaidTier(t *testing.T) {
-	v := testLicenseValidator(t, "paid", license.Unlimited, license.Unlimited)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "paid", license.Unlimited, license.Unlimited)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/license/entitlements", deps.handleEntitlements)
@@ -140,8 +140,8 @@ func TestHandleEntitlements_PaidTier(t *testing.T) {
 }
 
 func TestHandleEntitlements_FreeTier(t *testing.T) {
-	v := testLicenseValidator(t, "free", 1, 1)
-	deps := &Dependencies{LicenseValidator: v}
+	v := testLicenseProvider(t, "free", 1, 1)
+	deps := &Dependencies{LicenseProvider: v}
 
 	e := echo.New()
 	e.GET("/license/entitlements", deps.handleEntitlements)

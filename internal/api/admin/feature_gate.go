@@ -11,11 +11,11 @@ import (
 func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
-			if d.LicenseValidator == nil {
+			if d.LicenseProvider == nil {
 				return next(c)
 			}
 
-			ent := d.LicenseValidator.Entitlements()
+			ent := d.LicenseProvider.Entitlements()
 			if ent.HasFeature(feature) {
 				return next(c)
 			}
@@ -31,7 +31,7 @@ func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 
 // handleEntitlements returns the current license entitlements for UI rendering.
 func (d *Dependencies) handleEntitlements(c *echo.Context) error {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return c.JSON(http.StatusOK, map[string]any{
 			"tier": "free",
 			"features": map[string]bool{
@@ -43,7 +43,7 @@ func (d *Dependencies) handleEntitlements(c *echo.Context) error {
 		})
 	}
 
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"tier": ent.Tier,

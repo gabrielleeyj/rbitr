@@ -22,14 +22,14 @@ const (
 
 // handleLicenseStatus returns the current license info.
 func (d *Dependencies) handleLicenseStatus(c *echo.Context) error {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return c.JSON(http.StatusOK, map[string]any{
 			"valid": false,
 			"tier":  "free",
 		})
 	}
 
-	info := d.LicenseValidator.Info()
+	info := d.LicenseProvider.Info()
 	resp := map[string]any{
 		"valid": info.Valid,
 		"tier":  info.Tier,
@@ -48,11 +48,12 @@ func (d *Dependencies) handleLicenseStatus(c *echo.Context) error {
 }
 
 // handleLicenseUpload accepts a license key file, validates it, writes it to
-// disk, and triggers a hot-reload.
+// disk, and triggers a hot-reload. Only supported for self-managed providers.
 func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
-	if d.LicenseValidator == nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{
-			"error": "license management not configured",
+	mgr, ok := d.LicenseProvider.(license.SelfManagedManager)
+	if !ok || d.LicenseProvider == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{
+			"error": "license upload is only supported for self-managed installations",
 		})
 	}
 
@@ -62,7 +63,7 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	}
 
 	// Validate before writing.
-	info, validateErr := d.LicenseValidator.ValidateBytes(data)
+	info, validateErr := mgr.ValidateBytes(data)
 	if validateErr != nil {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{
 			"error":  "INVALID_LICENSE_KEY",
@@ -87,7 +88,7 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	}
 
 	// Write to disk atomically (write tmp then rename).
-	keyPath := d.LicenseValidator.KeyPath()
+	keyPath := mgr.KeyPath()
 	if writeErr := atomicWriteFile(keyPath, data); writeErr != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":  "failed to write license key file",
@@ -96,7 +97,7 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	}
 
 	// Trigger hot-reload.
-	d.LicenseValidator.LoadAndValidate()
+	mgr.LoadAndValidate()
 
 	// Record in license history.
 	fp := license.Fingerprint(data)
@@ -125,14 +126,16 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 }
 
 // handleLicenseRemove deletes the license key file and reverts to free tier.
+// Only supported for self-managed providers.
 func (d *Dependencies) handleLicenseRemove(c *echo.Context) error {
-	if d.LicenseValidator == nil {
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{
-			"error": "license management not configured",
+	mgr, ok := d.LicenseProvider.(license.SelfManagedManager)
+	if !ok || d.LicenseProvider == nil {
+		return c.JSON(http.StatusNotImplemented, map[string]string{
+			"error": "license removal is only supported for self-managed installations",
 		})
 	}
 
-	keyPath := d.LicenseValidator.KeyPath()
+	keyPath := mgr.KeyPath()
 	if err := os.Remove(keyPath); err != nil && !os.IsNotExist(err) {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "failed to remove license key file",
@@ -140,7 +143,7 @@ func (d *Dependencies) handleLicenseRemove(c *echo.Context) error {
 	}
 
 	// Trigger reload — will fall back to free tier.
-	d.LicenseValidator.LoadAndValidate()
+	mgr.LoadAndValidate()
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"valid": false,

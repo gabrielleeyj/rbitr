@@ -77,6 +77,9 @@ secrets:
 ## rbitr operates in free tier by default. Upload a license key via
 ## the admin UI or pre-provision one in a Kubernetes Secret.
 license:
+  ## License provider: "self-managed" (default), "aws-marketplace",
+  ## "gcp-marketplace", or "azure-marketplace".
+  provider: "self-managed"
   ## Path inside the container where the license key file is stored.
   ## The gateway reads from this path at startup and watches for changes.
   keyPath: "/data/rbitr/license.key"

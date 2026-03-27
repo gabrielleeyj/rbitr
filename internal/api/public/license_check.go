@@ -7,10 +7,10 @@ import (
 // checkFeatureAccess returns an error message if the feature is not accessible.
 // Returns empty string if access is allowed.
 func (d *Dependencies) checkFeatureAccess(_ context.Context, _, feature string) string {
-	if d.LicenseValidator == nil {
+	if d.LicenseProvider == nil {
 		return ""
 	}
-	ent := d.LicenseValidator.Entitlements()
+	ent := d.LicenseProvider.Entitlements()
 
 	if ent.HasFeature(feature) {
 		return ""
