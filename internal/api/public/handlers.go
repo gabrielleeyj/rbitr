@@ -46,6 +46,7 @@ type Dependencies struct {
 	ProvenanceManager  *auth.ProvenanceManager
 	TicketingService   TicketingHook
 	LicenseProvider    license.LicenseProvider
+	UsageReporter      license.UsageReporter
 	CredentialResolver *credential.Resolver
 }
 

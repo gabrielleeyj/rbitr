@@ -50,6 +50,13 @@ func (d *Dependencies) enforceUsageQuota(ctx context.Context, tenantID string) (
 		return nil, fmt.Errorf("increment usage meter: %w", err)
 	}
 
+	// Report to external marketplace metering (no-op for self-managed).
+	if d.UsageReporter != nil {
+		if reportErr := d.UsageReporter.RecordUsage(ctx, tenantID, period, 1); reportErr != nil {
+			slog.Warn("external usage reporting failed", "error", reportErr, "tenant_id", tenantID)
+		}
+	}
+
 	if count > ent.MonthlyActionLimit {
 		return &usageQuotaViolation{
 			Limit:   ent.MonthlyActionLimit,

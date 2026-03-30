@@ -19,23 +19,44 @@ const (
 	ProviderAzureMarketplace = "azure-marketplace"
 )
 
-// NewProvider creates a LicenseProvider and UsageReporter for the given
-// provider name. Only "self-managed" is currently supported; marketplace
-// providers will be added in future phases.
-func NewProvider(providerName string, pubKey ed25519.PublicKey, keyPath string) (LicenseProvider, UsageReporter, error) {
-	switch providerName {
+// ProviderConfig holds configuration for creating a LicenseProvider and UsageReporter.
+type ProviderConfig struct {
+	// Name selects the provider implementation (e.g. "self-managed", "aws-marketplace").
+	Name string
+
+	// PubKey is the Ed25519 public key for JWT license validation (self-managed only).
+	PubKey ed25519.PublicKey
+
+	// KeyPath is the path to the license key file on disk (self-managed only).
+	KeyPath string
+
+	// AWSProductCode is the AWS Marketplace product code.
+	AWSProductCode string
+
+	// AWSRegion overrides the default AWS region for marketplace API calls.
+	AWSRegion string
+
+	// AWSCustomerID is a pre-resolved customer identifier (optional; can be resolved at runtime via activation endpoint).
+	AWSCustomerID string
+}
+
+// NewProvider creates a LicenseProvider and UsageReporter based on the given config.
+// For self-managed, constructs the provider inline. For marketplace providers,
+// returns an error indicating they must be constructed via their dedicated packages.
+func NewProvider(cfg *ProviderConfig) (LicenseProvider, UsageReporter, error) {
+	switch cfg.Name {
 	case ProviderSelfManaged, "":
-		validator := NewValidator(pubKey, keyPath)
+		validator := NewValidator(cfg.PubKey, cfg.KeyPath)
 		validator.LoadAndValidate()
-		watcher := NewWatcher(validator, keyPath)
+		watcher := NewWatcher(validator, cfg.KeyPath)
 		provider := NewSelfManagedProvider(validator, watcher)
 		return provider, &NoopReporter{}, nil
 
 	case ProviderAWSMarketplace, ProviderGCPMarketplace, ProviderAzureMarketplace:
-		return nil, nil, fmt.Errorf("license provider %q is not yet implemented", providerName)
+		return nil, nil, fmt.Errorf("license provider %q must be constructed via its dedicated package", cfg.Name)
 
 	default:
 		return nil, nil, fmt.Errorf("unknown license provider: %q (supported: %s, %s, %s, %s)",
-			providerName, ProviderSelfManaged, ProviderAWSMarketplace, ProviderGCPMarketplace, ProviderAzureMarketplace)
+			cfg.Name, ProviderSelfManaged, ProviderAWSMarketplace, ProviderGCPMarketplace, ProviderAzureMarketplace)
 	}
 }

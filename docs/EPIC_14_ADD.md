@@ -4,8 +4,8 @@
 
 | Phase | Status | Date |
 |-------|--------|------|
-| **1** Interface Extraction & Self-Managed Adapter | TODO | — |
-| **2** AWS Marketplace Provider | TODO | — |
+| **1** Interface Extraction & Self-Managed Adapter | DONE | 2026-03-27 |
+| **2** AWS Marketplace Provider | DONE | 2026-03-30 |
 | **3** GCP Marketplace Provider | TODO | — |
 | **4** Azure Marketplace Provider | TODO | — |
 | **5** Integration Testing & Documentation | TODO | — |

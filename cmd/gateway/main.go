@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +13,9 @@ import (
 	"syscall"
 	"time"
 
+	awssdkconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/marketplaceentitlementservice"
+	"github.com/aws/aws-sdk-go-v2/service/marketplacemetering"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -25,6 +30,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/credential"
 	"github.com/gabrielleeyj/rbitr/internal/db"
 	"github.com/gabrielleeyj/rbitr/internal/license"
+	awslicense "github.com/gabrielleeyj/rbitr/internal/license/aws"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
@@ -62,10 +68,6 @@ func main() {
 	pubKey, err := license.EmbeddedPublicKey()
 	if err != nil {
 		log.Fatalf("license: %v", err)
-	}
-	licenseProvider, usageReporter, err := license.NewProvider(cfg.LicenseProvider, pubKey, cfg.LicenseKeyPath)
-	if err != nil {
-		log.Fatalf("license provider: %v", err)
 	}
 
 	dbConn, err := db.Connect(cfg.DatabaseURL, db.PoolConfig{
@@ -115,6 +117,11 @@ func main() {
 	})
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
+	licenseProvider, usageReporter, err := initLicenseProvider(&cfg, pubKey, e)
+	if err != nil {
+		log.Fatalf("license provider: %v", err) //nolint:gocritic // startup init before server starts
+	}
+
 	toolCache := cache.New[models.Tool](cacheTTL)
 	riskOverrideCache := cache.New[string](cacheTTL)
 
@@ -152,6 +159,7 @@ func main() {
 		ProvenanceManager:  provenanceMgr,
 		TicketingService:   ticketingService,
 		LicenseProvider:    licenseProvider,
+		UsageReporter:      usageReporter,
 		CredentialResolver: credResolver,
 	})
 	oidcProvider, adminSessionMgr := initSSOComponents(&cfg)
@@ -222,4 +230,49 @@ func initSessionManager(cfg *config.Config) *auth.SessionManager {
 	}
 	log.Printf("session tokens enabled (TTL=%s)", cfg.SessionTokenTTL)
 	return sm
+}
+
+func initLicenseProvider(cfg *config.Config, pubKey ed25519.PublicKey, e *echo.Echo) (license.LicenseProvider, license.UsageReporter, error) {
+	switch cfg.LicenseProvider {
+	case license.ProviderAWSMarketplace:
+		return initAWSLicenseProvider(cfg, e)
+	default:
+		return license.NewProvider(&license.ProviderConfig{
+			Name:    cfg.LicenseProvider,
+			PubKey:  pubKey,
+			KeyPath: cfg.LicenseKeyPath,
+		})
+	}
+}
+
+func initAWSLicenseProvider(cfg *config.Config, e *echo.Echo) (license.LicenseProvider, license.UsageReporter, error) {
+	if cfg.AWSProductCode == "" {
+		return nil, nil, errors.New("aws marketplace: RBTR_AWS_PRODUCT_CODE is required")
+	}
+
+	opts := []func(*awssdkconfig.LoadOptions) error{}
+	if cfg.AWSMarketplaceRegion != "" {
+		opts = append(opts, awssdkconfig.WithRegion(cfg.AWSMarketplaceRegion))
+	}
+
+	awsCfg, err := awssdkconfig.LoadDefaultConfig(context.Background(), opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("aws marketplace: load AWS config: %w", err)
+	}
+
+	entClient := marketplaceentitlementservice.NewFromConfig(awsCfg)
+	metClient := marketplacemetering.NewFromConfig(awsCfg)
+
+	provider, err := awslicense.NewProvider(entClient, cfg.AWSProductCode, cfg.AWSCustomerID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("aws marketplace provider: %w", err)
+	}
+
+	reporter := awslicense.NewReporter(metClient, cfg.AWSProductCode, cfg.AWSCustomerID)
+
+	handler := awslicense.NewActivationHandler(metClient, provider, reporter)
+	awslicense.RegisterRoutes(e, handler)
+
+	log.Printf("aws marketplace provider enabled (product_code=%s)", cfg.AWSProductCode)
+	return provider, reporter, nil
 }
