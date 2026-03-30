@@ -87,6 +87,13 @@ license:
   ## The Secret should have a key named "license.key" with the raw key data.
   existingSecret: ""
 
+## ── AWS Marketplace ────────────────────────────────────────────────
+## Only used when license.provider is "aws-marketplace".
+aws:
+  productCode: ""
+  region: ""
+  customerID: ""
+
 ## ── Feature Flags ──────────────────────────────────────────────────
 features:
   rateLimiting: false

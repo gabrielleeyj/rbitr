@@ -16,8 +16,16 @@ Metadata:
         Parameters: [GatewayImageUri, UIImageUri]
       - Label: { default: Application }
         Parameters: [SetupToken, GatewayCpu, GatewayMemory, UICpu, UIMemory]
+      - Label: { default: AWS Marketplace }
+        Parameters: [AWSProductCode]
 
 Parameters:
+  AWSProductCode:
+    Type: String
+    Default: ""
+    Description: AWS Marketplace product code (leave empty for self-managed deployments)
+
+
   VpcCIDR:
     Type: String
     Default: 10.0.0.0/16
@@ -91,6 +99,7 @@ Parameters:
 
 Conditions:
   GenerateSetupToken: !Equals [!Ref SetupToken, ""]
+  IsAWSMarketplace: !Not [!Equals [!Ref AWSProductCode, ""]]
 
 Resources:
   ## ── VPC ─────────────────────────────────────────────────────────
@@ -402,6 +411,21 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
+      Policies:
+        - !If
+          - IsAWSMarketplace
+          - PolicyName: MarketplaceMeteringAccess
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - aws-marketplace:ResolveCustomer
+                    - aws-marketplace:BatchMeterUsage
+                    - aws-marketplace:MeterUsage
+                    - entitlement.marketplace:GetEntitlements
+                  Resource: "*"
+          - !Ref "AWS::NoValue"
 
   ## ── ALB ─────────────────────────────────────────────────────────
   ALB:
@@ -497,6 +521,16 @@ Resources:
               Value: "true"
             - Name: RBTR_LICENSE_KEY_PATH
               Value: "/tmp/rbitr/license.key"
+            - !If
+              - IsAWSMarketplace
+              - Name: RBTR_LICENSE_PROVIDER
+                Value: "aws-marketplace"
+              - !Ref "AWS::NoValue"
+            - !If
+              - IsAWSMarketplace
+              - Name: RBTR_AWS_PRODUCT_CODE
+                Value: !Ref AWSProductCode
+              - !Ref "AWS::NoValue"
           LogConfiguration:
             LogDriver: awslogs
             Options:

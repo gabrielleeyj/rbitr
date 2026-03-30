@@ -39,6 +39,9 @@ type Config struct {
 	SSODefaultScopes        []string
 	LicenseKeyPath          string
 	LicenseProvider         string
+	AWSProductCode          string
+	AWSMarketplaceRegion    string
+	AWSCustomerID           string
 	DevAutoTools            bool
 	OutboundAllowPrivate    bool
 	DevMockInternalURL      string
@@ -92,6 +95,9 @@ func Load() Config {
 		SSODefaultScopes:        getEnvCSVDefault("RBTR_SSO_DEFAULT_SCOPES", []string{"admin:read", "admin:write"}),
 		LicenseKeyPath:          getEnv("RBTR_LICENSE_KEY_PATH", "/etc/rbitr/license.key"),
 		LicenseProvider:         getEnv("RBTR_LICENSE_PROVIDER", "self-managed"),
+		AWSProductCode:          getEnv("RBTR_AWS_PRODUCT_CODE", ""),
+		AWSMarketplaceRegion:    getEnv("RBTR_AWS_REGION", ""),
+		AWSCustomerID:           getEnv("RBTR_AWS_CUSTOMER_ID", ""),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		OutboundAllowPrivate:    getEnvBool("RBTR_OUTBOUND_ALLOW_PRIVATE"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),

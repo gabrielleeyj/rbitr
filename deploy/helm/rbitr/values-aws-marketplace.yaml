@@ -1,0 +1,22 @@
+## AWS Marketplace deployment overlay.
+## Usage: helm install rbitr ./deploy/helm/rbitr -f deploy/helm/rbitr/values-aws-marketplace.yaml
+
+license:
+  provider: "aws-marketplace"
+  ## License key path is not used for marketplace deployments.
+  keyPath: ""
+
+aws:
+  ## Required: your AWS Marketplace product code.
+  productCode: ""
+  ## Optional: override the default AWS region for marketplace API calls.
+  region: ""
+  ## Optional: pre-resolved customer ID (set via activation endpoint if empty).
+  customerID: ""
+
+serviceAccount:
+  create: true
+  annotations:
+    ## Required: IRSA role ARN with marketplace permissions.
+    ## See docs/EPIC_14_ADD.md for required IAM permissions.
+    eks.amazonaws.com/role-arn: ""
