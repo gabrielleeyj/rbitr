@@ -1,6 +1,7 @@
 package gcp
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,7 +43,7 @@ func TestWebhookHandler_ActivationRequest(t *testing.T) {
 	}`
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -94,7 +95,7 @@ func TestWebhookHandler_EntitlementActive(t *testing.T) {
 	}`
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -113,7 +114,7 @@ func TestWebhookHandler_InvalidBody(t *testing.T) {
 	handler, _ := newTestWebhookHandler(t)
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader("not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -142,7 +143,7 @@ func TestWebhookHandler_UnknownEvent(t *testing.T) {
 	}`
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/marketplace/gcp/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
