@@ -20,6 +20,10 @@ data:
   RBTR_AWS_CUSTOMER_ID: {{ .Values.aws.customerID | quote }}
   {{- end }}
   {{- end }}
+  {{- if eq .Values.license.provider "gcp-marketplace" }}
+  RBTR_GCP_PROJECT_ID: {{ .Values.gcp.projectID | quote }}
+  RBTR_GCP_SERVICE_NAME: {{ .Values.gcp.serviceName | quote }}
+  {{- end }}
   RBTR_FEATURE_RATE_LIMITING: {{ .Values.features.rateLimiting | quote }}
   RBTR_FEATURE_ARG_CONSTRAINTS: {{ .Values.features.argConstraints | quote }}
   RBTR_FEATURE_SHADOW_MODE: {{ .Values.features.shadowMode | quote }}

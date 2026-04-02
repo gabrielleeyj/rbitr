@@ -42,6 +42,8 @@ type Config struct {
 	AWSProductCode          string
 	AWSMarketplaceRegion    string
 	AWSCustomerID           string
+	GCPProjectID            string
+	GCPServiceName          string
 	DevAutoTools            bool
 	OutboundAllowPrivate    bool
 	DevMockInternalURL      string
@@ -98,6 +100,8 @@ func Load() Config {
 		AWSProductCode:          getEnv("RBTR_AWS_PRODUCT_CODE", ""),
 		AWSMarketplaceRegion:    getEnv("RBTR_AWS_REGION", ""),
 		AWSCustomerID:           getEnv("RBTR_AWS_CUSTOMER_ID", ""),
+		GCPProjectID:            getEnv("RBTR_GCP_PROJECT_ID", ""),
+		GCPServiceName:          getEnv("RBTR_GCP_SERVICE_NAME", ""),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		OutboundAllowPrivate:    getEnvBool("RBTR_OUTBOUND_ALLOW_PRIVATE"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),

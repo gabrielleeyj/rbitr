@@ -6,7 +6,7 @@
 |-------|--------|------|
 | **1** Interface Extraction & Self-Managed Adapter | DONE | 2026-03-27 |
 | **2** AWS Marketplace Provider | DONE | 2026-03-30 |
-| **3** GCP Marketplace Provider | TODO | — |
+| **3** GCP Marketplace Provider | DONE | 2026-04-02 |
 | **4** Azure Marketplace Provider | TODO | — |
 | **5** Integration Testing & Documentation | TODO | — |
 

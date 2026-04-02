@@ -1,0 +1,22 @@
+## GCP Marketplace deployment overlay.
+## Usage: helm install rbitr ./deploy/helm/rbitr -f deploy/helm/rbitr/values-gcp-marketplace.yaml
+
+license:
+  provider: "gcp-marketplace"
+  ## License key path is not used for marketplace deployments.
+  keyPath: ""
+
+gcp:
+  ## Required: your GCP project ID.
+  projectID: ""
+  ## Required: your GCP Marketplace service name (product external name).
+  serviceName: ""
+
+serviceAccount:
+  create: true
+  annotations:
+    ## Required: Workload Identity binding for GKE.
+    ## See docs/EPIC_14_ADD.md for required IAM roles:
+    ##   - roles/commerceoffercatalog.viewer
+    ##   - roles/servicemanagement.serviceController
+    iam.gke.io/gcp-service-account: ""

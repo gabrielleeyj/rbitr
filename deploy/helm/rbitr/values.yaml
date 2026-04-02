@@ -94,6 +94,12 @@ aws:
   region: ""
   customerID: ""
 
+## ── GCP Marketplace ────────────────────────────────────────────────
+## Only used when license.provider is "gcp-marketplace".
+gcp:
+  projectID: ""
+  serviceName: ""
+
 ## ── Feature Flags ──────────────────────────────────────────────────
 features:
   rateLimiting: false
