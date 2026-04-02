@@ -19,6 +19,9 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	procurement "google.golang.org/api/cloudcommerceprocurement/v1"
+	"google.golang.org/api/option"
+	servicecontrol "google.golang.org/api/servicecontrol/v2"
 
 	"github.com/gabrielleeyj/rbitr/internal/api/admin"
 	"github.com/gabrielleeyj/rbitr/internal/api/public"
@@ -31,6 +34,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/db"
 	"github.com/gabrielleeyj/rbitr/internal/license"
 	awslicense "github.com/gabrielleeyj/rbitr/internal/license/aws"
+	gcplicense "github.com/gabrielleeyj/rbitr/internal/license/gcp"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/policy"
@@ -236,6 +240,8 @@ func initLicenseProvider(cfg *config.Config, pubKey ed25519.PublicKey, e *echo.E
 	switch cfg.LicenseProvider {
 	case license.ProviderAWSMarketplace:
 		return initAWSLicenseProvider(cfg, e)
+	case license.ProviderGCPMarketplace:
+		return initGCPLicenseProvider(cfg, e)
 	default:
 		return license.NewProvider(&license.ProviderConfig{
 			Name:    cfg.LicenseProvider,
@@ -275,4 +281,47 @@ func initAWSLicenseProvider(cfg *config.Config, e *echo.Echo) (license.LicensePr
 
 	log.Printf("aws marketplace provider enabled (product_code=%s)", cfg.AWSProductCode)
 	return provider, reporter, nil
+}
+
+func initGCPLicenseProvider(cfg *config.Config, e *echo.Echo) (license.LicenseProvider, license.UsageReporter, error) {
+	if cfg.GCPProjectID == "" {
+		return nil, nil, errors.New("gcp marketplace: RBTR_GCP_PROJECT_ID is required")
+	}
+	if cfg.GCPServiceName == "" {
+		return nil, nil, errors.New("gcp marketplace: RBTR_GCP_SERVICE_NAME is required")
+	}
+
+	procSvc, err := gcpProcurementService(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("gcp marketplace: procurement service: %w", err)
+	}
+
+	scSvc, err := gcpServiceControlService(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("gcp marketplace: service control: %w", err)
+	}
+
+	procClient := gcplicense.NewSDKProcurementClient(procSvc)
+	scClient := gcplicense.NewSDKServiceControlClient(scSvc)
+
+	provider, err := gcplicense.NewProvider(procClient, cfg.GCPProjectID, cfg.GCPServiceName)
+	if err != nil {
+		return nil, nil, fmt.Errorf("gcp marketplace provider: %w", err)
+	}
+
+	reporter := gcplicense.NewReporter(scClient, cfg.GCPServiceName)
+
+	webhookHandler := gcplicense.NewWebhookHandler(provider, procClient)
+	gcplicense.RegisterRoutes(e, webhookHandler)
+
+	log.Printf("gcp marketplace provider enabled (project_id=%s, service=%s)", cfg.GCPProjectID, cfg.GCPServiceName)
+	return provider, reporter, nil
+}
+
+func gcpProcurementService(ctx context.Context) (*procurement.Service, error) {
+	return procurement.NewService(ctx, option.WithScopes(procurement.CloudPlatformScope))
+}
+
+func gcpServiceControlService(ctx context.Context) (*servicecontrol.Service, error) {
+	return servicecontrol.NewService(ctx, option.WithScopes(servicecontrol.ServicecontrolScope))
 }
