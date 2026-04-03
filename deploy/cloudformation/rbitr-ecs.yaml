@@ -484,7 +484,7 @@ Resources:
       Conditions:
         - Field: path-pattern
           PathPatternConfig:
-            Values: ["/v1/*", "/admin/*", "/setup/*", "/healthz", "/readyz", "/metrics"]
+            Values: ["/v1/*", "/admin/*", "/setup/*", "/api/marketplace/*", "/healthz", "/readyz", "/metrics"]
       Actions:
         - Type: forward
           TargetGroupArn: !Ref GatewayTargetGroup

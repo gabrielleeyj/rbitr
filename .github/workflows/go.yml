@@ -30,7 +30,7 @@ jobs:
           args: ./... --timeout=5m
 
       - name: Run Go Test
-        run: go test ./... -v -cover
+        run: go test ./... -v -race -cover
 
       - name: Run Setup Smoke Gate
         run: ./scripts/test_setup_smoke.sh

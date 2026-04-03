@@ -45,6 +45,13 @@ spec:
                 name: {{ include "rbitr.fullname" $ }}-gateway
                 port:
                   number: 8080
+          - path: /api/marketplace
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "rbitr.fullname" $ }}-gateway
+                port:
+                  number: 8080
           - path: /healthz
             pathType: Exact
             backend:
