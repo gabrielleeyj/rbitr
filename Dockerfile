@@ -9,9 +9,10 @@ COPY . .
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG VERSION=dev
 
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-  go build -trimpath -ldflags "-s -w" -o /out/gateway ./cmd/gateway
+  go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o /out/gateway ./cmd/gateway
 
 FROM alpine:3.21
 

@@ -45,6 +45,9 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/ticketing"
 )
 
+// version is set at build time via -ldflags.
+var version = "dev"
+
 const (
 	requestTimeout         = 15 * time.Second
 	gracefulTimeout        = 10 * time.Second
@@ -56,6 +59,12 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println("rbitr-gateway " + version)
+		return
+	}
+
+	log.Printf("rbitr-gateway %s starting", version)
 	cfg := config.Load()
 
 	setupToken, err := apisetup.ResolveSetupToken(cfg.SetupToken, cfg.SetupTokenFile)

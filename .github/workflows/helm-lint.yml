@@ -33,3 +33,12 @@ jobs:
 
       - name: Helm template (bundled PostgreSQL)
         run: helm template rbitr deploy/helm/rbitr --set postgresql.enabled=true > /dev/null
+
+      - name: Helm template (AWS Marketplace)
+        run: helm template rbitr deploy/helm/rbitr -f deploy/helm/rbitr/values-aws-marketplace.yaml > /dev/null
+
+      - name: Helm template (GCP Marketplace)
+        run: helm template rbitr deploy/helm/rbitr -f deploy/helm/rbitr/values-gcp-marketplace.yaml > /dev/null
+
+      - name: Helm template (Azure Marketplace)
+        run: helm template rbitr deploy/helm/rbitr -f deploy/helm/rbitr/values-azure-marketplace.yaml > /dev/null
