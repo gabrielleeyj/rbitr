@@ -1,0 +1,23 @@
+## Azure Marketplace deployment overlay.
+## Usage: helm install rbitr ./deploy/helm/rbitr -f deploy/helm/rbitr/values-azure-marketplace.yaml
+
+license:
+  provider: "azure-marketplace"
+  ## License key path is not used for marketplace deployments.
+  keyPath: ""
+
+azure:
+  ## Required: Azure AD tenant ID for the application registration.
+  tenantID: ""
+  ## Required: Azure AD application (client) ID.
+  clientID: ""
+  ## Required: Azure AD client secret (store in a Kubernetes Secret, not here).
+  clientSecret: ""
+  ## Optional: default plan ID for new subscriptions.
+  planID: ""
+
+serviceAccount:
+  create: true
+  annotations:
+    ## Required for AKS Workload Identity.
+    azure.workload.identity/client-id: ""

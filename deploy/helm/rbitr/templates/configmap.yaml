@@ -24,6 +24,13 @@ data:
   RBTR_GCP_PROJECT_ID: {{ .Values.gcp.projectID | quote }}
   RBTR_GCP_SERVICE_NAME: {{ .Values.gcp.serviceName | quote }}
   {{- end }}
+  {{- if eq .Values.license.provider "azure-marketplace" }}
+  RBTR_AZURE_TENANT_ID: {{ .Values.azure.tenantID | quote }}
+  RBTR_AZURE_CLIENT_ID: {{ .Values.azure.clientID | quote }}
+  {{- if .Values.azure.planID }}
+  RBTR_AZURE_PLAN_ID: {{ .Values.azure.planID | quote }}
+  {{- end }}
+  {{- end }}
   RBTR_FEATURE_RATE_LIMITING: {{ .Values.features.rateLimiting | quote }}
   RBTR_FEATURE_ARG_CONSTRAINTS: {{ .Values.features.argConstraints | quote }}
   RBTR_FEATURE_SHADOW_MODE: {{ .Values.features.shadowMode | quote }}

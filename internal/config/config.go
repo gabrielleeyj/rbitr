@@ -44,6 +44,10 @@ type Config struct {
 	AWSCustomerID           string
 	GCPProjectID            string
 	GCPServiceName          string
+	AzureTenantID           string
+	AzureClientID           string
+	AzureClientSecret       string
+	AzurePlanID             string
 	DevAutoTools            bool
 	OutboundAllowPrivate    bool
 	DevMockInternalURL      string
@@ -102,6 +106,10 @@ func Load() Config {
 		AWSCustomerID:           getEnv("RBTR_AWS_CUSTOMER_ID", ""),
 		GCPProjectID:            getEnv("RBTR_GCP_PROJECT_ID", ""),
 		GCPServiceName:          getEnv("RBTR_GCP_SERVICE_NAME", ""),
+		AzureTenantID:           getEnv("RBTR_AZURE_TENANT_ID", ""),
+		AzureClientID:           getEnv("RBTR_AZURE_CLIENT_ID", ""),
+		AzureClientSecret:       getEnv("RBTR_AZURE_CLIENT_SECRET", ""),
+		AzurePlanID:             getEnv("RBTR_AZURE_PLAN_ID", ""),
 		DevAutoTools:            getEnvBool("RBTR_DEV_AUTO_TOOLS"),
 		OutboundAllowPrivate:    getEnvBool("RBTR_OUTBOUND_ALLOW_PRIVATE"),
 		DevMockInternalURL:      getEnv("RBTR_DEV_MOCK_INTERNAL_URL", "http://localhost:8090"),
