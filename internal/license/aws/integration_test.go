@@ -153,11 +153,7 @@ func TestAWSIntegration_FullLifecycle(t *testing.T) {
 }
 
 func TestAWSIntegration_EntitlementRefreshFailure_KeepsLastGood(t *testing.T) {
-	callCount := 0
 	entClient := &stubEntitlementClient{}
-	// Override behavior per call.
-	origGetEnt := entClient.GetEntitlements
-	_ = origGetEnt
 
 	maxTenants := int32(10)
 	entClient.entitlements = []enttypes.Entitlement{
@@ -178,7 +174,6 @@ func TestAWSIntegration_EntitlementRefreshFailure_KeepsLastGood(t *testing.T) {
 
 	// Simulate API failure — entitlements should be preserved.
 	entClient.err = errors.New("throttled")
-	callCount++
 
 	// Provider keeps last-known-good on error (tested via unit tests).
 	// This integration test verifies the provider still returns valid data.

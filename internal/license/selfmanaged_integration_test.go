@@ -82,8 +82,8 @@ func TestSelfManaged_ValidKeyFile_PaidTier(t *testing.T) {
 	// Write to a temp file.
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "license.key")
-	if err := os.WriteFile(keyPath, token, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	if writeErr := os.WriteFile(keyPath, token, 0o600); writeErr != nil {
+		t.Fatalf("WriteFile: %v", writeErr)
 	}
 
 	cfg := &license.ProviderConfig{
@@ -128,8 +128,8 @@ func TestSelfManaged_ExpiredKey_FreeTier(t *testing.T) {
 
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "license.key")
-	if err := os.WriteFile(keyPath, token, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
+	if writeErr := os.WriteFile(keyPath, token, 0o600); writeErr != nil {
+		t.Fatalf("WriteFile: %v", writeErr)
 	}
 
 	cfg := &license.ProviderConfig{
@@ -236,7 +236,7 @@ func buildTestLicenseJWT(t *testing.T, priv ed25519.PrivateKey, tier string, key
 		Issuer("rbitr").
 		Subject("Test Corp").
 		IssuedAt(now).
-		Expiration(now.Add(365 * 24 * time.Hour)).
+		Expiration(now.Add(365*24*time.Hour)).
 		Claim("key_version", keyVersion).
 		Claim("tier", tier).
 		Claim("licensee", map[string]string{
@@ -244,15 +244,15 @@ func buildTestLicenseJWT(t *testing.T, priv ed25519.PrivateKey, tier string, key
 			"email": "admin@testcorp.com",
 		}).
 		Claim("entitlements", map[string]any{
-			"max_tenants":          -1,
+			"max_tenants":           -1,
 			"max_agents_per_tenant": -1,
-			"max_active_keys":      -1,
-			"monthly_action_limit": -1,
-			"audit_retention_days": -1,
-			"approval_workflows":   true,
-			"evidence_export":      true,
-			"integrations":         true,
-			"custom_policies":      true,
+			"max_active_keys":       -1,
+			"monthly_action_limit":  -1,
+			"audit_retention_days":  -1,
+			"approval_workflows":    true,
+			"evidence_export":       true,
+			"integrations":          true,
+			"custom_policies":       true,
 		}).
 		Build()
 	if err != nil {
@@ -280,7 +280,7 @@ func buildExpiredLicenseJWT(t *testing.T, priv ed25519.PrivateKey) []byte {
 	tok, err := jwt.NewBuilder().
 		Issuer("rbitr").
 		Subject("Test Corp").
-		IssuedAt(past.Add(-365 * 24 * time.Hour)).
+		IssuedAt(past.Add(-365*24*time.Hour)).
 		Expiration(past).
 		Claim("key_version", 1).
 		Claim("tier", "paid").
