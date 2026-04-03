@@ -34,6 +34,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/db"
 	"github.com/gabrielleeyj/rbitr/internal/license"
 	awslicense "github.com/gabrielleeyj/rbitr/internal/license/aws"
+	azurelicense "github.com/gabrielleeyj/rbitr/internal/license/azure"
 	gcplicense "github.com/gabrielleeyj/rbitr/internal/license/gcp"
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
@@ -242,6 +243,8 @@ func initLicenseProvider(cfg *config.Config, pubKey ed25519.PublicKey, e *echo.E
 		return initAWSLicenseProvider(cfg, e)
 	case license.ProviderGCPMarketplace:
 		return initGCPLicenseProvider(cfg, e)
+	case license.ProviderAzureMarketplace:
+		return initAzureLicenseProvider(cfg, e)
 	default:
 		return license.NewProvider(&license.ProviderConfig{
 			Name:    cfg.LicenseProvider,
@@ -324,4 +327,32 @@ func gcpProcurementService(ctx context.Context) (*procurement.Service, error) {
 
 func gcpServiceControlService(ctx context.Context) (*servicecontrol.Service, error) {
 	return servicecontrol.NewService(ctx, option.WithScopes(servicecontrol.ServicecontrolScope))
+}
+
+func initAzureLicenseProvider(cfg *config.Config, e *echo.Echo) (license.LicenseProvider, license.UsageReporter, error) {
+	if cfg.AzureTenantID == "" {
+		return nil, nil, errors.New("azure marketplace: RBTR_AZURE_TENANT_ID is required")
+	}
+	if cfg.AzureClientID == "" {
+		return nil, nil, errors.New("azure marketplace: RBTR_AZURE_CLIENT_ID is required")
+	}
+	if cfg.AzureClientSecret == "" {
+		return nil, nil, errors.New("azure marketplace: RBTR_AZURE_CLIENT_SECRET is required")
+	}
+
+	fulfillClient := azurelicense.NewHTTPFulfillmentClient(cfg.AzureTenantID, cfg.AzureClientID, cfg.AzureClientSecret)
+	metClient := azurelicense.NewHTTPMeteringClient(fulfillClient)
+
+	provider, err := azurelicense.NewProvider(fulfillClient, "", cfg.AzurePlanID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("azure marketplace provider: %w", err)
+	}
+
+	reporter := azurelicense.NewReporter(metClient, "", cfg.AzurePlanID)
+
+	webhookHandler := azurelicense.NewWebhookHandler(provider, reporter, fulfillClient)
+	azurelicense.RegisterRoutes(e, webhookHandler)
+
+	log.Printf("azure marketplace provider enabled (tenant_id=%s)", cfg.AzureTenantID)
+	return provider, reporter, nil
 }
