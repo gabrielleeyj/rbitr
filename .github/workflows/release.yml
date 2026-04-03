@@ -151,7 +151,7 @@ jobs:
             gateway_bin="gateway_${goos}_${goarch}${ext}"
             mocktool_bin="mocktool_${goos}_${goarch}${ext}"
 
-            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "-s -w" -o "dist/bin/${gateway_bin}" ./cmd/gateway
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "-s -w -X main.version=${tag}" -o "dist/bin/${gateway_bin}" ./cmd/gateway
             CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -trimpath -ldflags "-s -w" -o "dist/bin/${mocktool_bin}" ./cmd/mocktool
 
             package_dir="dist/rbitr_${tag}_${goos}_${goarch}"
@@ -239,6 +239,10 @@ jobs:
           push: true
           tags: ${{ steps.meta_gateway.outputs.tags }}
           labels: ${{ steps.meta_gateway.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.release_tag }}
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
           sbom: true
           provenance: true
 
@@ -252,6 +256,8 @@ jobs:
           push: true
           tags: ${{ steps.meta_mocktool.outputs.tags }}
           labels: ${{ steps.meta_mocktool.outputs.labels }}
+          cache-from: type=gha,scope=mocktool
+          cache-to: type=gha,mode=max,scope=mocktool
           sbom: true
           provenance: true
 
@@ -275,6 +281,8 @@ jobs:
           push: true
           tags: ${{ steps.meta_ui.outputs.tags }}
           labels: ${{ steps.meta_ui.outputs.labels }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
           sbom: true
           provenance: true
 

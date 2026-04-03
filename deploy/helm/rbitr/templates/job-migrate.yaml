@@ -31,10 +31,7 @@ spec:
           command:
             - sh
             - -c
-            - |
-              set -e
-              go install github.com/pressly/goose/v3/cmd/goose@{{ .Values.migration.gooseVersion }}
-              goose -dir /migrations postgres "$DATABASE_URL" up
+            - goose -dir /migrations postgres "$DATABASE_URL" up
           env:
             - name: DATABASE_URL
               valueFrom:

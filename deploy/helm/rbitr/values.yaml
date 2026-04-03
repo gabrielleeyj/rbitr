@@ -144,8 +144,7 @@ autoscaling:
 ## ── Migration ──────────────────────────────────────────────────────
 migration:
   enabled: true
-  image: golang:1.25.6
-  gooseVersion: v3.25.0
+  image: ghcr.io/pressly/goose:3.25.0
 
 ## ── Image Pull Secrets ─────────────────────────────────────────────
 imagePullSecrets: []
