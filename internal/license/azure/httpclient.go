@@ -146,7 +146,7 @@ func (c *HTTPFulfillmentClient) doJSON(req *http.Request, result any) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) // #nosec G704 -- URLs built from constants + path-escaped config values
 	if err != nil {
 		return err
 	}
