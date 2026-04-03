@@ -86,7 +86,7 @@ func (c *HTTPFulfillmentClient) ResolveToken(ctx context.Context, token string) 
 }
 
 func (c *HTTPFulfillmentClient) GetSubscription(ctx context.Context, subscriptionID string) (*Subscription, error) {
-	reqURL := fulfillmentBaseURL + "/subscriptions/" + subscriptionID + "?api-version=" + apiVersion
+	reqURL := fulfillmentBaseURL + "/subscriptions/" + url.PathEscape(subscriptionID) + "?api-version=" + apiVersion
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
 	if err != nil {
@@ -101,7 +101,7 @@ func (c *HTTPFulfillmentClient) GetSubscription(ctx context.Context, subscriptio
 }
 
 func (c *HTTPFulfillmentClient) ActivateSubscription(ctx context.Context, subscriptionID, planID string) error {
-	reqURL := fulfillmentBaseURL + "/subscriptions/" + subscriptionID + "/activate?api-version=" + apiVersion
+	reqURL := fulfillmentBaseURL + "/subscriptions/" + url.PathEscape(subscriptionID) + "/activate?api-version=" + apiVersion
 
 	body := map[string]string{"planId": planID}
 	jsonBody, err := json.Marshal(body)
@@ -183,7 +183,7 @@ func (c *HTTPFulfillmentClient) getToken(ctx context.Context) (string, error) {
 		return c.accessToken, nil
 	}
 
-	tokenURL := fmt.Sprintf(tokenEndpointTemplate, c.tenantID)
+	tokenURL := fmt.Sprintf(tokenEndpointTemplate, url.PathEscape(c.tenantID))
 	data := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {c.clientID},
