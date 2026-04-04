@@ -20,7 +20,7 @@ rbitr exposes two services — a Go API gateway and an Nginx-based UI — both l
                           └──────────┘  └──────────┘
 ```
 
-The gateway serves the API (`/admin`, `/setup`, `/v1`, `/healthz`, `/readyz`, `/metrics`). The UI serves the dashboard SPA and proxies API calls to the gateway via its internal Nginx config.
+The gateway serves the API (`/admin`, `/setup`, `/v1`, `/api/marketplace`, `/healthz`, `/readyz`, `/metrics`). The UI serves the dashboard SPA and proxies API calls to the gateway via its internal Nginx config.
 
 ## Reference Nginx TLS Configuration
 
@@ -87,6 +87,15 @@ server {
         proxy_read_timeout 300s;
         proxy_buffering off;
         proxy_cache off;
+    }
+
+    location /api/marketplace {
+        proxy_pass http://gateway:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     location /healthz {
@@ -201,6 +210,13 @@ spec:
                 name: rbitr-gateway
                 port:
                   number: 8080
+          - path: /api/marketplace
+            pathType: Prefix
+            backend:
+              service:
+                name: rbitr-gateway
+                port:
+                  number: 8080
           - path: /healthz
             pathType: Exact
             backend:
@@ -235,7 +251,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`rbitr.example.com`) && (PathPrefix(`/admin`) || PathPrefix(`/setup`) || PathPrefix(`/v1`) || Path(`/healthz`) || Path(`/readyz`))
+    - match: Host(`rbitr.example.com`) && (PathPrefix(`/admin`) || PathPrefix(`/setup`) || PathPrefix(`/v1`) || PathPrefix(`/api/marketplace`) || Path(`/healthz`) || Path(`/readyz`))
       kind: Rule
       services:
         - name: rbitr-gateway
@@ -258,7 +274,7 @@ spec:
    - `rbitr-gateway` — port 8080, health check on `GET /healthz` (expected 200).
    - `rbitr-ui` — port 5173, health check on `GET /healthz` (expected 200, served by the UI Nginx).
 3. **Listener rules (HTTPS :443):**
-   - Path `/admin/*`, `/setup/*`, `/v1/*`, `/healthz`, `/readyz`, `/metrics` → `rbitr-gateway` target group.
+   - Path `/admin/*`, `/setup/*`, `/v1/*`, `/api/marketplace/*`, `/healthz`, `/readyz`, `/metrics` → `rbitr-gateway` target group.
    - Default → `rbitr-ui` target group.
 4. **HTTP :80 listener:** redirect to HTTPS.
 5. **Idle timeout:** Set to 300 seconds for SSE/MCP streaming support.
@@ -270,7 +286,7 @@ spec:
 2. **Backend services:**
    - `rbitr-gateway` — port 8080, health check on `/healthz`.
    - `rbitr-ui` — port 5173, health check on `/healthz`.
-3. **URL map:** Route `/admin/*`, `/setup/*`, `/v1/*` to gateway backend. Default to UI backend.
+3. **URL map:** Route `/admin/*`, `/setup/*`, `/v1/*`, `/api/marketplace/*` to gateway backend. Default to UI backend.
 4. **Timeout:** Set backend service timeout to 300 seconds for MCP/SSE endpoints.
 5. **HTTP-to-HTTPS redirect:** Configure via a separate HTTP target proxy with redirect action.
 

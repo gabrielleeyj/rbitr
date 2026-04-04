@@ -35,7 +35,17 @@ The `migrate` service in `docker-compose.yml` runs `goose up` automatically:
 docker compose up migrate
 ```
 
-**Directly:**
+**Via goose container image:**
+
+```bash
+docker run --rm --network host \
+  -v "$(pwd)/migrations:/migrations" \
+  -e DATABASE_URL="$DATABASE_URL" \
+  ghcr.io/pressly/goose:3.25.0 \
+  goose -dir /migrations postgres "$DATABASE_URL" up
+```
+
+**Via local goose binary:**
 
 ```bash
 go install github.com/pressly/goose/v3/cmd/goose@v3.25.0
