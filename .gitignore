@@ -96,6 +96,7 @@ Claude.md
 **/devkey.pem
 **/private.pem
 **/license-gen
+cmd/license-gen/
 **.key
 
 # env for demo
