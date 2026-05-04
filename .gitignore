@@ -92,6 +92,9 @@ AGENTS.md
 # Claude.md
 Claude.md
 
+# Internal planning/spec docs (top-level docs/ only — keep subdirs like marketplace/, runbooks/)
+docs/*.md
+
 # License private keys (NEVER commit)
 **/devkey.pem
 **/private.pem
