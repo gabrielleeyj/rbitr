@@ -24,20 +24,20 @@ const (
 func (d *Dependencies) handleLicenseStatus(c *echo.Context) error {
 	if d.LicenseProvider == nil {
 		return c.JSON(http.StatusOK, map[string]any{
-			"valid": false,
-			"tier":  "free",
+			fieldValid: false,
+			fieldTier:  tierFreeStr,
 		})
 	}
 
 	info := d.LicenseProvider.Info()
 	resp := map[string]any{
-		"valid": info.Valid,
-		"tier":  info.Tier,
+		fieldValid: info.Valid,
+		fieldTier:  info.Tier,
 	}
 
 	if info.Valid {
 		resp["licensee"] = info.Licensee
-		resp["email"] = info.Email
+		resp[fieldEmail] = info.Email
 		resp["key_version"] = info.KeyVersion
 		resp["issued_at"] = info.IssuedAt
 		resp["expires_at"] = info.ExpiresAt
@@ -66,8 +66,8 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	info, validateErr := mgr.ValidateBytes(data)
 	if validateErr != nil {
 		return c.JSON(http.StatusUnprocessableEntity, map[string]string{
-			"error":  "INVALID_LICENSE_KEY",
-			"detail": validateErr.Error(),
+			"error":     "INVALID_LICENSE_KEY",
+			fieldDetail: validateErr.Error(),
 		})
 	}
 
@@ -81,8 +81,8 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 		}
 		if hasTrialBeenUsed {
 			return c.JSON(http.StatusForbidden, map[string]string{
-				"error":  "TRIAL_ALREADY_USED",
-				"detail": "Trial license can only be used once per installation. This installation has already consumed its trial period.",
+				"error":     "TRIAL_ALREADY_USED",
+				fieldDetail: "Trial license can only be used once per installation. This installation has already consumed its trial period.",
 			})
 		}
 	}
@@ -91,8 +91,8 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	keyPath := mgr.KeyPath()
 	if writeErr := atomicWriteFile(keyPath, data); writeErr != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to write license key file",
-			"detail": writeErr.Error(),
+			"error":     "failed to write license key file",
+			fieldDetail: writeErr.Error(),
 		})
 	}
 
@@ -114,10 +114,10 @@ func (d *Dependencies) handleLicenseUpload(c *echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"valid":          true,
-		"tier":           info.Tier,
+		fieldValid:       true,
+		fieldTier:        info.Tier,
 		"licensee":       info.Licensee,
-		"email":          info.Email,
+		fieldEmail:       info.Email,
 		"key_version":    info.KeyVersion,
 		"expires_at":     info.ExpiresAt,
 		"days_remaining": daysRemaining(info.ExpiresAt),
@@ -146,8 +146,8 @@ func (d *Dependencies) handleLicenseRemove(c *echo.Context) error {
 	mgr.LoadAndValidate()
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"valid": false,
-		"tier":  "free",
+		fieldValid: false,
+		fieldTier:  tierFreeStr,
 	})
 }
 

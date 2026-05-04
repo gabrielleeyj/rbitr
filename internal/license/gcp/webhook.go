@@ -57,20 +57,20 @@ func (h *WebhookHandler) HandleWebhook(c *echo.Context) error {
 	case "ENTITLEMENT_CREATION_REQUESTED":
 		h.handleActivationRequest(entitlementID)
 
-	case "ENTITLEMENT_ACTIVE":
-		h.provider.UpdateEntitlement(ctx, entitlementID, "ENTITLEMENT_ACTIVE")
+	case activeState:
+		h.provider.UpdateEntitlement(ctx, entitlementID, activeState)
 
-	case "ENTITLEMENT_CANCELLED":
-		h.provider.UpdateEntitlement(ctx, entitlementID, "ENTITLEMENT_CANCELLED")
+	case cancelledState:
+		h.provider.UpdateEntitlement(ctx, entitlementID, cancelledState)
 
-	case "ENTITLEMENT_PENDING_CANCELLATION":
-		h.provider.UpdateEntitlement(ctx, entitlementID, "ENTITLEMENT_PENDING_CANCELLATION")
+	case pendingCancellationState:
+		h.provider.UpdateEntitlement(ctx, entitlementID, pendingCancellationState)
 
 	case "ENTITLEMENT_PLAN_CHANGE_REQUESTED":
 		h.handlePlanChangeRequest(entitlementID)
 
 	case "ENTITLEMENT_PLAN_CHANGED":
-		h.provider.UpdateEntitlement(ctx, entitlementID, "ENTITLEMENT_ACTIVE")
+		h.provider.UpdateEntitlement(ctx, entitlementID, activeState)
 
 	default:
 		slog.Warn("gcp marketplace: unhandled webhook event type", "event_type", eventType)

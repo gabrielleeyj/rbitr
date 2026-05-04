@@ -89,7 +89,7 @@ func (m *MCPClient) ForwardRequest(ctx context.Context, upstreamURL string, req 
 		}
 		// Not a valid JSON-RPC error, wrap it
 		return &mcp.Response{
-			JSONRPC: "2.0",
+			JSONRPC: mcp.JSONRPCVersion,
 			ID:      req.ID,
 			Error: &mcp.ErrorObject{
 				Code:    mcp.ErrorInternalError,

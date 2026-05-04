@@ -22,6 +22,8 @@ const (
 	ModeSingle        ImportMode = "single"
 	ModeMulti         ImportMode = "multi"
 	httpClientTimeout            = 30 * time.Second
+
+	schemaTypeObject = "object"
 )
 
 // ImportRequest contains the parameters for an OpenAPI import.
@@ -155,7 +157,7 @@ func generateSingleTool(doc *openapi3.T, req *ImportRequest, baseURL, authType s
 	}
 
 	schema := map[string]any{
-		"type": "object",
+		"type": schemaTypeObject,
 		"properties": map[string]any{
 			"path": map[string]any{
 				"type":        "string",
@@ -168,11 +170,11 @@ func generateSingleTool(doc *openapi3.T, req *ImportRequest, baseURL, authType s
 				"description": "HTTP method",
 			},
 			"body": map[string]any{
-				"type":        "object",
+				"type":        schemaTypeObject,
 				"description": "Request body (JSON)",
 			},
 			"query": map[string]any{
-				"type":        "object",
+				"type":        schemaTypeObject,
 				"description": "Query parameters",
 			},
 		},
@@ -292,7 +294,7 @@ func buildOperationSchema(pathItem *openapi3.PathItem, op *openapi3.Operation) m
 	// Request body → nested "body" property.
 	if op.RequestBody != nil && op.RequestBody.Value != nil {
 		bodyProp := map[string]any{
-			"type":        "object",
+			"type":        schemaTypeObject,
 			"description": "Request body",
 		}
 		// Try to extract properties from JSON content schema.
@@ -307,7 +309,7 @@ func buildOperationSchema(pathItem *openapi3.PathItem, op *openapi3.Operation) m
 	}
 
 	schema := map[string]any{
-		"type":       "object",
+		"type":       schemaTypeObject,
 		"properties": properties,
 	}
 	if len(required) > 0 {

@@ -21,7 +21,7 @@ func (d *Dependencies) auditVisibilityFloor() *time.Time {
 	}
 
 	ent := d.LicenseProvider.Entitlements()
-	if ent.Tier != "free" {
+	if ent.Tier != tierFreeStr {
 		return nil
 	}
 

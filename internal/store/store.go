@@ -54,6 +54,11 @@ const (
 	defaultRateLimitPerDayVal    = int64(10000)
 	defaultRateLimitScopeVal     = "tenant_agent_tool"
 	defaultPageLimit             = 50
+
+	toolSourceAdmin           = "admin"
+	whereTenantID             = "tenant_id = $1"
+	rateLimitScopeTenantAgent = "tenant_agent"
+	rateLimitScopeTenantTool  = "tenant_tool"
 )
 
 type StoreAPI interface {
@@ -432,7 +437,7 @@ func (s *Store) InsertTool(ctx context.Context, tool *models.Tool) error {
 
 	source := tool.Source
 	if source == "" {
-		source = "admin"
+		source = toolSourceAdmin
 	}
 	var credCfg []byte
 	if len(tool.CredentialConfig) > 0 {
@@ -908,7 +913,7 @@ func (s *Store) ListApprovalRequests(ctx context.Context, tenantID, status strin
 	}
 
 	args := []any{tenantID}
-	clauses := []string{"tenant_id = $1"}
+	clauses := []string{whereTenantID}
 
 	if status != "" {
 		args = append(args, status)
@@ -1252,7 +1257,7 @@ func (s *Store) ListEvidenceFiltered(ctx context.Context, tenantID, decision, ac
 		limit = 50
 	}
 	args := []any{tenantID}
-	clauses := []string{"tenant_id = $1"}
+	clauses := []string{whereTenantID}
 
 	if decision != "" {
 		args = append(args, decision)
@@ -2707,7 +2712,7 @@ func (s *Store) ListNotificationSuppressions(ctx context.Context, tenantID strin
 	}
 
 	args := []any{tenantID}
-	clauses := []string{"tenant_id = $1"}
+	clauses := []string{whereTenantID}
 	if eventType != "" {
 		args = append(args, eventType)
 		clauses = append(clauses, fmt.Sprintf("event_type = $%d", len(args)))
@@ -3033,7 +3038,7 @@ func parseOptionalScope(value sql.NullString) (string, bool) {
 
 func isRateLimitScope(scope string) bool {
 	switch strings.TrimSpace(scope) {
-	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+	case "tenant", rateLimitScopeTenantAgent, rateLimitScopeTenantTool, defaultRateLimitScopeVal:
 		return true
 	default:
 		return false

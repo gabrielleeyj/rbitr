@@ -848,7 +848,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
 					PerMinute: 60,
 					PerDay:    10000,
-					Scope:     "tenant_agent_tool",
+					Scope:     rateLimitScopeTenantAgentTool,
 				}, nil)
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
@@ -866,7 +866,7 @@ func TestHandleSettingsGet(t *testing.T) {
 			expectMode:            "enforce",
 			expectRateLimitPerMin: 60,
 			expectRateLimitPerDay: 10000,
-			expectRateLimitScope:  "tenant_agent_tool",
+			expectRateLimitScope:  rateLimitScopeTenantAgentTool,
 		},
 		{
 			name:     "success with runtime feature flags",
@@ -885,7 +885,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
 					PerMinute: 120,
 					PerDay:    15000,
-					Scope:     "tenant_tool",
+					Scope:     rateLimitScopeTenantTool,
 				}, nil)
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
@@ -906,7 +906,7 @@ func TestHandleSettingsGet(t *testing.T) {
 			expectArgConstraints:    true,
 			expectRateLimitPerMin:   120,
 			expectRateLimitPerDay:   15000,
-			expectRateLimitScope:    "tenant_tool",
+			expectRateLimitScope:    rateLimitScopeTenantTool,
 		},
 		{
 			name:     "success with tenant settings",
@@ -920,7 +920,7 @@ func TestHandleSettingsGet(t *testing.T) {
 				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
 					PerMinute: 75,
 					PerDay:    12000,
-					Scope:     "tenant_agent",
+					Scope:     rateLimitScopeTenantAgent,
 				}, nil)
 				storeMock.On("GetDisableXTenantKey", context.Background()).Return(false, store.ErrNotFound)
 				storeMock.On("GetFeatureRateLimiting", context.Background()).Return(false, store.ErrNotFound)
@@ -945,7 +945,7 @@ func TestHandleSettingsGet(t *testing.T) {
 			expectPassThroughToolID: "mcp_upstream",
 			expectRateLimitPerMin:   75,
 			expectRateLimitPerDay:   12000,
-			expectRateLimitScope:    "tenant_agent",
+			expectRateLimitScope:    rateLimitScopeTenantAgent,
 		},
 	}
 
@@ -1283,7 +1283,7 @@ func TestHandleDefaultRateLimitUpdate(t *testing.T) {
 			name:         "forbidden",
 			adminKey:     "key",
 			scopes:       []string{"admin:read"},
-			payload:      DefaultRateLimitRequest{PerMinute: 60, PerDay: 10000, Scope: "tenant_agent_tool"},
+			payload:      DefaultRateLimitRequest{PerMinute: 60, PerDay: 10000, Scope: rateLimitScopeTenantAgentTool},
 			expectedCode: http.StatusForbidden,
 			expectedErr:  true,
 		},
@@ -1291,7 +1291,7 @@ func TestHandleDefaultRateLimitUpdate(t *testing.T) {
 			name:         "invalid payload",
 			adminKey:     "key",
 			scopes:       []string{"admin:write"},
-			payload:      DefaultRateLimitRequest{PerMinute: 0, PerDay: 10000, Scope: "tenant_agent_tool"},
+			payload:      DefaultRateLimitRequest{PerMinute: 0, PerDay: 10000, Scope: rateLimitScopeTenantAgentTool},
 			expectedCode: http.StatusBadRequest,
 		},
 		{
@@ -1310,7 +1310,7 @@ func TestHandleDefaultRateLimitUpdate(t *testing.T) {
 				storeMock.On("GetDefaultRateLimitConfig", context.Background()).Return(models.RateLimitConfig{
 					PerMinute: 60,
 					PerDay:    10000,
-					Scope:     "tenant_agent_tool",
+					Scope:     rateLimitScopeTenantAgentTool,
 				}, nil)
 				storeMock.On("SetDefaultRateLimitConfig", context.Background(), int64(120), int64(20000), "tenant").Return(nil)
 				storeMock.On("InsertAuditEvent", context.Background(), mock.Anything).Return(nil)

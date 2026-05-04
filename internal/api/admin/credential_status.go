@@ -25,14 +25,14 @@ func (d *Dependencies) handleCredentialStatus(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 
 	tool, err := d.Store.GetTool(c.Request().Context(), tenantID, toolID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errToolNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to get tool"})
 	}

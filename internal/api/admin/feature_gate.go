@@ -21,9 +21,9 @@ func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 			}
 
 			return c.JSON(http.StatusForbidden, map[string]string{
-				"error":   "FEATURE_NOT_AVAILABLE",
-				"feature": feature,
-				"message": feature + " requires a paid or trial license. Upload a license key in Settings > License to unlock.",
+				"error":      "FEATURE_NOT_AVAILABLE",
+				"feature":    feature,
+				fieldMessage: feature + " requires a paid or trial license. Upload a license key in Settings > License to unlock.",
 			})
 		}
 	}
@@ -33,12 +33,12 @@ func (d *Dependencies) featureGate(feature string) echo.MiddlewareFunc {
 func (d *Dependencies) handleEntitlements(c *echo.Context) error {
 	if d.LicenseProvider == nil {
 		return c.JSON(http.StatusOK, map[string]any{
-			"tier": "free",
-			"features": map[string]bool{
-				"approval_workflows": false,
-				"evidence_export":    false,
-				"integrations":       false,
-				"custom_policies":    true,
+			fieldTier: tierFreeStr,
+			fieldFeatures: map[string]bool{
+				featureApprovalWorkflows: false,
+				featureEvidenceExport:    false,
+				featureIntegrations:      false,
+				featureCustomPolicies:    true,
 			},
 		})
 	}
@@ -46,12 +46,12 @@ func (d *Dependencies) handleEntitlements(c *echo.Context) error {
 	ent := d.LicenseProvider.Entitlements()
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"tier": ent.Tier,
-		"features": map[string]bool{
-			"approval_workflows": ent.ApprovalWorkflows,
-			"evidence_export":    ent.EvidenceExport,
-			"integrations":       ent.Integrations,
-			"custom_policies":    ent.CustomPolicies,
+		fieldTier: ent.Tier,
+		fieldFeatures: map[string]bool{
+			featureApprovalWorkflows: ent.ApprovalWorkflows,
+			featureEvidenceExport:    ent.EvidenceExport,
+			featureIntegrations:      ent.Integrations,
+			featureCustomPolicies:    ent.CustomPolicies,
 		},
 		"limits": map[string]any{
 			"max_tenants":           ent.MaxTenants,

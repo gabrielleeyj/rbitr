@@ -22,6 +22,9 @@ const (
 
 	// meteringDimension is the Azure dimension name for governed actions.
 	meteringDimension = "governed_actions"
+
+	// statusAccepted is the response status returned when Azure accepts a usage event.
+	statusAccepted = "Accepted"
 )
 
 // Reporter implements license.UsageReporter by buffering usage records in memory
@@ -120,7 +123,7 @@ func (r *Reporter) doFlush(ctx context.Context) {
 
 		failCount := 0
 		for _, result := range resp.Result {
-			if result.Status != "Accepted" {
+			if result.Status != statusAccepted {
 				failCount++
 			}
 		}

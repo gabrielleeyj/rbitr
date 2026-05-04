@@ -22,7 +22,7 @@ func (d *Dependencies) checkFileAccess(arguments any, tenantID string) string {
 			"tenant_id", tenantID,
 			"traversal_paths", result.TraversalPaths,
 		)
-		return "file path traversal detected"
+		return errFilePathTraversal
 	}
 
 	if len(result.DeniedPaths) > 0 {
@@ -30,7 +30,7 @@ func (d *Dependencies) checkFileAccess(arguments any, tenantID string) string {
 			"tenant_id", tenantID,
 			"denied_paths", result.DeniedPaths,
 		)
-		return "file access outside tenant sandbox"
+		return errFileOutsideSandbox
 	}
 
 	return ""

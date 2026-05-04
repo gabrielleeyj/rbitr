@@ -51,7 +51,7 @@ func (p *OAuth2Provider) Resolve(ctx context.Context, _, _ string, config *Confi
 	}
 
 	return ResolvedCredential{
-		HeaderName:  "Authorization",
+		HeaderName:  headerAuthorization,
 		HeaderValue: "Bearer " + token,
 	}, nil
 }

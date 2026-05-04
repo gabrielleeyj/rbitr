@@ -14,6 +14,11 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/store"
 )
 
+const (
+	errMsgInvalidPolicyOutput = "invalid policy output"
+	tagBasePolicyDeny         = "base_policy:DENY"
+)
+
 type Result struct {
 	Version       string
 	Decision      string
@@ -34,7 +39,7 @@ type InvalidPolicyOutputError struct {
 
 func (e InvalidPolicyOutputError) Error() string {
 	if e.Err == nil {
-		return "invalid policy output"
+		return errMsgInvalidPolicyOutput
 	}
 	return e.Err.Error()
 }
@@ -77,17 +82,17 @@ func (e *Evaluator) Evaluate(ctx context.Context, tenantID string, input map[str
 	baseResult, baseErr := EvaluateBasePolicy(ctx, input)
 	if baseErr != nil {
 		// Base policy failure is non-fatal; log and continue with tenant policy.
-		baseResult = BasePolicyResult{Effect: "ALLOW", RuleID: "base_error", Reason: "base policy eval error"}
+		baseResult = BasePolicyResult{Effect: basePolicyEffectAllow, RuleID: "base_error", Reason: "base policy eval error"}
 	}
-	if baseResult.Effect == "DENY" {
+	if baseResult.Effect == basePolicyEffectDeny {
 		return Result{
 			Version:     "base",
-			Decision:    "DENY",
+			Decision:    basePolicyEffectDeny,
 			Risk:        inputRisk(input),
 			Rule:        models.DecisionRule{ID: baseResult.RuleID, Priority: basePolicyPriority},
 			Reasons:     []models.DecisionReason{{Code: "BASE_POLICY_DENY", Message: baseResult.Reason}},
 			Constraints: map[string]any{},
-			Tags:        []string{"base_policy:DENY"},
+			Tags:        []string{tagBasePolicyDeny},
 		}, nil
 	}
 
@@ -171,11 +176,13 @@ func (e *Evaluator) evaluateTenantPolicy(ctx context.Context, tenantID string, i
 // It is higher than any tenant policy rule to ensure base policy wins ties.
 const basePolicyPriority = 1000
 
+const riskMedium = "MEDIUM"
+
 func inputRisk(input map[string]any) string {
 	if risk, ok := input["action_risk"].(string); ok {
 		return risk
 	}
-	return "MEDIUM"
+	return riskMedium
 }
 
 func toDecisionReasons(reasons []opa.Reason) []models.DecisionReason {

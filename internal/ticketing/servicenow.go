@@ -36,7 +36,7 @@ func (p *ServiceNowProvider) CreateTicket(ctx context.Context, req *CreateTicket
 	payload := map[string]string{
 		"short_description": req.Summary,
 		"description":       req.Description,
-		"priority":          req.Priority,
+		fieldPriority:       req.Priority,
 		"assignment_group":  req.ProjectKey,
 		"category":          "rbitr-approval",
 	}

@@ -24,7 +24,7 @@ func (d *Dependencies) handleAdminWriteLock(c *echo.Context) error {
 
 	var payload AdminWriteLockRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	beforeLocked, _ := d.Store.GetAdminWriteLock(c.Request().Context())
@@ -37,8 +37,8 @@ func (d *Dependencies) handleAdminWriteLock(c *echo.Context) error {
 		"admin_write_lock": payload.Locked,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit write lock",
-			"detail": err.Error(),
+			"error":     "failed to audit write lock",
+			fieldDetail: err.Error(),
 		})
 	}
 

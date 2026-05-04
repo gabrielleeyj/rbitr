@@ -77,7 +77,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.PUT("/policy", deps.handlePolicyUpdate)
 
 	// Custom policies — gated behind "custom_policies" entitlement.
-	policyGroup := tenantGroup.Group("", deps.featureGate("custom_policies"))
+	policyGroup := tenantGroup.Group("", deps.featureGate(featureCustomPolicies))
 	policyGroup.GET("/policies", deps.handlePolicyVersions)
 	policyGroup.GET("/policies/:policy_version", deps.handlePolicyVersionGet)
 	policyGroup.POST("/policies", deps.handlePolicyCreate)
@@ -90,7 +90,7 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	policyGroup.DELETE("/risk-overrides/:action_type", deps.handleRiskOverrideDelete)
 
 	// Approval workflows — gated behind "approval_workflows" entitlement.
-	approvalGroup := tenantGroup.Group("", deps.featureGate("approval_workflows"))
+	approvalGroup := tenantGroup.Group("", deps.featureGate(featureApprovalWorkflows))
 	approvalGroup.GET("/approvals", deps.handleApprovalsList)
 	approvalGroup.GET("/approvals/:approval_request_id", deps.handleApprovalDetail)
 	approvalGroup.GET("/approvals/pending-count", deps.handleApprovalsPendingCount)
@@ -112,10 +112,10 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	tenantGroup.GET("/audit/resource-types", deps.handleAuditResourceTypes)
 
 	// Evidence export — gated behind "evidence_export" entitlement.
-	tenantGroup.GET("/audit/export", deps.handleAuditExport, deps.featureGate("evidence_export"))
+	tenantGroup.GET("/audit/export", deps.handleAuditExport, deps.featureGate(featureEvidenceExport))
 
 	// Integrations — notifications, ticketing, mailing lists gated behind "integrations" entitlement.
-	integrationGroup := tenantGroup.Group("", deps.featureGate("integrations"))
+	integrationGroup := tenantGroup.Group("", deps.featureGate(featureIntegrations))
 	integrationGroup.GET("/notifications", deps.handleNotificationConfigGet)
 	integrationGroup.PUT("/notifications", deps.handleNotificationConfigUpdate)
 	integrationGroup.PUT("/notifications/slack-secret-ref", deps.handleNotificationSlackSecretRefSet)
@@ -227,7 +227,7 @@ func (d *Dependencies) requireTenantVisibleContinue(c *echo.Context, next echo.H
 	}
 	if _, err := d.Store.GetTenant(c.Request().Context(), tenantID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant"})
 	}
@@ -244,7 +244,7 @@ func (d *Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 	}
 	var payload TenantConfigRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	tenantID := c.Param("tenant_id")
@@ -269,15 +269,15 @@ func (d *Dependencies) handleTenantConfigUpdate(c *echo.Context) error {
 		afterKeyHash = utils.HashTenantKey(payload.TenantKey)
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.CONFIG.UPDATE", "TENANT.CONFIG", tenantID, map[string]any{
-		"name":     beforeName,
+		fieldName:  beforeName,
 		"key_hash": beforeKeyHash,
 	}, map[string]any{
-		"name":     afterName,
+		fieldName:  afterName,
 		"key_hash": afterKeyHash,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tenant config update",
-			"detail": err.Error(),
+			"error":     "failed to audit tenant config update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -293,7 +293,7 @@ func (d *Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	}
 	var payload ToolConfigRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if payload.BaseURL == "" {
@@ -312,7 +312,7 @@ func (d *Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 	beforeTool, _ := d.Store.GetTool(c.Request().Context(), tenantID, toolID)
@@ -321,21 +321,21 @@ func (d *Dependencies) handleToolConfigUpdate(c *echo.Context) error {
 	}
 	d.invalidateTenantCaches(tenantID)
 	beforeAudit := map[string]any{
-		"base_url":            beforeTool.BaseURL,
-		"auth_type":           beforeTool.AuthType,
-		"auth_set":            beforeTool.AuthValue != "",
-		"credential_provider": credential.ProviderName(beforeTool.CredentialConfig),
+		fieldBaseURL:            beforeTool.BaseURL,
+		"auth_type":             beforeTool.AuthType,
+		fieldAuthSet:            beforeTool.AuthValue != "",
+		fieldCredentialProvider: credential.ProviderName(beforeTool.CredentialConfig),
 	}
 	afterAudit := map[string]any{
-		"base_url":            payload.BaseURL,
-		"auth_type":           payload.AuthType,
-		"auth_set":            payload.AuthValue != "",
-		"credential_provider": credential.ProviderName(payload.CredentialConfig),
+		fieldBaseURL:            payload.BaseURL,
+		"auth_type":             payload.AuthType,
+		fieldAuthSet:            payload.AuthValue != "",
+		fieldCredentialProvider: credential.ProviderName(payload.CredentialConfig),
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.CONFIG.UPDATE", "TOOL", toolID, beforeAudit, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tool update",
-			"detail": err.Error(),
+			"error":     "failed to audit tool update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -352,7 +352,7 @@ func (d *Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 
 	var payload ToolMetadataRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	// Validate input schema JSON if provided
@@ -365,7 +365,7 @@ func (d *Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 
@@ -398,8 +398,8 @@ func (d *Dependencies) handleToolMetadataUpdate(c *echo.Context) error {
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.METADATA.UPDATE", "TOOL", toolID, beforeAudit, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tool metadata update",
-			"detail": err.Error(),
+			"error":     "failed to audit tool metadata update",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -416,7 +416,7 @@ func (d *Dependencies) handlePolicyUpdate(c *echo.Context) error {
 	}
 	var payload PolicyUpdateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.RegoModule == "" || payload.PolicyVersion == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "rego_module and policy_version required"})
@@ -437,8 +437,8 @@ func (d *Dependencies) handlePolicyUpdate(c *echo.Context) error {
 		"rego_sha256":           utils.HashString(payload.RegoModule),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit policy update",
-			"detail": err.Error(),
+			"error":     "failed to audit policy update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -455,7 +455,7 @@ func (d *Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 
 	var payload RiskOverrideRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidRisk(payload.ActionRisk) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid action_risk"})
@@ -471,15 +471,15 @@ func (d *Dependencies) handleRiskOverrideUpdate(c *echo.Context) error {
 	}
 	d.invalidateTenantCaches(tenantID)
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "RISK_OVERRIDE.UPSERT", "RISK_OVERRIDE", actionType, map[string]any{
-		"action_type": actionType,
-		"action_risk": beforeRisk,
+		"action_type":        actionType,
+		auditFieldActionRisk: beforeRisk,
 	}, map[string]any{
-		"action_type": actionType,
-		"action_risk": payload.ActionRisk,
+		"action_type":        actionType,
+		auditFieldActionRisk: payload.ActionRisk,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit risk override update",
-			"detail": err.Error(),
+			"error":     "failed to audit risk override update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -503,8 +503,8 @@ func (d *Dependencies) handleBootstrapComplete(c *echo.Context) error {
 		"bootstrap_complete": true,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit bootstrap completion",
-			"detail": err.Error(),
+			"error":     "failed to audit bootstrap completion",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -555,10 +555,10 @@ func (d *Dependencies) handleAdminMe(c *echo.Context) error {
 func authError(c *echo.Context, err error) error {
 	if errors.Is(err, auth.ErrUnauthorized) {
 		c.Response().Header().Set("WWW-Authenticate", "Bearer")
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": errUnauthorized})
 	}
 	if errors.Is(err, auth.ErrForbidden) {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "forbidden"})
+		return c.JSON(http.StatusForbidden, map[string]string{"error": errForbidden})
 	}
 	return c.JSON(http.StatusInternalServerError, map[string]string{"error": "auth error"})
 }
@@ -578,7 +578,7 @@ func handleBootstrapError(c *echo.Context, err error) error {
 
 func isValidRisk(value string) bool {
 	switch value {
-	case "LOW", "MEDIUM", "HIGH", "CRITICAL":
+	case "LOW", "MEDIUM", severityHigh, "CRITICAL":
 		return true
 	default:
 		return false

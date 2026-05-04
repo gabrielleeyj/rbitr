@@ -2,6 +2,8 @@ package notifications
 
 import "strings"
 
+const titleApprovalExpiring = "Approval expiring soon"
+
 type templateDefinition struct {
 	Title string
 	Body  string
@@ -9,7 +11,7 @@ type templateDefinition struct {
 
 //nolint:gochecknoglobals // immutable template registry for notification messages.
 var templates = map[string]templateDefinition{
-	EventApprovalExpiring:    {Title: "Approval expiring soon"},
+	EventApprovalExpiring:    {Title: titleApprovalExpiring},
 	EventApprovalExpired:     {Title: "Approval expired"},
 	EventTokenAbuse:          {Title: "Possible approval token abuse"},
 	EventPolicyInvalidOutput: {Title: "Policy invalid output"},

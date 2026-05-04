@@ -25,6 +25,9 @@ const (
 
 	// pendingCancellationState still allows usage until end of billing cycle.
 	pendingCancellationState = "ENTITLEMENT_PENDING_CANCELLATION"
+
+	// cancelledState indicates a fully cancelled entitlement.
+	cancelledState = "ENTITLEMENT_CANCELLED"
 )
 
 // Provider implements license.LicenseProvider using the GCP Cloud Commerce

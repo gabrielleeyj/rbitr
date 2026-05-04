@@ -2,6 +2,9 @@ package mcp
 
 import "encoding/json"
 
+// jsonNull is the JSON literal for null values.
+const jsonNull = "null"
+
 // JSON-RPC 2.0 specification: https://www.jsonrpc.org/specification
 
 // Request represents a JSON-RPC 2.0 request.
@@ -87,7 +90,7 @@ func (r *RequestID) IsNull() bool {
 // MarshalJSON implements json.Marshaler for RequestID.
 func (r RequestID) MarshalJSON() ([]byte, error) {
 	if r.isNull {
-		return []byte("null"), nil
+		return []byte(jsonNull), nil
 	}
 	if r.str != nil {
 		return json.Marshal(r.str)
@@ -101,7 +104,7 @@ func (r RequestID) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements json.Unmarshaler for RequestID.
 func (r *RequestID) UnmarshalJSON(data []byte) error {
 	// Check for null
-	if string(data) == "null" {
+	if string(data) == jsonNull {
 		return &ErrorObject{
 			Code:    ErrorInvalidRequest,
 			Message: "id must be string or number",

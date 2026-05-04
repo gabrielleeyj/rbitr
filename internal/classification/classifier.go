@@ -48,6 +48,11 @@ const (
 	methodDelete  = "DELETE"
 )
 
+const (
+	toolIDJira         = "jira"
+	toolIDMockInternal = "mock_internal"
+)
+
 type classifyInput struct {
 	method         string
 	rawPath        string
@@ -64,10 +69,10 @@ func Classify(toolID, method, path, query string, headers map[string]string) Res
 	input := newClassifyInput(method, path, query)
 	toolID = strings.ToLower(strings.TrimSpace(toolID))
 
-	if toolID == "jira" {
+	if toolID == toolIDJira {
 		return classifyJira(&input)
 	}
-	if toolID == "mock_internal" {
+	if toolID == toolIDMockInternal {
 		return classifyMockInternal(&input)
 	}
 	return classifyGeneric(&input)

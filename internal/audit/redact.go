@@ -2,6 +2,8 @@ package audit
 
 import "strings"
 
+const fieldActivePolicyVersion = "active_policy_version"
+
 //nolint:gochecknoglobals // centralized allowlist used by redaction helpers.
 var resourceAllowlist = map[string]map[string]struct{}{
 	"TENANT.CONFIG": {
@@ -20,7 +22,7 @@ var resourceAllowlist = map[string]map[string]struct{}{
 		"rego_sha256":    {},
 	},
 	"POLICY.ACTIVE": {
-		"active_policy_version": {},
+		fieldActivePolicyVersion: {},
 	},
 	"RISK_OVERRIDE": {
 		"action_type": {},

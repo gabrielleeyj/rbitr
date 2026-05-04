@@ -34,14 +34,14 @@ func (d *Dependencies) handleUsageSummary(c *echo.Context) error {
 		ent = d.LicenseProvider.Entitlements()
 		info := d.LicenseProvider.Info()
 		licenseResp = map[string]any{
-			"valid":      info.Valid,
-			"tier":       info.Tier,
+			fieldValid:   info.Valid,
+			fieldTier:    info.Tier,
 			"upload_url": "/settings/license",
 		}
 	} else {
 		licenseResp = map[string]any{
-			"valid":      false,
-			"tier":       "free",
+			fieldValid:   false,
+			fieldTier:    tierFreeStr,
 			"upload_url": "/settings/license",
 		}
 	}
@@ -76,17 +76,17 @@ func (d *Dependencies) handleUsageSummary(c *echo.Context) error {
 	effectiveRetention := d.getEffectiveAuditRetentionDays(ctx, ent)
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"tier":   ent.Tier,
-		"period": period,
+		fieldTier: ent.Tier,
+		"period":  period,
 		"usage": map[string]any{
 			"governed_actions": buildGauge(actionsUsed, ent.MonthlyActionLimit),
 			"tenants":          buildGauge(int64(tenantCount), int64(ent.MaxTenants)),
 		},
-		"features": map[string]bool{
-			"approval_workflows": ent.ApprovalWorkflows,
-			"evidence_export":    ent.EvidenceExport,
-			"integrations":       ent.Integrations,
-			"custom_policies":    ent.CustomPolicies,
+		fieldFeatures: map[string]bool{
+			featureApprovalWorkflows: ent.ApprovalWorkflows,
+			featureEvidenceExport:    ent.EvidenceExport,
+			featureIntegrations:      ent.Integrations,
+			featureCustomPolicies:    ent.CustomPolicies,
 		},
 		"audit_retention_days":     effectiveRetention,
 		"audit_retention_days_max": ent.AuditRetentionDays,

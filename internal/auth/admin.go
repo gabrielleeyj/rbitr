@@ -15,6 +15,9 @@ import (
 const (
 	AdminKeyHeader      = "X-Admin-Key"
 	AuthorizationHeader = "Authorization"
+
+	scopeAdminRead  = "admin:read"
+	scopeAdminWrite = "admin:write"
 )
 
 func AdminKeyFromRequest(r *http.Request) string {
@@ -138,13 +141,13 @@ func hasScope(scopes []string, required string) bool {
 	// - admin:read remains an umbrella for all read-like granular scopes.
 	// - admin:write remains an umbrella for all non-read granular scopes.
 	if isReadLikeScope(required) {
-		return slices.Contains(scopes, "admin:read")
+		return slices.Contains(scopes, scopeAdminRead)
 	}
-	return slices.Contains(scopes, "admin:write")
+	return slices.Contains(scopes, scopeAdminWrite)
 }
 
 func isReadLikeScope(required string) bool {
-	if required == "admin:read" {
+	if required == scopeAdminRead {
 		return true
 	}
 	return strings.HasSuffix(required, ":read") ||

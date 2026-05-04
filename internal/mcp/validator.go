@@ -10,6 +10,9 @@ import (
 // MaxRequestSize is the maximum size of an MCP request body (10MB).
 const MaxRequestSize = 10 * 1024 * 1024
 
+// JSONRPCVersion is the JSON-RPC protocol version used by MCP.
+const JSONRPCVersion = "2.0"
+
 // ValidateAndParseRequest validates and parses a JSON-RPC request from raw bytes.
 func ValidateAndParseRequest(data []byte, maxSize int64) (*Request, error) {
 	if maxSize <= 0 {
@@ -48,7 +51,7 @@ func ValidateAndParseRequest(data []byte, maxSize int64) (*Request, error) {
 	}
 
 	// Validate JSON-RPC version
-	if req.JSONRPC != "2.0" {
+	if req.JSONRPC != JSONRPCVersion {
 		return nil, &ErrorObject{
 			Code:    ErrorInvalidRequest,
 			Message: "jsonrpc must be '2.0'",
@@ -74,7 +77,7 @@ func NewSuccessResponse(id *RequestID, result interface{}) (*Response, error) {
 	}
 
 	return &Response{
-		JSONRPC: "2.0",
+		JSONRPC: JSONRPCVersion,
 		ID:      id,
 		Result:  resultJSON,
 	}, nil
@@ -83,7 +86,7 @@ func NewSuccessResponse(id *RequestID, result interface{}) (*Response, error) {
 // NewErrorResponse creates a JSON-RPC error response.
 func NewErrorResponse(id *RequestID, errObj *ErrorObject) *Response {
 	return &Response{
-		JSONRPC: "2.0",
+		JSONRPC: JSONRPCVersion,
 		ID:      id,
 		Error:   errObj,
 	}

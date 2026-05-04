@@ -45,6 +45,18 @@ linters:
     errcheck:
       check-type-assertions: true
 
+    goconst:
+      # Ignore structural literals (JSON keys, JSON Schema field names, Prometheus label names,
+      # transport identifiers) where extracting a constant would harm readability rather than help.
+      ignore-string-values:
+        - error
+        - type
+        - string
+        - description
+        - http
+        - result
+        - channel
+
     gocritic:
       enabled-tags:
         - diagnostic

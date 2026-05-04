@@ -61,6 +61,8 @@ const (
 	basePolicyEffectAllow           = "ALLOW"
 	basePolicyEffectDeny            = "DENY"
 	basePolicyEffectRequireApproval = "REQUIRE_APPROVAL"
+
+	basePolicyRuleAllow = "base_allow"
 )
 
 // BasePolicyResult holds the outcome of a base policy evaluation.
@@ -119,12 +121,12 @@ func getBasePolicyPrepared(ctx context.Context) (rego.PreparedEvalQuery, error) 
 func parseBasePolicyResult(resultSet rego.ResultSet) (BasePolicyResult, error) {
 	if len(resultSet) == 0 || len(resultSet[0].Expressions) == 0 {
 		// No result means no restriction from base policy.
-		return BasePolicyResult{Effect: basePolicyEffectAllow, RuleID: "base_allow", Reason: "Base policy: no result"}, nil
+		return BasePolicyResult{Effect: basePolicyEffectAllow, RuleID: basePolicyRuleAllow, Reason: "Base policy: no result"}, nil
 	}
 
 	value, ok := resultSet[0].Expressions[0].Value.(map[string]any)
 	if !ok {
-		return BasePolicyResult{Effect: basePolicyEffectAllow, RuleID: "base_allow", Reason: "Base policy: parse error"}, nil
+		return BasePolicyResult{Effect: basePolicyEffectAllow, RuleID: basePolicyRuleAllow, Reason: "Base policy: parse error"}, nil
 	}
 
 	effect, _ := value["effect"].(string)
@@ -162,7 +164,7 @@ func MergeBasePolicyDecision(base BasePolicyResult, tenant *Result) Result {
 			Rule:          tenant.Rule,
 			Reasons:       tenant.Reasons,
 			Constraints:   tenant.Constraints,
-			Tags:          appendTag(tenant.Tags, "base_policy:DENY"),
+			Tags:          appendTag(tenant.Tags, tagBasePolicyDeny),
 			MatchedRules:  tenant.MatchedRules,
 			PolicyVersion: tenant.PolicyVersion,
 		}

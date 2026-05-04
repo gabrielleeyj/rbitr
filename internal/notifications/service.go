@@ -11,6 +11,8 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/telemetry"
 )
 
+const providerSendGrid = "sendgrid"
+
 type Service struct {
 	Store    store.StoreAPI
 	Resolver SecretResolver
@@ -174,7 +176,7 @@ func (s *Service) sendEmail(ctx context.Context, config *models.NotificationConf
 	switch provider {
 	case "ses":
 		sender, err = NewSESSender(ctx, config.EmailRegion, secretValue)
-	case "sendgrid":
+	case providerSendGrid:
 		sender, err = NewSendGridSender(secretValue)
 	case "mailgun":
 		sender, err = NewMailgunSender(secretValue, config.EmailDomain)

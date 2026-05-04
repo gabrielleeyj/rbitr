@@ -23,6 +23,18 @@ type Result struct {
 
 var ErrInvalidPolicyOutput = errors.New("invalid policy output")
 
+const (
+	DecisionAllow           = "ALLOW"
+	DecisionDeny            = "DENY"
+	DecisionRequireApproval = "REQUIRE_APPROVAL"
+
+	riskHigh = "HIGH"
+
+	reasonMissingRequiredField = "missing_required_field"
+	reasonBadEnum              = "bad_enum"
+	reasonSchemaViolation      = "schema_violation"
+)
+
 type Rule struct {
 	ID       string
 	Priority int
@@ -111,41 +123,41 @@ func parseResult(resultSet rego.ResultSet) (Result, error) {
 
 	version, ok := value["version"].(string)
 	if !ok || version == "" {
-		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonMissingRequiredField, Err: ErrInvalidPolicyOutput}
 	}
 	decision, ok := value["decision"].(string)
 	if !ok || decision == "" {
-		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonMissingRequiredField, Err: ErrInvalidPolicyOutput}
 	}
 	if !isDecisionAllowed(decision) {
-		return Result{}, PolicyOutputError{Reason: "bad_enum", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonBadEnum, Err: ErrInvalidPolicyOutput}
 	}
 	risk, ok := value["risk"].(string)
 	if !ok || risk == "" {
-		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonMissingRequiredField, Err: ErrInvalidPolicyOutput}
 	}
 	if !isRiskAllowed(risk) {
-		return Result{}, PolicyOutputError{Reason: "bad_enum", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonBadEnum, Err: ErrInvalidPolicyOutput}
 	}
 	ruleValue, ok := value["rule"].(map[string]any)
 	if !ok {
-		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonSchemaViolation, Err: ErrInvalidPolicyOutput}
 	}
 	ruleID, ok := ruleValue["id"].(string)
 	if !ok || ruleID == "" {
-		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonMissingRequiredField, Err: ErrInvalidPolicyOutput}
 	}
 	rulePriority, ok := parsePriority(ruleValue["priority"])
 	if !ok {
-		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonSchemaViolation, Err: ErrInvalidPolicyOutput}
 	}
 	reasons, ok := parseReasons(value["reasons"], true)
 	if !ok {
-		return Result{}, PolicyOutputError{Reason: "missing_required_field", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonMissingRequiredField, Err: ErrInvalidPolicyOutput}
 	}
 	constraintsValue, ok := value["constraints"].(map[string]any)
 	if !ok {
-		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonSchemaViolation, Err: ErrInvalidPolicyOutput}
 	}
 	tags := []string{}
 	if tagsValue, tagsOK := value["tags"].([]any); tagsOK {
@@ -158,7 +170,7 @@ func parseResult(resultSet rego.ResultSet) (Result, error) {
 
 	matchedRules, ok := parseMatchedRules(value["matched_rules"])
 	if !ok {
-		return Result{}, PolicyOutputError{Reason: "schema_violation", Err: ErrInvalidPolicyOutput}
+		return Result{}, PolicyOutputError{Reason: reasonSchemaViolation, Err: ErrInvalidPolicyOutput}
 	}
 	decision, resolvedRule, resolvedReasons := resolveDecision(decision, Rule{ID: ruleID, Priority: rulePriority}, reasons, matchedRules)
 
@@ -299,11 +311,11 @@ func decisionRank(decision string) int {
 	// DENY > REQUIRE_APPROVAL > ALLOW.
 	//nolint:mnd // this justs returns a priority.
 	switch decision {
-	case "DENY":
+	case DecisionDeny:
 		return 3
-	case "REQUIRE_APPROVAL":
+	case DecisionRequireApproval:
 		return 2
-	case "ALLOW":
+	case DecisionAllow:
 		return 1
 	default:
 		return 0
@@ -336,7 +348,7 @@ func IsValidDecision(decision string) bool {
 
 func isDecisionAllowed(decision string) bool {
 	switch decision {
-	case "ALLOW", "DENY", "REQUIRE_APPROVAL":
+	case DecisionAllow, DecisionDeny, DecisionRequireApproval:
 		return true
 	default:
 		return false
@@ -345,7 +357,7 @@ func isDecisionAllowed(decision string) bool {
 
 func isRiskAllowed(risk string) bool {
 	switch risk {
-	case "LOW", "MEDIUM", "HIGH", "CRITICAL":
+	case "LOW", "MEDIUM", riskHigh, "CRITICAL":
 		return true
 	default:
 		return false

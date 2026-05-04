@@ -18,6 +18,14 @@ const (
 	priorityHigh   = "High"
 	priorityMedium = "Medium"
 	priorityLow    = "Low"
+	priorityUrgent = "Urgent"
+
+	fieldKey      = "key"
+	fieldPriority = "priority"
+	fieldInput    = "input"
+	fieldNumber   = "number"
+
+	statusDone = "Done"
 )
 
 func MapPriority(provider, risk string) string {
@@ -66,7 +74,7 @@ func servicenowPriority(risk string) string {
 func linearPriority(risk string) string {
 	switch risk {
 	case riskCritical:
-		return "Urgent"
+		return priorityUrgent
 	case riskHigh:
 		return priorityHigh
 	case riskMedium:

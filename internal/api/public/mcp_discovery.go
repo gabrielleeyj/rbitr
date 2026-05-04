@@ -51,7 +51,7 @@ func enrichToolSchema(tool *models.Tool, schema json.RawMessage) json.RawMessage
 
 	// Add discovery hint so agents know this is an HTTP tool with a base URL.
 	schemaMap["x-rbitr-endpoints"] = map[string]any{
-		"base_url":    tool.BaseURL,
+		fieldBaseURL:  tool.BaseURL,
 		"description": "HTTP tool — use path and method arguments to call specific endpoints",
 	}
 
@@ -101,7 +101,7 @@ func (d *Dependencies) handleResourcesList(c *echo.Context, tenant models.Tenant
 			URI:         buildResourceURI(tools[i].ToolID),
 			Name:        tools[i].ToolID + " OpenAPI spec",
 			Description: "OpenAPI specification for " + tools[i].ToolID,
-			MIMEType:    "application/json",
+			MIMEType:    mimeApplicationJSON,
 		})
 	}
 
@@ -155,7 +155,7 @@ func (d *Dependencies) handleResourcesRead(c *echo.Context, tenant models.Tenant
 		Contents: []mcp.ResourceContent{
 			{
 				URI:      params.URI,
-				MIMEType: "application/json",
+				MIMEType: mimeApplicationJSON,
 				Text:     specContent,
 			},
 		},
@@ -170,7 +170,7 @@ func fetchOpenAPISpec(ctx context.Context, specURL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", mimeApplicationJSON)
 
 	resp, err := client.Do(req)
 	if err != nil {

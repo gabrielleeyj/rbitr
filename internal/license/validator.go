@@ -77,7 +77,7 @@ func NewValidator(publicKey ed25519.PublicKey, keyPath string) *Validator {
 		keyPath:   keyPath,
 		info: LicenseInfo{
 			Valid:        false,
-			Tier:         "free",
+			Tier:         tierFree,
 			Entitlements: FreeTierDefaults(),
 		},
 	}
@@ -96,7 +96,7 @@ func (v *Validator) LoadAndValidate() {
 		v.mu.Lock()
 		v.info = LicenseInfo{
 			Valid:        false,
-			Tier:         "free",
+			Tier:         tierFree,
 			Entitlements: FreeTierDefaults(),
 		}
 		v.mu.Unlock()
@@ -238,7 +238,7 @@ func (v *Validator) buildInfo(tok jwt.Token, claims *licenseClaims) (LicenseInfo
 	}
 
 	// Validate tier.
-	if claims.Tier != "free" && claims.Tier != "paid" && claims.Tier != "trial" {
+	if claims.Tier != tierFree && claims.Tier != tierPaid && claims.Tier != tierTrial {
 		return LicenseInfo{}, fmt.Errorf("%w: unknown tier %q", ErrMalformedLicense, claims.Tier)
 	}
 

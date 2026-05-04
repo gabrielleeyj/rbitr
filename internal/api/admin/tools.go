@@ -40,7 +40,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 
 	var payload CreateToolRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if err := validateToolID(payload.ToolID); err != nil {
@@ -67,7 +67,7 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 		if err := connector.ValidateToolBaseURL(payload.BaseURL, d.Config.OutboundAllowPrivate); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
-	case "mcp":
+	case transportMCP:
 		if payload.MCPUpstreamURL == "" {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": "mcp_upstream_url required for mcp transport"})
 		}
@@ -118,17 +118,17 @@ func (d *Dependencies) handleToolCreate(c *echo.Context) error {
 	d.invalidateTenantCaches(tenantID)
 
 	afterAudit := map[string]any{
-		"tool_id":             payload.ToolID,
-		"base_url":            payload.BaseURL,
-		"auth_type":           payload.AuthType,
-		"auth_set":            payload.AuthValue != "",
-		"transport":           payload.Transport,
-		"credential_provider": credential.ProviderName(payload.CredentialConfig),
+		fieldToolID:             payload.ToolID,
+		fieldBaseURL:            payload.BaseURL,
+		"auth_type":             payload.AuthType,
+		fieldAuthSet:            payload.AuthValue != "",
+		"transport":             payload.Transport,
+		fieldCredentialProvider: credential.ProviderName(payload.CredentialConfig),
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.CREATE", "TOOL", payload.ToolID, nil, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tool creation",
-			"detail": err.Error(),
+			"error":     "failed to audit tool creation",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -141,7 +141,7 @@ func (d *Dependencies) handleToolGet(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 
 	tool, err := d.Store.GetTool(c.Request().Context(), tenantID, toolID)
 	if err != nil {
@@ -164,7 +164,7 @@ func (d *Dependencies) handleToolArchive(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 
@@ -177,10 +177,10 @@ func (d *Dependencies) handleToolArchive(c *echo.Context) error {
 
 	d.invalidateTenantCaches(tenantID)
 
-	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.ARCHIVE", "TOOL", toolID, map[string]any{"tool_id": toolID}, nil); err != nil {
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.ARCHIVE", "TOOL", toolID, map[string]any{fieldToolID: toolID}, nil); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tool archive",
-			"detail": err.Error(),
+			"error":     "failed to audit tool archive",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -197,7 +197,7 @@ func (d *Dependencies) handleToolRestore(c *echo.Context) error {
 	}
 
 	tenantID := c.Param("tenant_id")
-	toolID := c.Param("tool_id")
+	toolID := c.Param(fieldToolID)
 	c.Set(telemetry.CtxTenantID, tenantID)
 	c.Set(telemetry.CtxToolID, toolID)
 
@@ -210,10 +210,10 @@ func (d *Dependencies) handleToolRestore(c *echo.Context) error {
 
 	d.invalidateTenantCaches(tenantID)
 
-	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.RESTORE", "TOOL", toolID, nil, map[string]any{"tool_id": toolID}); err != nil {
+	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.RESTORE", "TOOL", toolID, nil, map[string]any{fieldToolID: toolID}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit tool restore",
-			"detail": err.Error(),
+			"error":     "failed to audit tool restore",
+			fieldDetail: err.Error(),
 		})
 	}
 

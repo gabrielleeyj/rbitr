@@ -5,20 +5,20 @@ import "sort"
 // ActionTypes returns the supported action types for overrides and policy tooling.
 func ActionTypes() []string {
 	values := []string{
-		"ACCESS.GRANT",
-		"ACCESS.ROLE_CHANGE",
-		"CRM.DELETE",
-		"CRM.READ",
-		"DATA.BULK_EXPORT",
-		"DATA.DELETE",
-		"DATA.EXPORT",
-		"DATA.QUERY",
-		"DATA.READ",
-		"DATA.UPDATE",
-		"PAYMENT.REFUND",
-		"TICKET.COMMENT",
-		"TICKET.CREATE",
-		"TICKET.UPDATE",
+		string(ActionTypeAccessGrant),
+		string(ActionTypeAccessRoleChange),
+		string(ActionTypeCRMDelete),
+		string(ActionTypeCRMRead),
+		string(ActionTypeDataBulkExport),
+		string(ActionTypeDataDelete),
+		string(ActionTypeDataExport),
+		string(ActionTypeDataQuery),
+		string(ActionTypeDataRead),
+		string(ActionTypeDataUpdate),
+		string(ActionTypePaymentRefund),
+		string(ActionTypeTicketComment),
+		string(ActionTypeTicketCreate),
+		string(ActionTypeTicketUpdate),
 	}
 	sort.Strings(values)
 	return values

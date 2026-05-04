@@ -546,7 +546,7 @@ func matchesSingleJSONSchemaType(value any, typeName string) bool {
 	case "boolean":
 		_, ok := value.(bool)
 		return ok
-	case "null":
+	case jsonNull:
 		return value == nil
 	default:
 		return false
@@ -727,7 +727,7 @@ func argConstraintFailuresAsMaps(failures []argConstraintFailure) []map[string]a
 	out := make([]map[string]any, 0, len(failures))
 	for _, failure := range failures {
 		item := map[string]any{
-			"path":        failure.Path,
+			fieldPath:     failure.Path,
 			"op":          failure.Op,
 			"reason_code": failure.ReasonCode,
 		}

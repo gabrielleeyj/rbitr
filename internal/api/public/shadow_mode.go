@@ -55,7 +55,7 @@ func buildShadowDecisionMetadata(ruleID, risk, policyVersion string, reasons []m
 		"mode":              enforcementModeShadow,
 		"enforced":          false,
 		"original_decision": string(decisionDeny),
-		"reasons":           decisionReasonsAsMaps(reasons),
+		fieldReasons:        decisionReasonsAsMaps(reasons),
 	}
 	if ruleID != "" {
 		meta["rule_id"] = ruleID
@@ -64,7 +64,7 @@ func buildShadowDecisionMetadata(ruleID, risk, policyVersion string, reasons []m
 		meta["risk"] = risk
 	}
 	if policyVersion != "" {
-		meta["policy_version"] = policyVersion
+		meta[fieldPolicyVersion] = policyVersion
 	}
 	if len(constraints) > 0 {
 		meta["constraints"] = constraints
@@ -90,7 +90,7 @@ func (d *Dependencies) executeRESTShadowDeny(
 			d.Metrics.ErrorsTotal.Inc()
 		}
 		if errors.Is(err, errToolNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errToolNotFoundMessage})
 		}
 		if errors.Is(err, errConnectorMissing) {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "connector not configured"})
@@ -139,7 +139,7 @@ func (d *Dependencies) executeMCPShadowDeny(
 		}
 		return mcp.NewErrorResponse(forwardReq.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorInternalError,
-			Message: "upstream tool execution failed",
+			Message: errUpstreamToolExecFailed,
 		}), nil
 	}
 
@@ -151,7 +151,7 @@ func (d *Dependencies) executeMCPShadowDeny(
 }
 
 func withMCPShadowMetadata(raw json.RawMessage, shadowMeta map[string]any) json.RawMessage {
-	if len(raw) == 0 || strings.EqualFold(strings.TrimSpace(string(raw)), "null") {
+	if len(raw) == 0 || strings.EqualFold(strings.TrimSpace(string(raw)), jsonNull) {
 		out, _ := json.Marshal(map[string]any{
 			"_rbitr_shadow": shadowMeta,
 		})

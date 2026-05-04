@@ -21,6 +21,7 @@ const (
 	EventPolicyEvalError     = "POLICY.EVAL_ERROR"
 	SeverityWarn             = "WARN"
 	SeverityCritical         = "CRITICAL"
+	fieldTenant              = "Tenant"
 	defaultWindow            = 5 * time.Minute
 )
 
@@ -137,10 +138,10 @@ func (s *ApprovalExpiryScheduler) notifyApproval(ctx context.Context, approval *
 func ApprovalNotificationMessage(approval *models.ApprovalRequest, eventType string, now time.Time) NotificationMessage {
 	expiresIn := approval.ExpiresAt.Sub(now)
 	fields := map[string]string{
-		"Tenant":   approval.TenantID,
-		"Approval": approval.ApprovalRequestID,
-		"Action":   approval.ActionType,
-		"Risk":     approval.Risk,
+		fieldTenant: approval.TenantID,
+		"Approval":  approval.ApprovalRequestID,
+		"Action":    approval.ActionType,
+		"Risk":      approval.Risk,
 	}
 	if eventType == EventApprovalExpiring {
 		fields["ExpiresIn"] = formatDurationMinutes(expiresIn)

@@ -58,15 +58,15 @@ func (p *LinearProvider) CreateTicket(ctx context.Context, req *CreateTicketRequ
 	}`
 
 	variables := map[string]any{
-		"input": map[string]any{
+		fieldInput: map[string]any{
 			"teamId":      req.ProjectKey,
 			"title":       req.Summary,
 			"description": req.Description,
-			"priority":    priorityNum,
+			fieldPriority: priorityNum,
 		},
 	}
 	if len(req.Labels) > 0 {
-		if input, ok := variables["input"].(map[string]any); ok {
+		if input, ok := variables[fieldInput].(map[string]any); ok {
 			input["labelIds"] = req.Labels
 		}
 	}
@@ -125,8 +125,8 @@ func (p *LinearProvider) lookupIssueID(ctx context.Context, identifier string) (
 	}`
 	variables := map[string]any{
 		"filter": map[string]any{
-			"number": map[string]any{"eq": parts[1]},
-			"team":   map[string]any{"key": map[string]any{"eq": parts[0]}},
+			fieldNumber: map[string]any{"eq": parts[1]},
+			"team":      map[string]any{fieldKey: map[string]any{"eq": parts[0]}},
 		},
 	}
 
@@ -153,7 +153,7 @@ func (p *LinearProvider) addComment(ctx context.Context, issueID, body string) e
 		commentCreate(input: $input) { success }
 	}`
 	variables := map[string]any{
-		"input": map[string]any{
+		fieldInput: map[string]any{
 			"issueId": issueID,
 			"body":    body,
 		},
@@ -172,8 +172,8 @@ func (p *LinearProvider) updateState(ctx context.Context, issueID, status string
 		issueUpdate(id: $id, input: $input) { success }
 	}`
 	variables := map[string]any{
-		"id":    issueID,
-		"input": map[string]any{"stateId": stateID},
+		"id":       issueID,
+		fieldInput: map[string]any{"stateId": stateID},
 	}
 	_, err = p.graphql(ctx, query, variables)
 	return err
@@ -254,7 +254,7 @@ func (p *LinearProvider) graphql(ctx context.Context, query string, variables ma
 
 func linearPriorityNumber(priority string) int {
 	switch priority {
-	case "Urgent":
+	case priorityUrgent:
 		return linearPriUrgent
 	case priorityHigh:
 		return linearPriHigh

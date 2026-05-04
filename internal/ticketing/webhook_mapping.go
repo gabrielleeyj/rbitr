@@ -25,7 +25,7 @@ func MapWebhookStatus(provider, status string) ApprovalAction {
 
 func mapJiraStatus(status string) ApprovalAction {
 	switch status {
-	case "Done", "Closed", "Resolved":
+	case statusDone, "Closed", "Resolved":
 		return ActionApprove
 	case "Rejected", "Won't Do", "Declined":
 		return ActionDeny
@@ -47,7 +47,7 @@ func mapServiceNowStatus(status string) ApprovalAction {
 
 func mapLinearStatus(status string) ApprovalAction {
 	switch status {
-	case "Done", "Completed":
+	case statusDone, "Completed":
 		return ActionApprove
 	case "Canceled", "Cancelled":
 		return ActionDeny

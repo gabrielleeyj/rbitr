@@ -19,12 +19,12 @@ func decisionMatchedRulesAsMaps(rules []models.DecisionMatchedRule) []map[string
 	out := make([]map[string]any, 0, len(rules))
 	for _, rule := range rules {
 		item := map[string]any{
-			"rule_id":  rule.RuleID,
-			"priority": rule.Priority,
-			"effect":   rule.Effect,
+			fieldRuleID: rule.RuleID,
+			"priority":  rule.Priority,
+			"effect":    rule.Effect,
 		}
 		if len(rule.Reasons) > 0 {
-			item["reasons"] = decisionReasonsAsMaps(rule.Reasons)
+			item[fieldReasons] = decisionReasonsAsMaps(rule.Reasons)
 		}
 		if len(rule.ConstraintsSummary) > 0 {
 			item["constraints_summary"] = rule.ConstraintsSummary
@@ -38,8 +38,8 @@ func decisionReasonsAsMaps(reasons []models.DecisionReason) []map[string]any {
 	out := make([]map[string]any, 0, len(reasons))
 	for _, reason := range reasons {
 		item := map[string]any{
-			"code":    reason.Code,
-			"message": reason.Message,
+			"code":       reason.Code,
+			fieldMessage: reason.Message,
 		}
 		out = append(out, item)
 	}

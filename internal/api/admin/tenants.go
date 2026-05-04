@@ -51,7 +51,7 @@ func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 	}
 	var payload CreateTenantRequest
 	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Name == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name is required"})
@@ -65,11 +65,11 @@ func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 	}
 	if violation != nil {
 		return c.JSON(http.StatusForbidden, map[string]any{
-			"error":    "LIMIT_EXCEEDED",
-			"resource": violation.Resource,
-			"current":  violation.Current,
-			"limit":    violation.Limit,
-			"message":  violation.Message,
+			"error":      "LIMIT_EXCEEDED",
+			"resource":   violation.Resource,
+			"current":    violation.Current,
+			"limit":      violation.Limit,
+			fieldMessage: violation.Message,
 		})
 	}
 
@@ -81,7 +81,7 @@ func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 
 	rawKey, keyHash, keyPrefix, err := utils.GenerateAPIKey()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedGenerateKey})
 	}
 	keyID := uuid.NewString()
 	now := time.Now().UTC()
@@ -96,8 +96,8 @@ func (d *Dependencies) handleTenantCreate(c *echo.Context) error {
 	}
 
 	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.CREATED", "TENANT", tenantID, nil, map[string]any{
-		"name":       payload.Name,
-		"key_prefix": keyPrefix,
+		fieldName:      payload.Name,
+		fieldKeyPrefix: keyPrefix,
 	})
 
 	return c.JSON(http.StatusCreated, CreateTenantResponse{
@@ -147,11 +147,11 @@ func (d *Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 	}
 	if violation != nil {
 		return c.JSON(http.StatusForbidden, map[string]any{
-			"error":    "LIMIT_EXCEEDED",
-			"resource": violation.Resource,
-			"current":  violation.Current,
-			"limit":    violation.Limit,
-			"message":  violation.Message,
+			"error":      "LIMIT_EXCEEDED",
+			"resource":   violation.Resource,
+			"current":    violation.Current,
+			"limit":      violation.Limit,
+			fieldMessage: violation.Message,
 		})
 	}
 
@@ -159,7 +159,7 @@ func (d *Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 
 	rawKey, keyHash, keyPrefix, err := utils.GenerateAPIKey()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedGenerateKey})
 	}
 	keyID := uuid.NewString()
 	if err := d.Store.CreateTenantKey(ctx, &models.TenantKey{
@@ -173,7 +173,7 @@ func (d *Dependencies) handleTenantKeyCreate(c *echo.Context) error {
 	}
 
 	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.KEY.CREATED", "TENANT.KEY", keyID, nil, map[string]any{
-		"key_prefix": keyPrefix,
+		fieldKeyPrefix: keyPrefix,
 	})
 
 	return c.JSON(http.StatusCreated, TenantKeyIssueResponse{
@@ -210,7 +210,7 @@ func (d *Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	// Create new key
 	rawKey, keyHash, keyPrefix, err := utils.GenerateAPIKey()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedGenerateKey})
 	}
 	keyID := uuid.NewString()
 	if err := d.Store.CreateTenantKey(ctx, &models.TenantKey{
@@ -224,7 +224,7 @@ func (d *Dependencies) handleTenantKeyRotate(c *echo.Context) error {
 	}
 
 	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.KEY.ROTATED", "TENANT.KEY", keyID, nil, map[string]any{
-		"key_prefix": keyPrefix,
+		fieldKeyPrefix: keyPrefix,
 	})
 
 	return c.JSON(http.StatusOK, TenantKeyIssueResponse{
@@ -271,11 +271,11 @@ func (d *Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 
 	var payload SetTenantEnabledRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if err := d.Store.SetTenantEnabled(c.Request().Context(), tenantID, payload.Enabled); err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+		return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantNotFound})
 	}
 
 	action := "TENANT.DISABLED"
@@ -283,7 +283,7 @@ func (d *Dependencies) handleTenantSetEnabled(c *echo.Context) error {
 		action = "TENANT.ENABLED"
 	}
 	_ = d.emitAuditEvent(c, adminKey, tenantID, action, "TENANT", tenantID, nil, map[string]any{
-		"enabled": payload.Enabled,
+		fieldEnabled: payload.Enabled,
 	})
 
 	return c.NoContent(http.StatusNoContent)
@@ -308,7 +308,7 @@ func (d *Dependencies) handleTenantDelete(c *echo.Context) error {
 	now := time.Now().UTC()
 	if err := deleter.SoftDeleteTenant(c.Request().Context(), tenantID, now); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantNotFound})
 		}
 		if errors.Is(err, store.ErrAdminWriteLocked) {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
@@ -318,10 +318,10 @@ func (d *Dependencies) handleTenantDelete(c *echo.Context) error {
 
 	_ = d.emitAuditEvent(c, adminKey, tenantID, "TENANT.DELETED", "TENANT", tenantID, map[string]any{
 		"deleted_at": nil,
-		"enabled":    true,
+		fieldEnabled: true,
 	}, map[string]any{
 		"deleted_at": now,
-		"enabled":    false,
+		fieldEnabled: false,
 	})
 
 	return c.NoContent(http.StatusNoContent)

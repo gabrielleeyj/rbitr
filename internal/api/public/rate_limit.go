@@ -289,10 +289,10 @@ func withRateLimitConstraint(constraints map[string]any, violation *rateLimitVio
 	maps.Copy(cloned, constraints)
 	if violation != nil {
 		cloned["rate_limit_enforced"] = map[string]any{
-			"window":              violation.Window,
-			"limit":               violation.Limit,
-			"retry_after_seconds": violation.RetryAfterSeconds,
-			"scope":               violation.Scope,
+			fieldWindow:            violation.Window,
+			fieldLimit:             violation.Limit,
+			fieldRetryAfterSeconds: violation.RetryAfterSeconds,
+			fieldScope:             violation.Scope,
 		}
 	}
 	return cloned

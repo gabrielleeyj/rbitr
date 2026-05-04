@@ -75,7 +75,7 @@ func (d *Dependencies) handleTicketingConfigUpdate(c *echo.Context) error {
 	}
 	var payload TicketingConfigRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Provider != "" && payload.Provider != ticketing.ProviderJira &&
 		payload.Provider != ticketing.ProviderServiceNow && payload.Provider != ticketing.ProviderLinear {
@@ -99,15 +99,15 @@ func (d *Dependencies) handleTicketingConfigUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update ticketing config"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.TICKETING.CONFIG.UPDATE", "TENANT.TICKETING", tenantID, map[string]any{
-		"provider":    before.Provider,
-		"enabled":     before.Enabled,
+		fieldProvider: before.Provider,
+		fieldEnabled:  before.Enabled,
 		"auto_create": before.AutoCreate,
 	}, map[string]any{
-		"provider":    cfg.Provider,
-		"enabled":     cfg.Enabled,
+		fieldProvider: cfg.Provider,
+		fieldEnabled:  cfg.Enabled,
 		"auto_create": cfg.AutoCreate,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit ticketing config update", "detail": err.Error()})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit ticketing config update", fieldDetail: err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -119,10 +119,10 @@ func (d *Dependencies) handleTicketingSecretRefSet(c *echo.Context) error {
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
 	tenantID := c.Param("tenant_id")
@@ -135,11 +135,11 @@ func (d *Dependencies) handleTicketingSecretRefSet(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update ticketing secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.TICKETING.SECRET_REF.SET", "TENANT.TICKETING", tenantID, map[string]any{
-		"configured": before.SecretRef != "",
+		fieldConfigured: before.SecretRef != "",
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit ticketing secret ref", "detail": err.Error()})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit ticketing secret ref", fieldDetail: err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -151,10 +151,10 @@ func (d *Dependencies) handleTicketingWebhookSecretRefSet(c *echo.Context) error
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
 	tenantID := c.Param("tenant_id")
@@ -167,11 +167,11 @@ func (d *Dependencies) handleTicketingWebhookSecretRefSet(c *echo.Context) error
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update webhook secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.TICKETING.WEBHOOK_SECRET_REF.SET", "TENANT.TICKETING", tenantID, map[string]any{
-		"configured": before.WebhookSecretRef != "",
+		fieldConfigured: before.WebhookSecretRef != "",
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit webhook secret ref", "detail": err.Error()})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to audit webhook secret ref", fieldDetail: err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -208,7 +208,7 @@ func (d *Dependencies) handleTicketingTest(c *echo.Context) error {
 	}
 
 	d.TicketingService.OnApprovalCreated(c.Request().Context(), tenantID, testApproval)
-	return c.JSON(http.StatusOK, map[string]string{"status": "test ticket creation initiated"})
+	return c.JSON(http.StatusOK, map[string]string{fieldStatus: "test ticket creation initiated"})
 }
 
 func (d *Dependencies) handleTicketLinksList(c *echo.Context) error {
@@ -234,7 +234,7 @@ func (d *Dependencies) handleTicketingWebhook(c *echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "ticketing service not available"})
 	}
 
-	provider := c.Param("provider")
+	provider := c.Param(fieldProvider)
 	if provider != ticketing.ProviderJira && provider != ticketing.ProviderServiceNow && provider != ticketing.ProviderLinear {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unsupported provider"})
 	}
@@ -252,7 +252,7 @@ func (d *Dependencies) handleTicketingWebhook(c *echo.Context) error {
 
 	action := ticketing.MapWebhookStatus(provider, status)
 	if action == ticketing.ActionNone {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ignored"})
+		return c.JSON(http.StatusOK, map[string]string{fieldStatus: "ignored"})
 	}
 
 	link, err := d.Store.GetTicketLinkByExternalKey(c.Request().Context(), provider, externalKey)
@@ -285,7 +285,7 @@ func (d *Dependencies) handleTicketingWebhook(c *echo.Context) error {
 	}
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrInvalidState) {
-			return c.JSON(http.StatusConflict, map[string]string{"error": "approval not actionable", "detail": err.Error()})
+			return c.JSON(http.StatusConflict, map[string]string{"error": "approval not actionable", fieldDetail: err.Error()})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update approval"})
 	}
@@ -297,9 +297,9 @@ func (d *Dependencies) handleTicketingWebhook(c *echo.Context) error {
 	_ = d.Store.UpdateTicketLinkStatus(ctx, link.TicketLinkID, ticketStatus)
 
 	return c.JSON(http.StatusOK, map[string]string{
-		"status":              "processed",
-		"approval_request_id": link.ApprovalRequestID,
-		"action":              string(action),
+		fieldStatus:            "processed",
+		fieldApprovalRequestID: link.ApprovalRequestID,
+		"action":               string(action),
 	})
 }
 

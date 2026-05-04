@@ -94,7 +94,7 @@ func (d *Dependencies) handleSSOConfigUpdate(c *echo.Context) error {
 
 	var payload SSOConfigRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if strings.TrimSpace(payload.Issuer) == "" {
@@ -126,8 +126,8 @@ func (d *Dependencies) handleSSOConfigUpdate(c *echo.Context) error {
 		"client_id": payload.ClientID,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit SSO config update",
-			"detail": err.Error(),
+			"error":     "failed to audit SSO config update",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -136,7 +136,7 @@ func (d *Dependencies) handleSSOConfigUpdate(c *echo.Context) error {
 
 func (d *Dependencies) handleSSOAuthorize(c *echo.Context) error {
 	if d.OIDCProvider == nil || d.AdminSessionMgr == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "SSO not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errSSONotConfigured})
 	}
 
 	cfg, err := d.Store.GetSSOConfig(c.Request().Context())
@@ -169,7 +169,7 @@ func (d *Dependencies) handleSSOAuthorize(c *echo.Context) error {
 
 func (d *Dependencies) handleSSOCallback(c *echo.Context) error {
 	if d.OIDCProvider == nil || d.AdminSessionMgr == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "SSO not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errSSONotConfigured})
 	}
 
 	code := c.QueryParam("code")
@@ -206,7 +206,7 @@ func (d *Dependencies) handleSSOCallback(c *echo.Context) error {
 	// Issue admin session.
 	scopes := parseCSV(cfg.DefaultScopes)
 	if len(scopes) == 0 {
-		scopes = []string{"admin:read", "admin:write"}
+		scopes = []string{scopeAdminRead, scopeAdminWrite}
 	}
 
 	token, claims, err := d.AdminSessionMgr.IssueSession(userInfo, scopes)
@@ -224,7 +224,7 @@ func (d *Dependencies) handleSSOCallback(c *echo.Context) error {
 
 func (d *Dependencies) handleSSOLogout(c *echo.Context) error {
 	if d.AdminSessionMgr == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "SSO not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errSSONotConfigured})
 	}
 
 	token := auth.AdminKeyFromRequest(c.Request())

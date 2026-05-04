@@ -16,6 +16,11 @@ const (
 	ProviderEnv    ProviderType = "env"
 )
 
+const (
+	authTypeBearer      = "bearer"
+	headerAuthorization = "Authorization"
+)
+
 // ResolvedCredential contains the resolved auth header key and value.
 type ResolvedCredential struct {
 	HeaderName  string // e.g. "Authorization" or "X-Api-Key"

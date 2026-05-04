@@ -117,6 +117,11 @@ const (
 	enforcementModeShadow                  = "shadow"
 	defaultMinutes                         = 60
 	defaultDays                            = 10000
+
+	errApprovalNotFound       = "approval not found"
+	errAdminWritesLocked      = "admin writes locked"
+	auditFieldActivePolicyVer = "active_policy_version"
+	auditFieldActionRisk      = "action_risk"
 )
 
 type NotificationConfigResponse struct {
@@ -232,11 +237,11 @@ func (d *Dependencies) handleTenantDetail(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	item, err := d.Store.GetTenant(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant"})
 	}
@@ -248,12 +253,12 @@ func (d *Dependencies) handleEvidenceList(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	limit, err := parseLimit(c.QueryParam("limit"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 	}
-	decision := c.QueryParam("decision")
+	decision := c.QueryParam(fieldDecision)
 	actionType := c.QueryParam("action_type")
 	risk := c.QueryParam("risk")
 	var since *time.Time
@@ -309,7 +314,7 @@ func (d *Dependencies) handleEvidenceList(c *echo.Context) error {
 		}
 		exported = append(exported, export)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"tenant_id": tenantID, "records": exported})
+	return c.JSON(http.StatusOK, map[string]any{fieldTenantID: tenantID, "records": exported})
 }
 
 func (d *Dependencies) handleApprovalsList(c *echo.Context) error {
@@ -317,16 +322,16 @@ func (d *Dependencies) handleApprovalsList(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	limit, err := parseLimit(c.QueryParam("limit"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 	}
 	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidOffset})
 	}
-	status := strings.ToUpper(strings.TrimSpace(c.QueryParam("status")))
+	status := strings.ToUpper(strings.TrimSpace(c.QueryParam(fieldStatus)))
 	if status != "" && !isApprovalStatus(status) {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status"})
 	}
@@ -351,13 +356,13 @@ func (d *Dependencies) handleApprovalsPendingCount(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeApprovalsRead); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	count, err := d.Store.CountPendingApprovals(c.Request().Context(), tenantID, time.Now().UTC())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load pending approvals"})
 	}
 	return c.JSON(http.StatusOK, map[string]any{
-		"tenant_id":     tenantID,
+		fieldTenantID:   tenantID,
 		"pending_count": count,
 	})
 }
@@ -367,14 +372,14 @@ func (d *Dependencies) handleApprovalDetail(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
-	approvalID := c.Param("approval_request_id")
+	tenantID := c.Param(fieldTenantID)
+	approvalID := c.Param(fieldApprovalRequestID)
 	approval, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errApprovalNotFound})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadApproval})
 	}
 	now := time.Now().UTC()
 	if approvalExpired(&approval, now) {
@@ -403,14 +408,14 @@ func (d *Dependencies) handlePolicyVersions(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	versions, err := d.Store.ListPolicyVersions(c.Request().Context(), tenantID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list policies"})
 	}
 	config, err := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadTenantConfig})
 	}
 
 	response := PolicyVersionsResponse{
@@ -426,12 +431,12 @@ func (d *Dependencies) handlePolicyVersionGet(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
-	version := c.Param("policy_version")
+	tenantID := c.Param(fieldTenantID)
+	version := c.Param(fieldPolicyVersion)
 	item, err := d.Store.GetPolicyVersion(c.Request().Context(), tenantID, version)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errPolicyVersionNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load policy"})
 	}
@@ -446,7 +451,7 @@ func (d *Dependencies) handlePolicyCreate(c *echo.Context) error {
 
 	var payload PolicyCreateRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.PolicyVersion == "" || payload.RegoModule == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "policy_version and rego_module required"})
@@ -456,30 +461,30 @@ func (d *Dependencies) handlePolicyCreate(c *echo.Context) error {
 	}
 	if _, err := opa.PrepareQuery(c.Request().Context(), payload.RegoModule); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error":  "rego compilation failed",
-			"detail": err.Error(),
+			"error":     "rego compilation failed",
+			fieldDetail: err.Error(),
 		})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	if err := d.Store.CreatePolicyVersion(c.Request().Context(), tenantID, payload.PolicyVersion, payload.RegoModule, adminKey.AdminKeyID, payload.Notes); err != nil {
 		if errors.Is(err, store.ErrAdminWriteLocked) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+			return c.JSON(http.StatusForbidden, map[string]string{"error": errAdminWritesLocked})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to create policy",
-			"detail": err.Error(),
+			"error":     "failed to create policy",
+			fieldDetail: err.Error(),
 		})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.CREATE", "POLICY.VERSION", payload.PolicyVersion, nil, map[string]any{
-		"policy_version": payload.PolicyVersion,
-		"created_by":     adminKey.AdminKeyID,
-		"notes":          payload.Notes,
-		"rego_sha256":    utils.HashString(payload.RegoModule),
+		fieldPolicyVersion: payload.PolicyVersion,
+		"created_by":       adminKey.AdminKeyID,
+		"notes":            payload.Notes,
+		"rego_sha256":      utils.HashString(payload.RegoModule),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit policy create",
-			"detail": err.Error(),
+			"error":     "failed to audit policy create",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusCreated)
@@ -491,33 +496,33 @@ func (d *Dependencies) handlePolicyPublish(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
-	version := c.Param("policy_version")
+	tenantID := c.Param(fieldTenantID)
+	version := c.Param(fieldPolicyVersion)
 	before, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
 	if err := d.Store.PublishPolicyVersion(c.Request().Context(), tenantID, version); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errPolicyVersionNotFound})
 		}
 		if errors.Is(err, store.ErrAdminWriteLocked) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+			return c.JSON(http.StatusForbidden, map[string]string{"error": errAdminWritesLocked})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to publish policy",
-			"detail": err.Error(),
+			"error":     "failed to publish policy",
+			fieldDetail: err.Error(),
 		})
 	}
 	d.invalidateTenantCaches(tenantID)
 	after, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.PUBLISH", "POLICY.ACTIVE", version, map[string]any{
-		"active_policy_version": before.ActivePolicyVersion,
+		auditFieldActivePolicyVer: before.ActivePolicyVersion,
 	}, map[string]any{
-		"active_policy_version": after.ActivePolicyVersion,
+		auditFieldActivePolicyVer: after.ActivePolicyVersion,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit policy publish",
-			"detail": err.Error(),
+			"error":     "failed to audit policy publish",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -531,21 +536,21 @@ func (d *Dependencies) handlePolicyRollback(c *echo.Context) error {
 
 	var payload PolicyRollbackRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 	if err := d.Store.RollbackPolicyVersion(c.Request().Context(), tenantID, payload.PolicyVersion); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errPolicyVersionNotFound})
 		}
 		if errors.Is(err, store.ErrAdminWriteLocked) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "admin writes locked"})
+			return c.JSON(http.StatusForbidden, map[string]string{"error": errAdminWritesLocked})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to rollback policy",
-			"detail": err.Error(),
+			"error":     "failed to rollback policy",
+			fieldDetail: err.Error(),
 		})
 	}
 	d.invalidateTenantCaches(tenantID)
@@ -556,13 +561,13 @@ func (d *Dependencies) handlePolicyRollback(c *echo.Context) error {
 		target = after.ActivePolicyVersion
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.ROLLBACK", "POLICY.ACTIVE", target, map[string]any{
-		"active_policy_version": before.ActivePolicyVersion,
+		auditFieldActivePolicyVer: before.ActivePolicyVersion,
 	}, map[string]any{
-		"active_policy_version": after.ActivePolicyVersion,
+		auditFieldActivePolicyVer: after.ActivePolicyVersion,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit policy rollback",
-			"detail": err.Error(),
+			"error":     "failed to audit policy rollback",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -575,20 +580,20 @@ func (d *Dependencies) handlePolicySimulate(c *echo.Context) error {
 
 	var payload PolicySimulationRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Input == nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "input required"})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	regoModule := payload.RegoModule
 	//nolint:nestif // Selecting policy source inline keeps version/active fallback behavior explicit.
 	if regoModule == "" {
 		if payload.PolicyVersion != "" {
 			version, err := d.Store.GetPolicyVersion(c.Request().Context(), tenantID, payload.PolicyVersion)
 			if err != nil {
-				return c.JSON(http.StatusNotFound, map[string]string{"error": "policy version not found"})
+				return c.JSON(http.StatusNotFound, map[string]string{"error": errPolicyVersionNotFound})
 			}
 			regoModule = version.RegoModule
 		} else {
@@ -607,14 +612,14 @@ func (d *Dependencies) handlePolicySimulate(c *echo.Context) error {
 	result, err := engine.Evaluate(c.Request().Context(), payload.Input)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error":  "policy evaluation failed",
-			"detail": err.Error(),
+			"error":     "policy evaluation failed",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.JSON(http.StatusOK, map[string]any{
-		"decision": map[string]any{
+		fieldDecision: map[string]any{
 			"version":       result.Version,
-			"decision":      result.Decision,
+			fieldDecision:   result.Decision,
 			"risk":          result.Risk,
 			"rule":          map[string]any{"id": result.Rule.ID, "priority": result.Rule.Priority},
 			"reasons":       simulationReasons(result.Reasons),
@@ -629,8 +634,8 @@ func simulationReasons(reasons []opa.Reason) []map[string]any {
 	out := make([]map[string]any, 0, len(reasons))
 	for _, reason := range reasons {
 		out = append(out, map[string]any{
-			"code":    reason.Code,
-			"message": reason.Message,
+			"code":       reason.Code,
+			fieldMessage: reason.Message,
 		})
 	}
 	return out
@@ -660,7 +665,7 @@ func (d *Dependencies) handleRiskOverridesList(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	overrides, err := d.Store.ListRiskOverrides(c.Request().Context(), tenantID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list overrides"})
@@ -674,7 +679,7 @@ func (d *Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	actionType := c.Param("action_type")
 	beforeRisk, _ := d.Store.GetRiskOverride(c.Request().Context(), tenantID, actionType)
 	if err := d.Store.DeleteRiskOverride(c.Request().Context(), tenantID, actionType); err != nil {
@@ -682,12 +687,12 @@ func (d *Dependencies) handleRiskOverrideDelete(c *echo.Context) error {
 	}
 	d.invalidateTenantCaches(tenantID)
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "RISK_OVERRIDE.DELETE", "RISK_OVERRIDE", actionType, map[string]any{
-		"action_type": actionType,
-		"action_risk": beforeRisk,
+		"action_type":        actionType,
+		auditFieldActionRisk: beforeRisk,
 	}, nil); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit override delete",
-			"detail": err.Error(),
+			"error":     "failed to audit override delete",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -698,7 +703,7 @@ func (d *Dependencies) handleToolsList(c *echo.Context) error {
 		return err
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	includeArchived := c.QueryParam("include_archived") == "true"
 	tools, err := d.Store.ListTools(c.Request().Context(), tenantID, includeArchived, false)
 	if err != nil {
@@ -740,7 +745,7 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeSettingsRead); err != nil {
 		return err
 	}
-	tenantID := strings.TrimSpace(c.QueryParam("tenant_id"))
+	tenantID := strings.TrimSpace(c.QueryParam(fieldTenantID))
 	locked, err := d.Store.GetAdminWriteLock(c.Request().Context())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load settings"})
@@ -796,7 +801,7 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 	defaultRateLimit := models.RateLimitConfig{
 		PerMinute: defaultMinutes,
 		PerDay:    defaultDays,
-		Scope:     "tenant_agent_tool",
+		Scope:     rateLimitScopeTenantAgentTool,
 	}
 	if value, err := d.Store.GetDefaultRateLimitConfig(c.Request().Context()); err == nil {
 		defaultRateLimit = value
@@ -816,9 +821,9 @@ func (d *Dependencies) handleSettingsGet(c *echo.Context) error {
 		tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), tenantID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+				return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantConfigNotFound})
 			}
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadTenantConfig})
 		}
 		if mode := strings.TrimSpace(tenantConfig.EnforcementMode); mode == string(enforcementModeShadow) {
 			enforcementMode = mode
@@ -862,30 +867,30 @@ func (d *Dependencies) handleAuditList(c *echo.Context) error {
 	}
 	limit, err := parseLimit(c.QueryParam("limit"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 	}
 	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidOffset})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	action := c.QueryParam("action")
 	resourceType := c.QueryParam("resource_type")
 	actorID := c.QueryParam("actor_id")
 	from, err := parseTimeParam(c.QueryParam("from"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidFrom})
 	}
 	to, err := parseTimeParam(c.QueryParam("to"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidTo})
 	}
 	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEvents(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to list audit events",
-			"detail": err.Error(),
+			"error":     "failed to list audit events",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.JSON(http.StatusOK, events)
@@ -895,7 +900,7 @@ func (d *Dependencies) handleAuditResourceTypes(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditRead); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	values, err := d.Store.ListAuditResourceTypes(c.Request().Context(), tenantID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list audit resource types"})
@@ -909,7 +914,7 @@ func (d *Dependencies) handleAuditExport(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeAuditExport); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	return d.handleAuditExportResponse(c, tenantID)
 }
 
@@ -928,11 +933,11 @@ func (d *Dependencies) handleAuditExportResponse(c *echo.Context, tenantID strin
 	if !all {
 		limit, err = parseExportLimit(c.QueryParam("limit"))
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 		}
 		offset, err = parseOffset(c.QueryParam("offset"))
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidOffset})
 		}
 	}
 	action := c.QueryParam("action")
@@ -940,11 +945,11 @@ func (d *Dependencies) handleAuditExportResponse(c *echo.Context, tenantID strin
 	actorID := c.QueryParam("actor_id")
 	from, err := parseTimeParam(c.QueryParam("from"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidFrom})
 	}
 	to, err := parseTimeParam(c.QueryParam("to"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidTo})
 	}
 	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEventsExport(c.Request().Context(), tenantID, limit, offset, action, resourceType, actorID, from, to)
@@ -981,29 +986,29 @@ func (d *Dependencies) handleAuditListAll(c *echo.Context) error {
 	}
 	limit, err := parseLimit(c.QueryParam("limit"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 	}
 	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidOffset})
 	}
 	action := c.QueryParam("action")
 	resourceType := c.QueryParam("resource_type")
 	actorID := c.QueryParam("actor_id")
 	from, err := parseTimeParam(c.QueryParam("from"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid from"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidFrom})
 	}
 	to, err := parseTimeParam(c.QueryParam("to"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid to"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidTo})
 	}
 	from = applyVisibilityFloor(from, d.auditVisibilityFloor())
 	events, err := d.Store.ListAuditEvents(c.Request().Context(), "", limit, offset, action, resourceType, actorID, from, to)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to list audit events",
-			"detail": err.Error(),
+			"error":     "failed to list audit events",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.JSON(http.StatusOK, events)
@@ -1013,13 +1018,13 @@ func (d *Dependencies) handleNotificationConfigGet(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "notification config not found"})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	return c.JSON(http.StatusOK, NotificationConfigResponse{
 		TenantID:                   config.TenantID,
@@ -1057,7 +1062,7 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 	}
 	var payload NotificationConfigRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.SlackBotEnabled && payload.SlackBotDefaultChannel == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack_bot_default_channel required"})
@@ -1084,7 +1089,7 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "whatsapp_default_recipient required"})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if payload.EmailEnabled {
 		provider := strings.ToLower(payload.EmailProvider)
@@ -1138,8 +1143,8 @@ func (d *Dependencies) handleNotificationConfigUpdate(c *echo.Context) error {
 		"whatsapp_enabled":      payload.WhatsAppEnabled,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit notification update",
-			"detail": err.Error(),
+			"error":     "failed to audit notification update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1152,13 +1157,13 @@ func (d *Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) erro
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	beforeConfigured := before.SlackWebhookSecretRef != "" || before.SlackBotSecretRef != ""
 	config := before
@@ -1169,13 +1174,13 @@ func (d *Dependencies) handleNotificationSlackSecretRefSet(c *echo.Context) erro
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update slack secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.SLACK_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
-		"configured": beforeConfigured,
+		fieldConfigured: beforeConfigured,
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit slack secret ref",
-			"detail": err.Error(),
+			"error":     "failed to audit slack secret ref",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1188,13 +1193,13 @@ func (d *Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) erro
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	beforeConfigured := before.EmailSecretRef != ""
 	config := before
@@ -1205,13 +1210,13 @@ func (d *Dependencies) handleNotificationEmailSecretRefSet(c *echo.Context) erro
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update email secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.EMAIL_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
-		"configured": beforeConfigured,
+		fieldConfigured: beforeConfigured,
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit email secret ref",
-			"detail": err.Error(),
+			"error":     "failed to audit email secret ref",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1221,7 +1226,7 @@ func (d *Dependencies) handleMailingListsList(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	lists, err := d.Store.ListMailingLists(c.Request().Context(), tenantID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list mailing lists"})
@@ -1236,7 +1241,7 @@ func (d *Dependencies) handleMailingListCreate(c *echo.Context) error {
 	}
 	var payload MailingListRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Name == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name required"})
@@ -1247,7 +1252,7 @@ func (d *Dependencies) handleMailingListCreate(c *echo.Context) error {
 		}
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	list := models.MailingList{
 		MailingListID: uuid.NewString(),
 		TenantID:      tenantID,
@@ -1258,13 +1263,13 @@ func (d *Dependencies) handleMailingListCreate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to create mailing list"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.CREATE", "MAILING_LIST", list.MailingListID, map[string]any{}, map[string]any{
-		"name":         payload.Name,
+		fieldName:      payload.Name,
 		"description":  payload.Description,
 		"member_count": len(payload.Members),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit mailing list create",
-			"detail": err.Error(),
+			"error":     "failed to audit mailing list create",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.JSON(http.StatusCreated, list)
@@ -1277,7 +1282,7 @@ func (d *Dependencies) handleMailingListUpdate(c *echo.Context) error {
 	}
 	var payload MailingListRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Name == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name required"})
@@ -1288,7 +1293,7 @@ func (d *Dependencies) handleMailingListUpdate(c *echo.Context) error {
 		}
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	listID := c.Param("mailing_list_id")
 	before, _ := d.Store.GetMailingList(c.Request().Context(), tenantID, listID)
 	list := models.MailingList{
@@ -1301,16 +1306,16 @@ func (d *Dependencies) handleMailingListUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update mailing list"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.UPDATE", "MAILING_LIST", listID, map[string]any{
-		"name":        before.Name,
+		fieldName:     before.Name,
 		"description": before.Description,
 	}, map[string]any{
-		"name":         payload.Name,
+		fieldName:      payload.Name,
 		"description":  payload.Description,
 		"member_count": len(payload.Members),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit mailing list update",
-			"detail": err.Error(),
+			"error":     "failed to audit mailing list update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1321,19 +1326,19 @@ func (d *Dependencies) handleMailingListDelete(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	listID := c.Param("mailing_list_id")
 	before, _ := d.Store.GetMailingList(c.Request().Context(), tenantID, listID)
 	if err := d.Store.DeleteMailingList(c.Request().Context(), tenantID, listID); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to delete mailing list"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.MAILING_LIST.DELETE", "MAILING_LIST", listID, map[string]any{
-		"name":        before.Name,
+		fieldName:     before.Name,
 		"description": before.Description,
 	}, map[string]any{}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit mailing list delete",
-			"detail": err.Error(),
+			"error":     "failed to audit mailing list delete",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1344,29 +1349,29 @@ func (d *Dependencies) handleNotificationTestSlack(c *echo.Context) error {
 		return err
 	}
 	if d.Notifications == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errNotifNotConfigured})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errNotifConfigMissing})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	if !config.SlackWebhookEnabled || config.SlackWebhookSecretRef == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack webhook not configured"})
 	}
 	msg := notifications.NotificationMessage{
 		Title:  "Slack notification test",
-		Body:   "This is a test notification from rbitr.",
-		Fields: map[string]string{"Tenant": tenantID},
+		Body:   testNotificationBody,
+		Fields: map[string]string{fieldTenant: tenantID},
 	}
 	if err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
 		TenantID:   tenantID,
-		EventType:  "NOTIFICATIONS.TEST",
-		Severity:   "INFO",
-		ResourceID: "test",
+		EventType:  eventNotificationsTest,
+		Severity:   severityInfo,
+		ResourceID: resourceTest,
 	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send slack test"})
 	}
@@ -1378,15 +1383,15 @@ func (d *Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
 		return err
 	}
 	if d.Notifications == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errNotifNotConfigured})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errNotifConfigMissing})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	if !config.SlackBotEnabled || config.SlackBotSecretRef == "" || config.SlackBotDefaultChannel == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "slack bot not configured"})
@@ -1400,14 +1405,14 @@ func (d *Dependencies) handleNotificationTestSlackBot(c *echo.Context) error {
 	}, d.Notifications.Cooldown, d.Metrics)
 	msg := notifications.NotificationMessage{
 		Title:  "Slack bot notification test",
-		Body:   "This is a test notification from rbitr.",
-		Fields: map[string]string{"Tenant": tenantID},
+		Body:   testNotificationBody,
+		Fields: map[string]string{fieldTenant: tenantID},
 	}
 	if err := engine.Send(c.Request().Context(), notifications.SlackBotChannel, notifications.NotificationEvent{
 		TenantID:   tenantID,
-		EventType:  "NOTIFICATIONS.TEST",
-		Severity:   "INFO",
-		ResourceID: "test",
+		EventType:  eventNotificationsTest,
+		Severity:   severityInfo,
+		ResourceID: resourceTest,
 	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send slack bot test"})
 	}
@@ -1419,29 +1424,29 @@ func (d *Dependencies) handleNotificationTestEmail(c *echo.Context) error {
 		return err
 	}
 	if d.Notifications == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errNotifNotConfigured})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errNotifConfigMissing})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	if !config.EmailEnabled || config.EmailProvider == "" || config.EmailFrom == "" || config.EmailDefaultMailingListID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "email not configured"})
 	}
 	msg := notifications.NotificationMessage{
 		Title:  "Email notification test",
-		Body:   "This is a test notification from rbitr.",
-		Fields: map[string]string{"Tenant": tenantID},
+		Body:   testNotificationBody,
+		Fields: map[string]string{fieldTenant: tenantID},
 	}
 	if err := d.Notifications.Send(c.Request().Context(), tenantID, notifications.NotificationEvent{
 		TenantID:   tenantID,
-		EventType:  "NOTIFICATIONS.TEST",
-		Severity:   "INFO",
-		ResourceID: "test",
+		EventType:  eventNotificationsTest,
+		Severity:   severityInfo,
+		ResourceID: resourceTest,
 	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send email test"})
 	}
@@ -1455,13 +1460,13 @@ func (d *Dependencies) handleNotificationTelegramSecretRefSet(c *echo.Context) e
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	beforeConfigured := before.TelegramSecretRef != ""
 	config := before
@@ -1472,13 +1477,13 @@ func (d *Dependencies) handleNotificationTelegramSecretRefSet(c *echo.Context) e
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update telegram secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.TELEGRAM_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
-		"configured": beforeConfigured,
+		fieldConfigured: beforeConfigured,
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit telegram secret ref",
-			"detail": err.Error(),
+			"error":     "failed to audit telegram secret ref",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1491,13 +1496,13 @@ func (d *Dependencies) handleNotificationWhatsAppSecretRefSet(c *echo.Context) e
 	}
 	var payload SecretRefRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if !isValidSecretRef(payload.SecretRef) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid secret_ref"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidSecretRef})
 	}
 
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	before, _ := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	beforeConfigured := before.WhatsAppSecretRef != ""
 	config := before
@@ -1508,13 +1513,13 @@ func (d *Dependencies) handleNotificationWhatsAppSecretRefSet(c *echo.Context) e
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update whatsapp secret ref"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TENANT.NOTIFICATIONS.WHATSAPP_SECRET_REF.SET", "TENANT.NOTIFICATIONS", tenantID, map[string]any{
-		"configured": beforeConfigured,
+		fieldConfigured: beforeConfigured,
 	}, map[string]any{
-		"configured": true,
+		fieldConfigured: true,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit whatsapp secret ref",
-			"detail": err.Error(),
+			"error":     "failed to audit whatsapp secret ref",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1525,15 +1530,15 @@ func (d *Dependencies) handleNotificationTestTelegram(c *echo.Context) error {
 		return err
 	}
 	if d.Notifications == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errNotifNotConfigured})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errNotifConfigMissing})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	if !config.TelegramEnabled || config.TelegramSecretRef == "" || config.TelegramChatID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "telegram not configured"})
@@ -1547,14 +1552,14 @@ func (d *Dependencies) handleNotificationTestTelegram(c *echo.Context) error {
 	}, d.Notifications.Cooldown, d.Metrics)
 	msg := notifications.NotificationMessage{
 		Title:  "Telegram notification test",
-		Body:   "This is a test notification from rbitr.",
-		Fields: map[string]string{"Tenant": tenantID},
+		Body:   testNotificationBody,
+		Fields: map[string]string{fieldTenant: tenantID},
 	}
 	if err := engine.Send(c.Request().Context(), notifications.TelegramChannel, notifications.NotificationEvent{
 		TenantID:   tenantID,
-		EventType:  "NOTIFICATIONS.TEST",
-		Severity:   "INFO",
-		ResourceID: "test",
+		EventType:  eventNotificationsTest,
+		Severity:   severityInfo,
+		ResourceID: resourceTest,
 	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send telegram test"})
 	}
@@ -1566,15 +1571,15 @@ func (d *Dependencies) handleNotificationTestWhatsApp(c *echo.Context) error {
 		return err
 	}
 	if d.Notifications == nil {
-		return c.JSON(http.StatusNotImplemented, map[string]string{"error": "notifications not configured"})
+		return c.JSON(http.StatusNotImplemented, map[string]string{"error": errNotifNotConfigured})
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	config, err := d.Store.GetNotificationConfig(c.Request().Context(), tenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "notification config missing"})
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": errNotifConfigMissing})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load notification config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadNotifConfig})
 	}
 	if !config.WhatsAppEnabled || config.WhatsAppSecretRef == "" || config.WhatsAppPhoneNumberID == "" || config.WhatsAppDefaultRecipient == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "whatsapp not configured"})
@@ -1588,14 +1593,14 @@ func (d *Dependencies) handleNotificationTestWhatsApp(c *echo.Context) error {
 	}, d.Notifications.Cooldown, d.Metrics)
 	msg := notifications.NotificationMessage{
 		Title:  "WhatsApp notification test",
-		Body:   "This is a test notification from rbitr.",
-		Fields: map[string]string{"Tenant": tenantID},
+		Body:   testNotificationBody,
+		Fields: map[string]string{fieldTenant: tenantID},
 	}
 	if err := engine.Send(c.Request().Context(), notifications.WhatsAppChannel, notifications.NotificationEvent{
 		TenantID:   tenantID,
-		EventType:  "NOTIFICATIONS.TEST",
-		Severity:   "INFO",
-		ResourceID: "test",
+		EventType:  eventNotificationsTest,
+		Severity:   severityInfo,
+		ResourceID: resourceTest,
 	}, msg); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to send whatsapp test"})
 	}
@@ -1606,14 +1611,14 @@ func (d *Dependencies) handleNotificationSuppressions(c *echo.Context) error {
 	if _, err := requireAdminScope(c, d.Store, scopeNotifRead); err != nil {
 		return err
 	}
-	tenantID := c.Param("tenant_id")
+	tenantID := c.Param(fieldTenantID)
 	limit, err := parseLimit(c.QueryParam("limit"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid limit"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidLimit})
 	}
 	offset, err := parseOffset(c.QueryParam("offset"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid offset"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidOffset})
 	}
 	eventType := strings.ToUpper(strings.TrimSpace(c.QueryParam("event_type")))
 	channel := strings.TrimSpace(c.QueryParam("channel"))
@@ -1661,7 +1666,7 @@ func (d *Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 
 	var payload DefaultApprovalTTLRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if payload.Seconds < 60 || payload.Seconds > 86400 {
@@ -1673,13 +1678,13 @@ func (d *Dependencies) handleDefaultApprovalTTLUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update default approval ttl"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.APPROVAL_TTL_DEFAULT.SET", "SETTINGS", "default_approval_ttl_seconds", map[string]any{
-		"value": beforeTTL,
+		fieldValue: beforeTTL,
 	}, map[string]any{
-		"value": payload.Seconds,
+		fieldValue: payload.Seconds,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit approval ttl update",
-			"detail": err.Error(),
+			"error":     "failed to audit approval ttl update",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -1694,7 +1699,7 @@ func (d *Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 
 	var payload AuditRetentionRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	if payload.Days < 30 || payload.Days > 3650 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "days must be between 30 and 3650"})
@@ -1717,13 +1722,13 @@ func (d *Dependencies) handleAuditRetentionUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update audit retention"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.AUDIT_RETENTION.SET", "SETTINGS", "audit_retention_days", map[string]any{
-		"value": beforeValue,
+		fieldValue: beforeValue,
 	}, map[string]any{
-		"value": payload.Days,
+		fieldValue: payload.Days,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit retention update",
-			"detail": err.Error(),
+			"error":     "failed to audit retention update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1737,7 +1742,7 @@ func (d *Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
 
 	var payload DefaultRateLimitRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	payload.Scope = strings.TrimSpace(payload.Scope)
 	if payload.PerMinute <= 0 {
@@ -1762,15 +1767,15 @@ func (d *Dependencies) handleDefaultRateLimitUpdate(c *echo.Context) error {
 	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.RATE_LIMIT_DEFAULT.SET", "SETTINGS", "default_rate_limit_config", map[string]any{
 		"per_minute": beforeValue.PerMinute,
 		"per_day":    beforeValue.PerDay,
-		"scope":      beforeValue.Scope,
+		fieldScope:   beforeValue.Scope,
 	}, map[string]any{
 		"per_minute": payload.PerMinute,
 		"per_day":    payload.PerDay,
-		"scope":      payload.Scope,
+		fieldScope:   payload.Scope,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit default rate limit update",
-			"detail": err.Error(),
+			"error":     "failed to audit default rate limit update",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -1785,40 +1790,40 @@ func (d *Dependencies) handleEnforcementModeUpdate(c *echo.Context) error {
 
 	var payload EnforcementModeRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	payload.TenantID = strings.TrimSpace(payload.TenantID)
 	payload.EnforcementMode = strings.TrimSpace(strings.ToLower(payload.EnforcementMode))
 	if payload.TenantID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "tenant_id required"})
 	}
-	if payload.EnforcementMode != "enforce" && payload.EnforcementMode != "shadow" {
+	if payload.EnforcementMode != enforcementModeEnforce && payload.EnforcementMode != enforcementModeShadow {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "enforcement_mode must be enforce or shadow"})
 	}
 
-	beforeMode := "enforce"
+	beforeMode := enforcementModeEnforce
 	if existingConfig, err := d.Store.GetTenantConfig(c.Request().Context(), payload.TenantID); err == nil {
-		if mode := strings.TrimSpace(existingConfig.EnforcementMode); mode == "shadow" {
+		if mode := strings.TrimSpace(existingConfig.EnforcementMode); mode == enforcementModeShadow {
 			beforeMode = mode
 		}
 	}
 
 	if err := d.Store.SetTenantEnforcementMode(c.Request().Context(), payload.TenantID, payload.EnforcementMode); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantConfigNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update enforcement mode"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, payload.TenantID, "SETTINGS.ENFORCEMENT_MODE.SET", "SETTINGS", "enforcement_mode", map[string]any{
-		"tenant_id": payload.TenantID,
-		"value":     beforeMode,
+		fieldTenantID: payload.TenantID,
+		fieldValue:    beforeMode,
 	}, map[string]any{
-		"tenant_id": payload.TenantID,
-		"value":     payload.EnforcementMode,
+		fieldTenantID: payload.TenantID,
+		fieldValue:    payload.EnforcementMode,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit enforcement mode update",
-			"detail": err.Error(),
+			"error":     "failed to audit enforcement mode update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1832,7 +1837,7 @@ func (d *Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error
 
 	var payload MCPPassthroughUpstreamRequest
 	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 	payload.TenantID = strings.TrimSpace(payload.TenantID)
 	payload.ToolID = strings.TrimSpace(payload.ToolID)
@@ -1843,9 +1848,9 @@ func (d *Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error
 	tenantConfig, err := d.Store.GetTenantConfig(c.Request().Context(), payload.TenantID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantConfigNotFound})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tenant config"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadTenantConfig})
 	}
 	beforeToolID := strings.TrimSpace(tenantConfig.MCPPassthroughUpstreamToolID)
 
@@ -1853,7 +1858,7 @@ func (d *Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error
 		tool, err := d.Store.GetTool(c.Request().Context(), payload.TenantID, payload.ToolID)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return c.JSON(http.StatusNotFound, map[string]string{"error": "tool not found"})
+				return c.JSON(http.StatusNotFound, map[string]string{"error": errToolNotFound})
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load tool"})
 		}
@@ -1864,20 +1869,20 @@ func (d *Dependencies) handleMCPPassthroughUpstreamUpdate(c *echo.Context) error
 
 	if err := d.Store.SetTenantMCPPassthroughUpstreamToolID(c.Request().Context(), payload.TenantID, payload.ToolID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "tenant config not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errTenantConfigNotFound})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update mcp pass-through upstream"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, payload.TenantID, "SETTINGS.MCP_PASSTHROUGH_UPSTREAM.SET", "SETTINGS", "mcp_passthrough_upstream_tool_id", map[string]any{
-		"tenant_id": payload.TenantID,
-		"value":     beforeToolID,
+		fieldTenantID: payload.TenantID,
+		fieldValue:    beforeToolID,
 	}, map[string]any{
-		"tenant_id": payload.TenantID,
-		"value":     payload.ToolID,
+		fieldTenantID: payload.TenantID,
+		fieldValue:    payload.ToolID,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit mcp pass-through upstream update",
-			"detail": err.Error(),
+			"error":     "failed to audit mcp pass-through upstream update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -1941,7 +1946,7 @@ func (d *Dependencies) handleSessionTokenTTLUpdate(c *echo.Context) error {
 
 	var payload DefaultApprovalTTLRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if payload.Seconds < 60 || payload.Seconds > 86400 {
@@ -1953,13 +1958,13 @@ func (d *Dependencies) handleSessionTokenTTLUpdate(c *echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update session token ttl"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, "", "SETTINGS.SESSION_TOKEN_TTL.SET", "SETTINGS", "session_token_ttl_seconds", map[string]any{
-		"value": beforeTTL,
+		fieldValue: beforeTTL,
 	}, map[string]any{
-		"value": payload.Seconds,
+		fieldValue: payload.Seconds,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit session token ttl update",
-			"detail": err.Error(),
+			"error":     "failed to audit session token ttl update",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -2020,7 +2025,7 @@ func (d *Dependencies) handleBooleanSystemSettingUpdate(
 
 	var payload BooleanSettingRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	beforeValue, _ := getter(c.Request().Context())
@@ -2028,13 +2033,13 @@ func (d *Dependencies) handleBooleanSystemSettingUpdate(
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to update setting"})
 	}
 	if err := d.emitAuditEvent(c, adminKey, "", auditAction, "SETTINGS", resourceID, map[string]any{
-		"value": beforeValue,
+		fieldValue: beforeValue,
 	}, map[string]any{
-		"value": payload.Enabled,
+		fieldValue: payload.Enabled,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit setting update",
-			"detail": err.Error(),
+			"error":     "failed to audit setting update",
+			fieldDetail: err.Error(),
 		})
 	}
 	return c.NoContent(http.StatusNoContent)
@@ -2042,7 +2047,7 @@ func (d *Dependencies) handleBooleanSystemSettingUpdate(
 
 func isRateLimitScope(scope string) bool {
 	switch strings.TrimSpace(scope) {
-	case "tenant", "tenant_agent", "tenant_tool", "tenant_agent_tool":
+	case "tenant", rateLimitScopeTenantAgent, rateLimitScopeTenantTool, rateLimitScopeTenantAgentTool:
 		return true
 	default:
 		return false
@@ -2057,17 +2062,17 @@ func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditActi
 
 	var payload ApprovalDecisionRequest
 	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
-	tenantID := c.Param("tenant_id")
-	approvalID := c.Param("approval_request_id")
+	tenantID := c.Param(fieldTenantID)
+	approvalID := c.Param(fieldApprovalRequestID)
 	before, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errApprovalNotFound})
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadApproval})
 	}
 	now := time.Now().UTC()
 	if approvalExpired(&before, now) {
@@ -2089,7 +2094,7 @@ func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditActi
 	}
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "approval not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": errApprovalNotFound})
 		}
 		if errors.Is(err, store.ErrInvalidState) {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "approval state invalid"})
@@ -2099,7 +2104,7 @@ func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditActi
 
 	after, err := d.Store.GetApprovalRequest(c.Request().Context(), tenantID, approvalID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load approval"})
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": errFailedLoadApproval})
 	}
 	if d.Metrics != nil {
 		switch approvalStatus(status) {
@@ -2112,19 +2117,19 @@ func (d *Dependencies) handleApprovalDecision(c *echo.Context, status, auditActi
 		}
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, auditAction, "APPROVAL.REQUEST", approvalID, map[string]any{
-		"status":           before.Status,
+		fieldStatus:        before.Status,
 		"decided_at":       before.DecidedAt,
 		"decided_by":       before.DecidedBy,
 		"decision_comment": before.DecisionComment,
 	}, map[string]any{
-		"status":           after.Status,
+		fieldStatus:        after.Status,
 		"decided_at":       after.DecidedAt,
 		"decided_by":       after.DecidedBy,
 		"decision_comment": after.DecisionComment,
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit approval decision",
-			"detail": err.Error(),
+			"error":     "failed to audit approval decision",
+			fieldDetail: err.Error(),
 		})
 	}
 
@@ -2168,7 +2173,7 @@ func (d *Dependencies) emitAuditEvent(c *echo.Context, adminKey models.AdminKey,
 	event := models.AdminAuditEvent{
 		AuditEventID: "ae_" + uuid.NewString(),
 		TenantID:     tenantID,
-		ActorType:    "admin_key",
+		ActorType:    actorTypeAdminKey,
 		ActorID:      adminKey.AdminKeyID,
 		ActorDisplay: adminKey.AdminKeyID,
 		Action:       action,
@@ -2274,7 +2279,7 @@ func parseTimeParam(value string) (*time.Time, error) {
 func writeAuditCSV(writer *csv.Writer, events []models.AdminAuditEvent, includeDetails bool) error {
 	header := []string{
 		"audit_event_id",
-		"tenant_id",
+		fieldTenantID,
 		"stream_id",
 		"event_hash",
 		"prev_hash",

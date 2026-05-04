@@ -23,9 +23,9 @@ func resolveFromValue(authType, value string) ResolvedCredential {
 		return ResolvedCredential{}
 	}
 	switch authType {
-	case "bearer":
+	case authTypeBearer:
 		return ResolvedCredential{
-			HeaderName:  "Authorization",
+			HeaderName:  headerAuthorization,
 			HeaderValue: "Bearer " + value,
 		}
 	case "api_key":

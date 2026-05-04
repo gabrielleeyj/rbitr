@@ -49,7 +49,7 @@ func (d *Dependencies) handleOpenAPIImportPreview(c *echo.Context) error {
 
 	var payload OpenAPIImportRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&payload); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if payload.SpecURL == "" {
@@ -96,7 +96,7 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 
 	var payload OpenAPIImportConfirmRequest
 	if decodeErr := json.NewDecoder(c.Request().Body).Decode(&payload); decodeErr != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": errInvalidRequestBody})
 	}
 
 	if payload.SpecURL == "" {
@@ -137,8 +137,8 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 				continue
 			}
 			return c.JSON(http.StatusInternalServerError, map[string]string{
-				"error":  "failed to insert tool",
-				"detail": models[i].ToolID,
+				"error":     "failed to insert tool",
+				fieldDetail: models[i].ToolID,
 			})
 		}
 		created = append(created, toolToResponse(&models[i]))
@@ -154,8 +154,8 @@ func (d *Dependencies) handleOpenAPIImportConfirm(c *echo.Context) error {
 	}
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "TOOL.IMPORT_OPENAPI", "TOOL", payload.SpecURL, nil, afterAudit); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error":  "failed to audit import",
-			"detail": err.Error(),
+			"error":     "failed to audit import",
+			fieldDetail: err.Error(),
 		})
 	}
 

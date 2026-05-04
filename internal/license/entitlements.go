@@ -27,6 +27,12 @@ const (
 	tierPaid  = "paid"
 	tierTrial = "trial"
 
+	// Feature names used in entitlement checks.
+	featureApprovalWorkflows = "approval_workflows"
+	featureEvidenceExport    = "evidence_export"
+	featureIntegrations      = "integrations"
+	featureCustomPolicies    = "custom_policies"
+
 	hoursPerDay = 24
 )
 
@@ -121,13 +127,13 @@ func DefaultsForTier(tier string) Entitlements {
 // HasFeature reports whether the named boolean feature is enabled.
 func (e Entitlements) HasFeature(feature string) bool {
 	switch feature {
-	case "approval_workflows":
+	case featureApprovalWorkflows:
 		return e.ApprovalWorkflows
-	case "evidence_export":
+	case featureEvidenceExport:
 		return e.EvidenceExport
-	case "integrations":
+	case featureIntegrations:
 		return e.Integrations
-	case "custom_policies":
+	case featureCustomPolicies:
 		return e.CustomPolicies
 	default:
 		return false

@@ -32,11 +32,11 @@ func (p *JiraProvider) Name() string { return ProviderJira }
 func (p *JiraProvider) CreateTicket(ctx context.Context, req *CreateTicketRequest) (CreateTicketResult, error) {
 	payload := map[string]any{
 		"fields": map[string]any{
-			"project":     map[string]string{"key": req.ProjectKey},
+			"project":     map[string]string{fieldKey: req.ProjectKey},
 			"summary":     req.Summary,
 			"description": jiraDescription(req.Description),
 			"issuetype":   map[string]string{"name": req.IssueType},
-			"priority":    map[string]string{"name": req.Priority},
+			fieldPriority: map[string]string{"name": req.Priority},
 		},
 	}
 	if len(req.Labels) > 0 {
