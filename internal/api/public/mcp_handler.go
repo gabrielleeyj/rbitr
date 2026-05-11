@@ -322,7 +322,7 @@ func (d *Dependencies) handlePassThrough(c *echo.Context, tenant models.Tenant, 
 		}
 		c.Logger().Warn("mcp pass-through upstream fallback used",
 			"tenant_id", tenant.TenantID,
-			"tool_id", selectedToolID,
+			fieldToolID, selectedToolID,
 			fieldMethod, req.Method,
 			"request_id", c.Request().Header.Get("X-Request-Id"),
 		)
@@ -667,16 +667,16 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 				"error", err,
 				"tenant_id", tenant.TenantID,
 				"agent_id", agentID,
-				"tool_id", toolID,
-				"policy_version", policyVersion,
+				fieldToolID, toolID,
+				fieldPolicyVersion, policyVersion,
 				"request_id", requestID,
 			)
 			return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 				Code:    mcp.ErrorPolicyInvalid,
 				Message: "policy evaluation error",
 				Data: mustMarshalJSON(map[string]any{
-					"reason_code":    invalidReason,
-					"policy_version": policyVersion,
+					"reason_code":      invalidReason,
+					fieldPolicyVersion: policyVersion,
 				}),
 			}), nil
 		}
@@ -868,12 +868,12 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 
 		// Return JSON-RPC error for DENY
 		denyData, _ := json.Marshal(map[string]any{
-			"denied":         true,
-			"policy_version": decisionResult.PolicyVersion,
-			"rule_id":        decisionResult.Rule.ID,
-			"risk":           decisionResult.Risk,
-			"reasons":        formatReasons(decisionResult.Reasons),
-			"matched_rules":  matchedRulesFromConstraints(decisionResult.Constraints),
+			"denied":           true,
+			fieldPolicyVersion: decisionResult.PolicyVersion,
+			fieldRuleID:        decisionResult.Rule.ID,
+			fieldRisk:          decisionResult.Risk,
+			fieldReasons:       formatReasons(decisionResult.Reasons),
+			"matched_rules":    matchedRulesFromConstraints(decisionResult.Constraints),
 		})
 		return mcp.NewErrorResponse(req.ID, &mcp.ErrorObject{
 			Code:    mcp.ErrorDeniedByPolicy,
@@ -975,7 +975,7 @@ func (d *Dependencies) handleToolsCall(c *echo.Context, tenant models.Tenant, ag
 			Code:    mcp.ErrorInternalError,
 			Message: "tool not configured for MCP or HTTP",
 			Data: mustMarshalJSON(map[string]any{
-				"tool_id": toolID,
+				fieldToolID: toolID,
 			}),
 		}), nil
 
@@ -1230,7 +1230,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 				Code:    mcp.ErrorInternalError,
 				Message: errToolNotFoundMessage,
 				Data: mustMarshalJSON(map[string]any{
-					"tool_id":              toolID,
+					fieldToolID:            toolID,
 					fieldApprovalRequestID: approval.ApprovalRequestID,
 				}),
 			}), nil
@@ -1248,7 +1248,7 @@ func (d *Dependencies) handleMCPApprovedCall(c *echo.Context, tenant models.Tena
 			Code:    mcp.ErrorInternalError,
 			Message: "tool not configured for MCP or HTTP",
 			Data: mustMarshalJSON(map[string]any{
-				"tool_id":              tool.ToolID,
+				fieldToolID:            tool.ToolID,
 				fieldApprovalRequestID: approval.ApprovalRequestID,
 			}),
 		}), nil
