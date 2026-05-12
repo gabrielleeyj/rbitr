@@ -26,7 +26,9 @@ Governance domains:
 
 ## Getting Started (Dev)
 
-### Option A: Docker Compose
+### Option A: Docker Compose (recommended)
+
+Brings up Postgres, runs migrations, and starts the gateway, UI, and mocktool in one command.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
@@ -35,14 +37,23 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 - Gateway: http://localhost:8080
 - UI: http://localhost:5173
 - Postgres: localhost:2345
+- Mocktool: http://localhost:8090
 
-Bootstrap first tenant/admin keys:
+Once the gateway is healthy, bootstrap the first tenant + admin keys (run from a second terminal):
 
 ```bash
 ./scripts/dev/bootstrap.sh
 ```
 
+This creates tenant `t_demo` with admin key `admin_demo_key_2026!` and tenant key `tenant_demo_key_2026!`. Override via `TENANT_ID`, `ADMIN_KEY`, `TENANT_KEY` env vars.
+
 ### Option B: Local Binaries
+
+Prerequisites:
+
+- Go 1.25+
+- A running Postgres on `localhost:2345` (the easiest path is `docker compose up -d db` from this repo, which exposes Postgres at port 2345)
+- `goose` migration tool (`go install github.com/pressly/goose/v3/cmd/goose@latest`)
 
 1. Run migrations:
 
@@ -51,14 +62,29 @@ export DATABASE_URL=postgres://postgres:postgres@localhost:2345/rbitr?sslmode=di
 goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
-2. Start mock tool and gateway:
+2. Start mock tool and gateway in separate terminals:
 
 ```bash
-go run ./cmd/mocktool
-go run ./cmd/gateway
+go run ./cmd/mocktool   # terminal 1, port 8090
+go run ./cmd/gateway    # terminal 2, port 8080
 ```
 
-3. Run tests: `go test ./...`
+3. Bootstrap the first tenant (terminal 3):
+
+```bash
+./scripts/dev/bootstrap.sh
+```
+
+4. Run tests: `go test ./...`
+
+### Option C: OpenClaw + Telegram demo
+
+A separate compose file wires rbitr together with the OpenClaw agent host and a Telegram bot for an end-to-end agent governance demo. See `docs/demo-setup.md` for the full walkthrough.
+
+```bash
+cp .env.demo.example .env.demo   # fill in TELEGRAM_BOT_TOKEN, ANTHROPIC_API_KEY
+docker compose -f docker-compose.demo.yml --env-file .env.demo up --build
+```
 
 ### Database Runtime Defaults
 
@@ -747,15 +773,22 @@ All features can be toggled via environment variables at startup or via the admi
 
 ## Demo
 
-Run `./scripts/test_demo.sh` to test the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail).
+### One-shot script
 
-Before running the demo, bootstrap setup once:
+`./scripts/test_demo.sh` exercises the full workflow (ALLOW, REQUIRE_APPROVAL with admin approval, DENY, and evidence trail). It self-bootstraps with its own defaults (`t_acme`, `rbtr_live_...`, `rbtr_admin_...`) and assumes the gateway and mocktool are already running.
 
 ```bash
-./scripts/dev/bootstrap.sh
+# terminal 1
+go run ./cmd/mocktool
+# terminal 2
+go run ./cmd/gateway
+# terminal 3
+./scripts/test_demo.sh
 ```
 
-Demo defaults:
+### Manual walkthrough
+
+Demo defaults (from `./scripts/dev/bootstrap.sh`):
 
 - tenant id: `t_demo`
 - admin key: `admin_demo_key_2026!`
@@ -768,7 +801,13 @@ go run ./cmd/mocktool
 go run ./cmd/gateway
 ```
 
-2. Allowed call (DATA.READ):
+2. Bootstrap the tenant once the gateway is up:
+
+```bash
+./scripts/dev/bootstrap.sh
+```
+
+3. Allowed call (DATA.READ):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -786,7 +825,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 Expect: decision `ALLOW`.
 
-3. Approval required (PAYMENT.REFUND):
+4. Approval required (PAYMENT.REFUND):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -804,7 +843,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 Expect: HTTP 409 with `approval_request_id` + `approval_token`. Clients should treat this as pending approval and replay after approval.
 
-3b. Admin approves:
+4b. Admin approves:
 
 ```bash
 curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval_request_id>/approve" \
@@ -813,7 +852,7 @@ curl -sS -X POST "http://localhost:8080/admin/tenants/t_demo/approvals/<approval
 -d '{"comment":"approved in demo"}'
 ```
 
-3c. Agent resubmits with approval headers:
+4c. Agent resubmits with approval headers:
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -833,7 +872,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 Expect: HTTP 200 with tool response and approval marked EXECUTED.
 
-4. Denied (DATA.EXPORT):
+5. Denied (DATA.EXPORT):
 
 ```bash
 curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
@@ -851,7 +890,7 @@ curl -sS -X POST "http://localhost:8080/v1/tools/mock_internal/call" \
 
 Expect: HTTP 403 with decision `DENY`.
 
-5. Evidence trail:
+6. Evidence trail:
 
 ```bash
 curl -sS "http://localhost:8080/v1/tenants/t_demo/evidence?limit=50" \
