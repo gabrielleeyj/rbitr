@@ -2,6 +2,13 @@
   "gateway": {
     "mode": "local"
   },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5-20250929"
+      }
+    }
+  },
   "channels": {
     "telegram": {
       "enabled": true,
@@ -16,13 +23,11 @@
   "mcp": {
     "servers": {
       "rbitr": {
-        "transport": {
-          "type": "streamableHTTP",
-          "url": "http://gateway:8080/v1/mcp/$RBITR_TENANT_ID",
-          "headers": {
-            "Authorization": "Bearer $RBITR_TENANT_KEY",
-            "X-Agent-Id": "openclaw-telegram"
-          }
+        "transport": "streamable-http",
+        "url": "http://gateway:8080/v1/mcp/$RBITR_TENANT_ID",
+        "headers": {
+          "Authorization": "Bearer $RBITR_TENANT_KEY",
+          "X-Agent-Id": "openclaw-telegram"
         }
       }
     }

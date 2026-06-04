@@ -104,3 +104,6 @@ cmd/license-gen/
 
 # env for demo
 .env.demo
+
+# compiled gateway binary (build artifact)
+/gateway

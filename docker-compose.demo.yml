@@ -70,7 +70,7 @@ services:
     environment:
       # --- LLM provider (set at least one in .env.demo) ---
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-      OPENCLAW_PRIMARY_MODEL: "${OPENCLAW_PRIMARY_MODEL:-anthropic/claude-sonnet-4-20250514}"
+      OPENCLAW_PRIMARY_MODEL: "${OPENCLAW_PRIMARY_MODEL:-anthropic/claude-sonnet-4-5-20250929}"
 
       # --- Telegram ---
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
@@ -85,12 +85,14 @@ services:
       RBITR_TENANT_KEY: "${RBITR_TENANT_KEY:-}"
     volumes:
       - ./openclaw-config.json:/tmp/openclaw-config-template.json:ro
+      - openclaw-data:/home/node/.openclaw
     entrypoint:
       [
         "sh",
         "-c",
-        "mkdir -p /home/node/.openclaw && if [ -n \"$RBITR_TENANT_ID\" ] && [ -n \"$RBITR_TENANT_KEY\" ]; then sed \"s|\\$RBITR_TENANT_ID|$RBITR_TENANT_ID|g; s|\\$RBITR_TENANT_KEY|$RBITR_TENANT_KEY|g\" /tmp/openclaw-config-template.json > /home/node/.openclaw/openclaw.json; else cp /tmp/openclaw-config-template.json /home/node/.openclaw/openclaw.json; fi && exec openclaw gateway",
+        "mkdir -p /home/node/.openclaw && if [ ! -f /home/node/.openclaw/openclaw.json ]; then if [ -n \"$RBITR_TENANT_ID\" ] && [ -n \"$RBITR_TENANT_KEY\" ]; then sed \"s|\\$RBITR_TENANT_ID|$RBITR_TENANT_ID|g; s|\\$RBITR_TENANT_KEY|$RBITR_TENANT_KEY|g\" /tmp/openclaw-config-template.json > /home/node/.openclaw/openclaw.json; else cp /tmp/openclaw-config-template.json /home/node/.openclaw/openclaw.json; fi; fi && exec openclaw gateway",
       ]
+    restart: unless-stopped
     ports:
       - "18789:18789"
       - "18790:18790"
@@ -104,3 +106,4 @@ services:
 
 volumes:
   license-data:
+  openclaw-data:
