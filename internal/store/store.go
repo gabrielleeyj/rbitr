@@ -78,8 +78,11 @@ type StoreAPI interface {
 	ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error)
 	GetPolicyVersion(ctx context.Context, tenantID, policyVersion string) (models.PolicyVersion, error)
 	CreatePolicyVersion(ctx context.Context, tenantID, policyVersion, regoModule, createdBy, notes string) error
+	CreatePolicyVersionStructured(ctx context.Context, tenantID, policyVersion, regoModule string, structuredJSON []byte, createdBy, notes string) error
 	PublishPolicyVersion(ctx context.Context, tenantID, policyVersion string) error
 	RollbackPolicyVersion(ctx context.Context, tenantID, policyVersion string) error
+	ListFallbackHitPairs(ctx context.Context, tenantID string, ruleIDs []string, since time.Time, limit int) ([]models.CoverageFallbackHit, error)
+	ListUnusedActiveTools(ctx context.Context, tenantID string) ([]string, error)
 	GetRiskOverride(ctx context.Context, tenantID, actionType string) (string, error)
 	ListRiskOverrides(ctx context.Context, tenantID string) ([]models.RiskOverride, error)
 	DeleteRiskOverride(ctx context.Context, tenantID, actionType string) error
@@ -621,8 +624,41 @@ func (s *Store) GetEffectiveRateLimitConfig(ctx context.Context, tenantID string
 	return config, nil
 }
 
+// Policy authoring modes recorded on policy_versions.authoring_mode.
+const (
+	AuthoringModeRego       = "rego"
+	AuthoringModeStructured = "structured"
+)
+
+const policyVersionColumns = `tenant_id, policy_version, rego_module, created_at, created_by, notes, structured_json, authoring_mode`
+
+// scanPolicyVersion scans a policy_versions row selected with policyVersionColumns.
+func scanPolicyVersion(scan func(dest ...any) error) (models.PolicyVersion, error) {
+	var version models.PolicyVersion
+	var createdBy, notes, authoringMode sql.NullString
+	var structuredJSON []byte
+	if err := scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt,
+		&createdBy, &notes, &structuredJSON, &authoringMode); err != nil {
+		return models.PolicyVersion{}, err
+	}
+	if createdBy.Valid {
+		version.CreatedBy = createdBy.String
+	}
+	if notes.Valid {
+		version.Notes = notes.String
+	}
+	if len(structuredJSON) > 0 {
+		version.StructuredJSON = append(json.RawMessage(nil), structuredJSON...)
+	}
+	version.AuthoringMode = AuthoringModeRego
+	if authoringMode.Valid && authoringMode.String != "" {
+		version.AuthoringMode = authoringMode.String
+	}
+	return version, nil
+}
+
 func (s *Store) ListPolicyVersions(ctx context.Context, tenantID string) ([]models.PolicyVersion, error) {
-	query := `SELECT tenant_id, policy_version, rego_module, created_at, created_by, notes
+	query := `SELECT ` + policyVersionColumns + `
 		FROM rbitr.policy_versions
 		WHERE tenant_id = $1
 		ORDER BY created_at DESC`
@@ -634,17 +670,9 @@ func (s *Store) ListPolicyVersions(ctx context.Context, tenantID string) ([]mode
 
 	var versions []models.PolicyVersion
 	for rows.Next() {
-		var version models.PolicyVersion
-		var createdBy sql.NullString
-		var notes sql.NullString
-		if err := rows.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &createdBy, &notes); err != nil {
+		version, err := scanPolicyVersion(rows.Scan)
+		if err != nil {
 			return nil, err
-		}
-		if createdBy.Valid {
-			version.CreatedBy = createdBy.String
-		}
-		if notes.Valid {
-			version.Notes = notes.String
 		}
 		versions = append(versions, version)
 	}
@@ -652,24 +680,16 @@ func (s *Store) ListPolicyVersions(ctx context.Context, tenantID string) ([]mode
 }
 
 func (s *Store) GetPolicyVersion(ctx context.Context, tenantID, policyVersion string) (models.PolicyVersion, error) {
-	query := `SELECT tenant_id, policy_version, rego_module, created_at, created_by, notes
+	query := `SELECT ` + policyVersionColumns + `
 		FROM rbitr.policy_versions
 		WHERE tenant_id = $1 AND policy_version = $2`
 	row := s.db.QueryRowContext(ctx, query, tenantID, policyVersion)
-	var version models.PolicyVersion
-	var createdBy sql.NullString
-	var notes sql.NullString
-	if err := row.Scan(&version.TenantID, &version.PolicyVersion, &version.RegoModule, &version.CreatedAt, &createdBy, &notes); err != nil {
+	version, err := scanPolicyVersion(row.Scan)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.PolicyVersion{}, ErrNotFound
 		}
 		return models.PolicyVersion{}, err
-	}
-	if createdBy.Valid {
-		version.CreatedBy = createdBy.String
-	}
-	if notes.Valid {
-		version.Notes = notes.String
 	}
 	return version, nil
 }
@@ -678,9 +698,23 @@ func (s *Store) CreatePolicyVersion(ctx context.Context, tenantID, policyVersion
 	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, created_by, notes)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		tenantID, policyVersion, regoModule, time.Now().UTC(), createdBy, notes)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, created_by, notes, authoring_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		tenantID, policyVersion, regoModule, time.Now().UTC(), createdBy, notes, AuthoringModeRego)
+	return err
+}
+
+// CreatePolicyVersionStructured persists a policy version authored via the
+// structured builder, storing both the compiled Rego and the structured JSON so
+// the version can be re-edited in the UI. The enforcement path still reads only
+// rego_module, so this is fully compatible with hand-written policies.
+func (s *Store) CreatePolicyVersionStructured(ctx context.Context, tenantID, policyVersion, regoModule string, structuredJSON []byte, createdBy, notes string) error {
+	if err := s.ensureAdminWritesAllowed(ctx); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, created_by, notes, structured_json, authoring_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tenantID, policyVersion, regoModule, time.Now().UTC(), createdBy, notes, structuredJSON, AuthoringModeStructured)
 	return err
 }
 

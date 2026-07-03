@@ -98,3 +98,15 @@ decision := decision_obj("DENY", input.action_risk, "rule_deny_sensitive_v1", 10
 #            "reason": "High-value transaction"
 #        }
 #    }
+#
+# 7. Structured policies (authored via the UI rule builder) compile to this same
+#    contract. Their generated modules add a second constructor for rules that
+#    carry constraints:
+#
+#      decision_obj_c(decision, risk, rule_id, priority, code, message, constraints)
+#
+#    which is identical to decision_obj but takes a caller-supplied constraints
+#    object (used to emit the approval block above). decision_obj delegates to it
+#    with an empty {} constraints. Generated modules also bind
+#    `req_risk := object.get(input, "action_risk", "MEDIUM")` so rules that match
+#    only on tool_id still produce a valid risk when action_risk is absent.

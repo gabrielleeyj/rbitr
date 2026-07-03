@@ -21,17 +21,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   createPolicyVersion,
+  getActionTypes,
   getPolicyVersion,
+  getStructuredPolicy,
   listPolicies,
+  listTools,
   publishPolicyVersion,
   rollbackPolicyVersion,
   simulatePolicy,
   type PolicySimulationResponse,
   type PolicyVersion,
+  type StructuredPolicy,
+  type StructuredRule,
 } from "@/lib/api";
+import { RuleBuilder, emptyStructuredPolicy } from "@/components/policies/RuleBuilder";
+import { CoveragePanel } from "@/components/policies/CoveragePanel";
 import { useAdminKey } from "@/lib/auth";
 import { useTenant } from "@/lib/tenant";
 import {
@@ -65,6 +73,13 @@ export function PoliciesPage() {
     "idle",
   );
   const [diffPreview, setDiffPreview] = useState("");
+  const [viewMode, setViewMode] = useState<"builder" | "advanced">("builder");
+  const [actionTypesList, setActionTypesList] = useState<string[]>([]);
+  const [toolsList, setToolsList] = useState<string[]>([]);
+  const [structuredInitial, setStructuredInitial] = useState<StructuredPolicy | null>(null);
+  const [advancedActive, setAdvancedActive] = useState(false);
+  const [seedRule, setSeedRule] = useState<StructuredRule | null>(null);
+  const [coverageRefresh, setCoverageRefresh] = useState(0);
   const lastLoadedKeyRef = useRef<string | null>(null);
   const refreshInFlight = useRef<Promise<void> | null>(null);
   const canReadPolicies = hasScope(scopePoliciesRead);
@@ -261,6 +276,58 @@ export function PoliciesPage() {
       mounted = false;
     };
   }, [adminKey, tenantId, canReadPolicies]);
+
+  // Load builder inputs (action types, tools) and the structured form of the
+  // active policy version so the rule builder can round-trip it.
+  useEffect(() => {
+    let mounted = true;
+    const loadBuilderData = async () => {
+      if (!adminKey || !tenantId || !canReadPolicies) {
+        return;
+      }
+      try {
+        const [actionTypes, tools] = await Promise.all([
+          getActionTypes({ adminKey }),
+          listTools({ adminKey }, tenantId),
+        ]);
+        if (!mounted) return;
+        setActionTypesList(actionTypes.action_types ?? []);
+        setToolsList((tools ?? []).map((tool) => tool.tool_id));
+      } catch {
+        // Builder inputs are non-critical; leave selectors empty on failure.
+      }
+
+      if (!activeVersion) {
+        setStructuredInitial(emptyStructuredPolicy);
+        setAdvancedActive(false);
+        return;
+      }
+      try {
+        const structured = await getStructuredPolicy({ adminKey }, tenantId, activeVersion);
+        if (!mounted) return;
+        setAdvancedActive(structured.advanced_mode);
+        setStructuredInitial(structured.structured ?? emptyStructuredPolicy);
+      } catch {
+        if (!mounted) return;
+        setStructuredInitial(emptyStructuredPolicy);
+        setAdvancedActive(false);
+      }
+    };
+    void loadBuilderData();
+    return () => {
+      mounted = false;
+    };
+  }, [adminKey, tenantId, activeVersion, canReadPolicies, coverageRefresh]);
+
+  const handleStructuredSaved = () => {
+    setCoverageRefresh((value) => value + 1);
+    void refresh();
+  };
+
+  const handleConfigureGap = (rule: StructuredRule) => {
+    setViewMode("builder");
+    setSeedRule(rule);
+  };
 
   useEffect(() => {
     setDiffPreview(computeDiffPreview(baseRego, regoModule));
@@ -572,6 +639,33 @@ export function PoliciesPage() {
           ) : null}
         </CardContent>
       </Card>
+      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "builder" | "advanced")}>
+        <TabsList>
+          <TabsTrigger value="builder">Rule builder</TabsTrigger>
+          <TabsTrigger value="advanced">Advanced (Rego)</TabsTrigger>
+        </TabsList>
+        <TabsContent value="builder" className="space-y-6">
+          <CoveragePanel
+            adminKey={adminKey ?? ""}
+            tenantId={tenantId ?? ""}
+            refreshToken={coverageRefresh}
+            onConfigure={handleConfigureGap}
+          />
+          <RuleBuilder
+            adminKey={adminKey ?? ""}
+            tenantId={tenantId ?? ""}
+            actionTypes={actionTypesList}
+            tools={toolsList}
+            canWrite={canWritePolicies}
+            canPublish={canPublishPolicies}
+            initialPolicy={structuredInitial}
+            advancedActive={advancedActive}
+            seedRule={seedRule}
+            onSeedConsumed={() => setSeedRule(null)}
+            onSaved={handleStructuredSaved}
+          />
+        </TabsContent>
+        <TabsContent value="advanced">
       <Card>
         <CardHeader>
           <CardTitle>New policy version</CardTitle>
@@ -745,6 +839,8 @@ export function PoliciesPage() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

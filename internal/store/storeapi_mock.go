@@ -607,6 +607,93 @@ func (_c *MockStoreAPI_CreatePolicyVersion_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// CreatePolicyVersionStructured provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) CreatePolicyVersionStructured(ctx context.Context, tenantID string, policyVersion string, regoModule string, structuredJSON []byte, createdBy string, notes string) error {
+	ret := _mock.Called(ctx, tenantID, policyVersion, regoModule, structuredJSON, createdBy, notes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreatePolicyVersionStructured")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, []byte, string, string) error); ok {
+		r0 = returnFunc(ctx, tenantID, policyVersion, regoModule, structuredJSON, createdBy, notes)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStoreAPI_CreatePolicyVersionStructured_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePolicyVersionStructured'
+type MockStoreAPI_CreatePolicyVersionStructured_Call struct {
+	*mock.Call
+}
+
+// CreatePolicyVersionStructured is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - policyVersion string
+//   - regoModule string
+//   - structuredJSON []byte
+//   - createdBy string
+//   - notes string
+func (_e *MockStoreAPI_Expecter) CreatePolicyVersionStructured(ctx interface{}, tenantID interface{}, policyVersion interface{}, regoModule interface{}, structuredJSON interface{}, createdBy interface{}, notes interface{}) *MockStoreAPI_CreatePolicyVersionStructured_Call {
+	return &MockStoreAPI_CreatePolicyVersionStructured_Call{Call: _e.mock.On("CreatePolicyVersionStructured", ctx, tenantID, policyVersion, regoModule, structuredJSON, createdBy, notes)}
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersionStructured_Call) Run(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, structuredJSON []byte, createdBy string, notes string)) *MockStoreAPI_CreatePolicyVersionStructured_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 []byte
+		if args[4] != nil {
+			arg4 = args[4].([]byte)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersionStructured_Call) Return(err error) *MockStoreAPI_CreatePolicyVersionStructured_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStoreAPI_CreatePolicyVersionStructured_Call) RunAndReturn(run func(ctx context.Context, tenantID string, policyVersion string, regoModule string, structuredJSON []byte, createdBy string, notes string) error) *MockStoreAPI_CreatePolicyVersionStructured_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateTenant provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) CreateTenant(ctx context.Context, tenantID string, name string) error {
 	ret := _mock.Called(ctx, tenantID, name)
@@ -4890,6 +4977,92 @@ func (_c *MockStoreAPI_ListEvidenceFiltered_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// ListFallbackHitPairs provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListFallbackHitPairs(ctx context.Context, tenantID string, ruleIDs []string, since time.Time, limit int) ([]models.CoverageFallbackHit, error) {
+	ret := _mock.Called(ctx, tenantID, ruleIDs, since, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListFallbackHitPairs")
+	}
+
+	var r0 []models.CoverageFallbackHit
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string, time.Time, int) ([]models.CoverageFallbackHit, error)); ok {
+		return returnFunc(ctx, tenantID, ruleIDs, since, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string, time.Time, int) []models.CoverageFallbackHit); ok {
+		r0 = returnFunc(ctx, tenantID, ruleIDs, since, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]models.CoverageFallbackHit)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string, time.Time, int) error); ok {
+		r1 = returnFunc(ctx, tenantID, ruleIDs, since, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListFallbackHitPairs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListFallbackHitPairs'
+type MockStoreAPI_ListFallbackHitPairs_Call struct {
+	*mock.Call
+}
+
+// ListFallbackHitPairs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+//   - ruleIDs []string
+//   - since time.Time
+//   - limit int
+func (_e *MockStoreAPI_Expecter) ListFallbackHitPairs(ctx interface{}, tenantID interface{}, ruleIDs interface{}, since interface{}, limit interface{}) *MockStoreAPI_ListFallbackHitPairs_Call {
+	return &MockStoreAPI_ListFallbackHitPairs_Call{Call: _e.mock.On("ListFallbackHitPairs", ctx, tenantID, ruleIDs, since, limit)}
+}
+
+func (_c *MockStoreAPI_ListFallbackHitPairs_Call) Run(run func(ctx context.Context, tenantID string, ruleIDs []string, since time.Time, limit int)) *MockStoreAPI_ListFallbackHitPairs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		var arg3 time.Time
+		if args[3] != nil {
+			arg3 = args[3].(time.Time)
+		}
+		var arg4 int
+		if args[4] != nil {
+			arg4 = args[4].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListFallbackHitPairs_Call) Return(coverageFallbackHits []models.CoverageFallbackHit, err error) *MockStoreAPI_ListFallbackHitPairs_Call {
+	_c.Call.Return(coverageFallbackHits, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListFallbackHitPairs_Call) RunAndReturn(run func(ctx context.Context, tenantID string, ruleIDs []string, since time.Time, limit int) ([]models.CoverageFallbackHit, error)) *MockStoreAPI_ListFallbackHitPairs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListMailingListMembers provides a mock function for the type MockStoreAPI
 func (_mock *MockStoreAPI) ListMailingListMembers(ctx context.Context, mailingListID string) ([]models.MailingListMember, error) {
 	ret := _mock.Called(ctx, mailingListID)
@@ -5546,6 +5719,74 @@ func (_c *MockStoreAPI_ListTools_Call) Return(tools []models.Tool, err error) *M
 }
 
 func (_c *MockStoreAPI_ListTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string, includeArchived bool, excludeDevSeeds bool) ([]models.Tool, error)) *MockStoreAPI_ListTools_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUnusedActiveTools provides a mock function for the type MockStoreAPI
+func (_mock *MockStoreAPI) ListUnusedActiveTools(ctx context.Context, tenantID string) ([]string, error) {
+	ret := _mock.Called(ctx, tenantID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUnusedActiveTools")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]string, error)); ok {
+		return returnFunc(ctx, tenantID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []string); ok {
+		r0 = returnFunc(ctx, tenantID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStoreAPI_ListUnusedActiveTools_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUnusedActiveTools'
+type MockStoreAPI_ListUnusedActiveTools_Call struct {
+	*mock.Call
+}
+
+// ListUnusedActiveTools is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tenantID string
+func (_e *MockStoreAPI_Expecter) ListUnusedActiveTools(ctx interface{}, tenantID interface{}) *MockStoreAPI_ListUnusedActiveTools_Call {
+	return &MockStoreAPI_ListUnusedActiveTools_Call{Call: _e.mock.On("ListUnusedActiveTools", ctx, tenantID)}
+}
+
+func (_c *MockStoreAPI_ListUnusedActiveTools_Call) Run(run func(ctx context.Context, tenantID string)) *MockStoreAPI_ListUnusedActiveTools_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStoreAPI_ListUnusedActiveTools_Call) Return(strings []string, err error) *MockStoreAPI_ListUnusedActiveTools_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStoreAPI_ListUnusedActiveTools_Call) RunAndReturn(run func(ctx context.Context, tenantID string) ([]string, error)) *MockStoreAPI_ListUnusedActiveTools_Call {
 	_c.Call.Return(run)
 	return _c
 }
