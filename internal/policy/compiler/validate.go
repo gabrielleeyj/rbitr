@@ -51,7 +51,7 @@ func validEffects() map[Effect]struct{} {
 }
 
 func validRisks() map[string]struct{} {
-	return map[string]struct{}{"LOW": {}, "MEDIUM": {}, "HIGH": {}, "CRITICAL": {}}
+	return map[string]struct{}{riskLow: {}, riskMedium: {}, riskHigh: {}, riskCritical: {}}
 }
 
 func reservedRuleIDs() map[string]struct{} {

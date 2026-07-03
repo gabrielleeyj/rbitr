@@ -80,10 +80,10 @@ func (d *Dependencies) handlePolicyStructuredCreate(c *echo.Context) error {
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.CREATE", "POLICY.VERSION", payload.PolicyVersion, nil, map[string]any{
 		fieldPolicyVersion:  payload.PolicyVersion,
 		"created_by":        adminKey.AdminKeyID,
-		"notes":             payload.Notes,
+		fieldNotes:          payload.Notes,
 		"authoring_mode":    store.AuthoringModeStructured,
 		"structured_sha256": utils.HashString(string(structuredJSON)),
-		"rego_sha256":       utils.HashString(regoModule),
+		fieldRegoSHA256:     utils.HashString(regoModule),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":     "failed to audit policy create",

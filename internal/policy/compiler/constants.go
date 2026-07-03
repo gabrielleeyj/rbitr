@@ -29,9 +29,15 @@ const (
 	// setup wizard's default policy module.
 	defaultOutputVersion = "2026-01-20"
 
+	// Risk levels recognized by the compiler.
+	riskLow      = "LOW"
+	riskMedium   = "MEDIUM"
+	riskHigh     = "HIGH"
+	riskCritical = "CRITICAL"
+
 	// defaultFallbackRisk is the risk reported by the final default rule, and the
 	// fallback used when an incoming request carries no action_risk.
-	defaultFallbackRisk = "MEDIUM"
+	defaultFallbackRisk = riskMedium
 
 	// approvalTTL bounds (seconds) mirror the gateway's approval expiry limits.
 	minApprovalTTLSeconds     = 60

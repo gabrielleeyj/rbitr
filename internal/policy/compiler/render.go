@@ -101,8 +101,8 @@ func writeDecisionChain(b *strings.Builder, p *StructuredPolicy, sorted []Rule) 
 	}
 
 	if p.appendRiskFallbacks() {
-		writeRiskFallback(b, &first, RuleHighRiskUnknown, "HIGH", "HIGH_RISK_UNKNOWN")
-		writeRiskFallback(b, &first, RuleCriticalRiskUnknown, "CRITICAL", "CRITICAL_RISK_UNKNOWN")
+		writeRiskFallback(b, &first, RuleHighRiskUnknown, riskHigh, "HIGH_RISK_UNKNOWN")
+		writeRiskFallback(b, &first, RuleCriticalRiskUnknown, riskCritical, "CRITICAL_RISK_UNKNOWN")
 	}
 
 	writeDefaultRule(b, p, first)

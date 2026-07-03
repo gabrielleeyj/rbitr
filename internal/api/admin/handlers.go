@@ -437,7 +437,7 @@ func (d *Dependencies) handlePolicyUpdate(c *echo.Context) error {
 		"active_policy_version": beforeConfig.ActivePolicyVersion,
 	}, map[string]any{
 		"active_policy_version": afterConfig.ActivePolicyVersion,
-		"rego_sha256":           utils.HashString(payload.RegoModule),
+		fieldRegoSHA256:         utils.HashString(payload.RegoModule),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":     "failed to audit policy update",

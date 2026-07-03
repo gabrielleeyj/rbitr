@@ -49,6 +49,8 @@ const (
 	fieldValue         = "value"
 	fieldScope         = "scope"
 	fieldStatus        = "status"
+	fieldNotes         = "notes"
+	fieldRegoSHA256    = "rego_sha256"
 
 	rateLimitScopeTenantAgentTool = "tenant_agent_tool"
 	rateLimitScopeTenantAgent     = "tenant_agent"

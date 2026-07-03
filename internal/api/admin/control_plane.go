@@ -481,8 +481,8 @@ func (d *Dependencies) handlePolicyCreate(c *echo.Context) error {
 	if err := d.emitAuditEvent(c, adminKey, tenantID, "POLICY.VERSION.CREATE", "POLICY.VERSION", payload.PolicyVersion, nil, map[string]any{
 		fieldPolicyVersion: payload.PolicyVersion,
 		"created_by":       adminKey.AdminKeyID,
-		"notes":            payload.Notes,
-		"rego_sha256":      utils.HashString(payload.RegoModule),
+		fieldNotes:         payload.Notes,
+		fieldRegoSHA256:    utils.HashString(payload.RegoModule),
 	}); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error":     "failed to audit policy create",
