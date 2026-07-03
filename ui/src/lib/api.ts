@@ -123,6 +123,66 @@ export interface PolicySimulationResponse {
   };
 }
 
+export type PolicyEffect = "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
+
+export interface StructuredMatcher {
+  tool_ids?: string[];
+  action_types?: string[];
+  action_risks?: string[];
+}
+
+export interface StructuredApproval {
+  expires_in_seconds?: number;
+  reason?: string;
+}
+
+export interface StructuredRule {
+  id: string;
+  priority: number;
+  effect: PolicyEffect;
+  match: StructuredMatcher;
+  reason?: string;
+  approval?: StructuredApproval;
+}
+
+export interface StructuredPolicy {
+  schema_version: string;
+  output_version?: string;
+  default_effect: PolicyEffect;
+  rules: StructuredRule[];
+  append_risk_fallbacks?: boolean;
+}
+
+export interface StructuredPolicyResponse {
+  policy_version: string;
+  authoring_mode: string;
+  advanced_mode: boolean;
+  structured?: StructuredPolicy;
+}
+
+export interface PolicyCoverageGap {
+  tool_id: string;
+  action_type?: string;
+  action_risk?: string;
+  current_fallback_decision?: string;
+  fallback_rule_id?: string;
+  hit_count: number;
+  last_seen?: string;
+  reason: "fallback_hit" | "no_traffic";
+}
+
+export interface PolicyCoverageReport {
+  tenant_id: string;
+  active_policy_version: string;
+  generated_at: string;
+  window_days: number;
+  gaps: PolicyCoverageGap[];
+  summary: {
+    fallback_hit_pairs: number;
+    unused_tools: number;
+  };
+}
+
 export interface HTTPConfig {
   base_url: string;
   auth_type: string;
@@ -581,12 +641,59 @@ export function rollbackPolicyVersion(
 export function simulatePolicy(
   config: ApiConfig,
   tenantId: string,
-  payload: { policy_version?: string; rego_module?: string; input: Record<string, unknown> }
+  payload: {
+    policy_version?: string;
+    rego_module?: string;
+    structured?: StructuredPolicy;
+    input: Record<string, unknown>;
+  }
 ): Promise<PolicySimulationResponse> {
   return request<PolicySimulationResponse>(`/admin/tenants/${tenantId}/policies/simulate`, config, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function getStructuredPolicy(
+  config: ApiConfig,
+  tenantId: string,
+  version: string
+): Promise<StructuredPolicyResponse> {
+  return request<StructuredPolicyResponse>(
+    `/admin/tenants/${tenantId}/policies/${version}/structured`,
+    config
+  );
+}
+
+export function saveStructuredPolicy(
+  config: ApiConfig,
+  tenantId: string,
+  payload: {
+    policy_version: string;
+    notes?: string;
+    structured: StructuredPolicy;
+    publish?: boolean;
+  }
+): Promise<void> {
+  return request<void>(`/admin/tenants/${tenantId}/policies/structured`, config, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getPolicyCoverage(
+  config: ApiConfig,
+  tenantId: string,
+  params?: { windowDays?: number; limit?: number }
+): Promise<PolicyCoverageReport> {
+  const query = new URLSearchParams();
+  if (params?.windowDays) query.set("window_days", String(params.windowDays));
+  if (params?.limit) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PolicyCoverageReport>(
+    `/admin/tenants/${tenantId}/policy/coverage${suffix}`,
+    config
+  );
 }
 
 export function listTools(config: ApiConfig, tenantId: string): Promise<ToolConfig[]> {

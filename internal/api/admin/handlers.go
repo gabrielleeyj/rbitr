@@ -81,9 +81,12 @@ func RegisterRoutes(e *echo.Echo, deps *Dependencies) {
 	policyGroup.GET("/policies", deps.handlePolicyVersions)
 	policyGroup.GET("/policies/:policy_version", deps.handlePolicyVersionGet)
 	policyGroup.POST("/policies", deps.handlePolicyCreate)
+	policyGroup.POST("/policies/structured", deps.handlePolicyStructuredCreate)
+	policyGroup.GET("/policies/:policy_version/structured", deps.handlePolicyStructuredGet)
 	policyGroup.POST("/policies/simulate", deps.handlePolicySimulate)
 	policyGroup.PUT("/policies/:policy_version/publish", deps.handlePolicyPublish)
 	policyGroup.PUT("/policies/rollback", deps.handlePolicyRollback)
+	policyGroup.GET("/policy/coverage", deps.handlePolicyCoverage)
 
 	policyGroup.GET("/risk-overrides", deps.handleRiskOverridesList)
 	policyGroup.PUT("/risk-overrides/:action_type", deps.handleRiskOverrideUpdate)

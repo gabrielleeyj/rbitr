@@ -786,14 +786,14 @@ func TestStoreListPolicyVersions(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	query := regexp.QuoteMeta(`SELECT tenant_id, policy_version, rego_module, created_at, created_by, notes
+	query := regexp.QuoteMeta(`SELECT ` + policyVersionColumns + `
 		FROM rbitr.policy_versions
 		WHERE tenant_id = $1
 		ORDER BY created_at DESC`)
 	mock.ExpectQuery(query).
 		WithArgs("t1").
-		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes"}).
-			AddRow("t1", "p_v1", "module", time.Now(), "admin", "notes"))
+		WillReturnRows(sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes", "structured_json", "authoring_mode"}).
+			AddRow("t1", "p_v1", "module", time.Now(), "admin", "notes", nil, AuthoringModeRego))
 
 	st := New(db)
 	versions, err := st.ListPolicyVersions(context.Background(), "t1")
@@ -810,12 +810,12 @@ func TestStoreGetPolicyVersion(t *testing.T) {
 	}{
 		{
 			name: "found",
-			rows: sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes"}).
-				AddRow("t1", "p_v1", "module", time.Now(), "admin", "notes"),
+			rows: sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes", "structured_json", "authoring_mode"}).
+				AddRow("t1", "p_v1", "module", time.Now(), "admin", "notes", nil, AuthoringModeRego),
 		},
 		{
 			name:      "not found",
-			rows:      sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes"}),
+			rows:      sqlmock.NewRows([]string{"tenant_id", "policy_version", "rego_module", "created_at", "created_by", "notes", "structured_json", "authoring_mode"}),
 			expectErr: ErrNotFound,
 		},
 	}
@@ -826,7 +826,7 @@ func TestStoreGetPolicyVersion(t *testing.T) {
 			require.NoError(t, err)
 			defer db.Close()
 
-			query := regexp.QuoteMeta(`SELECT tenant_id, policy_version, rego_module, created_at, created_by, notes
+			query := regexp.QuoteMeta(`SELECT ` + policyVersionColumns + `
 		FROM rbitr.policy_versions
 		WHERE tenant_id = $1 AND policy_version = $2`)
 			mock.ExpectQuery(query).WithArgs("t1", "p_v1").WillReturnRows(tc.rows)
@@ -851,9 +851,9 @@ func TestStoreCreatePolicyVersion(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM rbitr.system_settings WHERE key = $1`)).
 		WithArgs(adminWriteLockKey).
 		WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("false"))
-	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, created_by, notes)
-		VALUES ($1, $2, $3, $4, $5, $6)`)).
-		WithArgs("t1", "p_v2", "module", sqlmock.AnyArg(), "admin", "notes").
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO rbitr.policy_versions (tenant_id, policy_version, rego_module, created_at, created_by, notes, authoring_mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`)).
+		WithArgs("t1", "p_v2", "module", sqlmock.AnyArg(), "admin", "notes", AuthoringModeRego).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	st := New(db)

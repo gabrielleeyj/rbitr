@@ -23,6 +23,7 @@ import (
 	"github.com/gabrielleeyj/rbitr/internal/models"
 	"github.com/gabrielleeyj/rbitr/internal/notifications"
 	"github.com/gabrielleeyj/rbitr/internal/opa"
+	"github.com/gabrielleeyj/rbitr/internal/policy/compiler"
 	"github.com/gabrielleeyj/rbitr/internal/store"
 	"github.com/gabrielleeyj/rbitr/internal/utils"
 )
@@ -38,9 +39,10 @@ type PolicyRollbackRequest struct {
 }
 
 type PolicySimulationRequest struct {
-	PolicyVersion string         `json:"policy_version"`
-	RegoModule    string         `json:"rego_module"`
-	Input         map[string]any `json:"input"`
+	PolicyVersion string                     `json:"policy_version"`
+	RegoModule    string                     `json:"rego_module"`
+	Structured    *compiler.StructuredPolicy `json:"structured,omitempty"`
+	Input         map[string]any             `json:"input"`
 }
 
 type ApprovalDecisionRequest struct {
@@ -588,6 +590,16 @@ func (d *Dependencies) handlePolicySimulate(c *echo.Context) error {
 
 	tenantID := c.Param(fieldTenantID)
 	regoModule := payload.RegoModule
+	if payload.Structured != nil {
+		compiled, err := compiler.Compile(payload.Structured)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"error":     "structured policy invalid",
+				fieldDetail: err.Error(),
+			})
+		}
+		regoModule = compiled
+	}
 	//nolint:nestif // Selecting policy source inline keeps version/active fallback behavior explicit.
 	if regoModule == "" {
 		if payload.PolicyVersion != "" {

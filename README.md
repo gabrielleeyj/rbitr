@@ -6,7 +6,7 @@
 
 Governance semantics for AI agents: canonicalization + hashing + action classification.
 
-- OPA/Rego policies stored in DB (policy-as-data)
+- OPA/Rego policies stored in DB (policy-as-data), authored via a structured rule builder or raw Rego
 - ADR persistence (governance artifact, not access logs)
 - Approval-request persistence (the "human-in-loop" hook)
 - Evidence export with DTO whitelist + contract validation + redaction tests
@@ -235,12 +235,18 @@ GitHub Actions manual run: `.github/workflows/marketplace-onboarding.yml`.
 
 Tool calls are automatically classified into action types based on HTTP method, path, query, and headers. Each action type is assigned a risk level (LOW, MEDIUM, HIGH, CRITICAL). Per-tenant risk overrides can adjust the default risk.
 
-### OPA/Rego Policies
+### Policy Authoring
 
-Per-tenant policies are authored in Rego and stored in PostgreSQL. The gateway evaluates policies on every tool call and produces a decision: ALLOW, DENY, or REQUIRE_APPROVAL.
+Per-tenant policies are stored as OPA/Rego in PostgreSQL and evaluated on every tool call, producing a decision: ALLOW, DENY, or REQUIRE_APPROVAL. There are two ways to author them:
+
+- **Structured rule builder (default)**: define permissions as a list of rules that match on `tool_id`, `action_type`, and/or `action_risk` and resolve to an effect, plus a default effect for anything unmatched. The gateway compiles the structured policy to Rego on save, so OPA remains the enforcement engine. Higher-priority rules win; the first match applies. Saved via `POST /admin/tenants/{tenant_id}/policies/structured` and round-tripped via `GET /admin/tenants/{tenant_id}/policies/{version}/structured`.
+- **Advanced (raw Rego)**: author Rego directly for full expressiveness. Versions authored this way report `advanced_mode` and open in the raw editor. See [`POLICY_TEMPLATE.rego`](POLICY_TEMPLATE.rego) for the required output contract.
+
+Both modes share the same version history, simulation, and enforcement path:
 
 - **Policy Versioning**: multiple versions per tenant with publish/rollback
-- **Policy Simulation**: dry-run evaluation against test inputs via `POST /admin/tenants/{tenant_id}/policies/simulate`
+- **Policy Simulation**: dry-run evaluation against test inputs (structured or Rego) via `POST /admin/tenants/{tenant_id}/policies/simulate`
+- **Coverage analysis**: `GET /admin/tenants/{tenant_id}/policy/coverage` lists endpoints with ambiguous permissions — those governed only by catch-all fallback rules, or registered tools never exercised — so they can be configured explicitly. The rule builder surfaces this list with an inline "Set permission" action.
 
 ### Mandatory Base Policy (Epic 11)
 
@@ -615,10 +621,13 @@ azure-kv://myvault/slack-token
 |--------|------|-------------|
 | `GET` | `/admin/tenants/{tenant_id}/policies` | List policy versions |
 | `GET` | `/admin/tenants/{tenant_id}/policies/{version}` | Get policy |
-| `POST` | `/admin/tenants/{tenant_id}/policies` | Create policy version |
-| `POST` | `/admin/tenants/{tenant_id}/policies/simulate` | Simulate policy |
+| `POST` | `/admin/tenants/{tenant_id}/policies` | Create policy version (raw Rego) |
+| `POST` | `/admin/tenants/{tenant_id}/policies/structured` | Create policy version from structured rules |
+| `GET` | `/admin/tenants/{tenant_id}/policies/{version}/structured` | Get structured form of a version |
+| `POST` | `/admin/tenants/{tenant_id}/policies/simulate` | Simulate policy (Rego or structured) |
 | `PUT` | `/admin/tenants/{tenant_id}/policies/{version}/publish` | Publish version |
 | `PUT` | `/admin/tenants/{tenant_id}/policies/rollback` | Rollback policy |
+| `GET` | `/admin/tenants/{tenant_id}/policy/coverage` | List endpoints with ambiguous permissions |
 
 **Approvals**
 

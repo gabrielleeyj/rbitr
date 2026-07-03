@@ -51,12 +51,26 @@ type Policy struct {
 }
 
 type PolicyVersion struct {
-	TenantID      string    `json:"tenant_id"`
-	PolicyVersion string    `json:"policy_version"`
-	RegoModule    string    `json:"rego_module"`
-	CreatedAt     time.Time `json:"created_at"`
-	CreatedBy     string    `json:"created_by"`
-	Notes         string    `json:"notes"`
+	TenantID       string          `json:"tenant_id"`
+	PolicyVersion  string          `json:"policy_version"`
+	RegoModule     string          `json:"rego_module"`
+	CreatedAt      time.Time       `json:"created_at"`
+	CreatedBy      string          `json:"created_by"`
+	Notes          string          `json:"notes"`
+	StructuredJSON json.RawMessage `json:"structured_json,omitempty"`
+	AuthoringMode  string          `json:"authoring_mode,omitempty"`
+}
+
+// CoverageFallbackHit is an aggregated (tool, action) pair whose requests were
+// governed only by a catch-all fallback rule within the analysed window.
+type CoverageFallbackHit struct {
+	ToolID     string    `json:"tool_id"`
+	ActionType string    `json:"action_type"`
+	ActionRisk string    `json:"action_risk"`
+	Decision   string    `json:"decision"`
+	RuleID     string    `json:"rule_id"`
+	HitCount   int       `json:"hit_count"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 type TenantConfig struct {
