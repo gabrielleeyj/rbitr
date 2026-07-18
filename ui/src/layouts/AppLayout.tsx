@@ -22,6 +22,12 @@ export function AppLayout() {
 
   return (
     <SidebarProvider defaultOpen>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <Sidebar>
         <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-3 px-4 py-4">
@@ -30,7 +36,9 @@ export function AppLayout() {
               <div className="font-display text-lg font-bold tracking-tight">
                 rbitr
               </div>
-              <div className="text-xs text-muted-foreground">control plane</div>
+              <div className="text-xs text-sidebar-foreground/70">
+                control plane
+              </div>
             </div>
           </div>
         </SidebarHeader>
@@ -49,7 +57,7 @@ export function AppLayout() {
       <SidebarInset>
         <TopBar />
         <Separator />
-        <main className="px-4 py-4 md:px-6 md:py-6">
+        <main id="main-content" tabIndex={-1} className="px-4 py-4 outline-none md:px-6 md:py-6">
           <Outlet />
         </main>
       </SidebarInset>

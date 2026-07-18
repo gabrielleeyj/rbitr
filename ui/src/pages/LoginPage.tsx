@@ -118,7 +118,7 @@ export function LoginPage() {
               <Label htmlFor="admin-key">Admin key</Label>
               <Input
                 id="admin-key"
-                placeholder="admin_demo_key"
+                placeholder="Paste your admin key"
                 value={adminKey}
                 onChange={(event) => setAdminKeyInput(event.target.value)}
               />

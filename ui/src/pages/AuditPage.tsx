@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { ListSkeleton } from "@/components/list-skeleton";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { auditExportUrl, listAuditEvents, listAuditResourceTypes } from "@/lib/api";
@@ -212,12 +212,11 @@ export function AuditPage() {
   }, [adminKey, tenantId, canReadAudit]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Audit events</CardTitle>
-        <CardDescription>Review recent admin changes for the selected tenant.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section className="space-y-6">
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Review recent admin changes for the selected tenant.
+      </p>
+      <div className="space-y-4">
         {error ? (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
@@ -231,7 +230,7 @@ export function AuditPage() {
         {!tenantId ? (
           <div className="text-sm text-muted-foreground">Select a tenant to view audit events.</div>
         ) : loading ? (
-          <div className="text-sm text-muted-foreground">Loading audit events...</div>
+          <ListSkeleton />
         ) : (
         <div className="space-y-3">
           <div className="grid gap-3 md:grid-cols-6">
@@ -449,7 +448,7 @@ export function AuditPage() {
         </Table>
         </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

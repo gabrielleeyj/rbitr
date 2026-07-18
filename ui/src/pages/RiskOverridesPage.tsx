@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -188,7 +189,7 @@ export function RiskOverridesPage() {
         {!tenantId ? (
           <div className="text-sm text-muted-foreground">Select a tenant to view overrides.</div>
         ) : loading ? (
-          <div className="text-sm text-muted-foreground">Loading overrides...</div>
+          <ListSkeleton rows={3} />
         ) : overrides.length === 0 ? (
           <div className="text-sm text-muted-foreground">No overrides configured.</div>
         ) : (

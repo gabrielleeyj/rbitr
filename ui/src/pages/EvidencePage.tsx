@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -131,12 +130,11 @@ export function EvidencePage() {
   }, [adminKey, canReadActionTypes]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Evidence</CardTitle>
-        <CardDescription>Review governed actions and export evidence packs.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <section className="space-y-6">
+      <p className="max-w-prose text-sm text-muted-foreground">
+        Review governed actions and export evidence packs.
+      </p>
+      <div className="space-y-6">
         {!selectedTenant ? (
           <Alert>
             <AlertDescription>Select a tenant to view evidence.</AlertDescription>
@@ -253,7 +251,7 @@ export function EvidencePage() {
             )}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

@@ -34,8 +34,9 @@ const VARIANT_BY_TONE = {
 } as const;
 
 export function formatStatusLabel(status: string): string {
-  if (!status) return "unknown";
-  return status.toLowerCase().replaceAll("_", " ");
+  if (!status) return "Unknown";
+  const words = status.toLowerCase().replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 interface StatusBadgeProps {

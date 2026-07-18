@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import {
   Card,
@@ -229,7 +230,11 @@ export function TicketingPage() {
   }
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading ticketing configuration...</div>;
+    return (
+      <div className="p-6">
+        <ListSkeleton />
+      </div>
+    );
   }
 
   if (error) {

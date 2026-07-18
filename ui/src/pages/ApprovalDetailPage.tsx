@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
@@ -130,7 +131,7 @@ export function ApprovalDetailPage() {
       ) : null}
 
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading approval...</div>
+        <ListSkeleton rows={3} />
       ) : approval ? (
         <Card>
           <CardHeader>

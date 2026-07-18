@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -462,7 +463,7 @@ export function TenantsPage() {
             </div>
           ) : null}
           {loading ? (
-            <div className="text-sm text-muted-foreground">Loading tenants...</div>
+            <ListSkeleton />
           ) : (
             <Table>
               <TableHeader>
@@ -671,7 +672,7 @@ export function TenantsPage() {
 
               {canReadKeys ? (
                 keysLoading ? (
-                  <div className="text-sm text-muted-foreground">Loading tenant keys...</div>
+                  <ListSkeleton rows={2} />
                 ) : tenantKeys.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
                     No API keys yet. Create a key so agents and admins can

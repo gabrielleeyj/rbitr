@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -249,7 +250,7 @@ export function ToolsPage() {
   };
 
   if (loading) {
-    return <Card><CardContent className="py-8 text-center text-muted-foreground">Loading tools...</CardContent></Card>;
+    return <ListSkeleton />;
   }
 
   if (error) {

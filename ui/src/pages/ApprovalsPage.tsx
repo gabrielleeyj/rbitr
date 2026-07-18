@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, formatStatusLabel } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -207,7 +207,7 @@ export function ApprovalsPage() {
             <TabsList className="flex flex-wrap gap-2">
               {statusTabs.map((value) => (
                 <TabsTrigger key={value} value={value}>
-                  {value}
+                  {formatStatusLabel(value)}
                 </TabsTrigger>
               ))}
             </TabsList>

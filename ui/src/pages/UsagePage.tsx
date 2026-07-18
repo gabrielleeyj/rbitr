@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BarChart3, AlertTriangle } from "lucide-react";
+import { ListSkeleton } from "@/components/list-skeleton";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -74,7 +75,7 @@ export function UsagePage() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="text-sm text-muted-foreground">Loading usage data...</div>
+        <ListSkeleton />
       </div>
     );
   }
