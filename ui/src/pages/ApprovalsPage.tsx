@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -216,7 +216,7 @@ export function ApprovalsPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <div className="text-xs text-muted-foreground">Status</div>
-              <Badge variant="secondary">{selectedStatusLabel}</Badge>
+              <StatusBadge status={status} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -294,7 +294,7 @@ export function ApprovalsPage() {
                     </TableCell>
                     <TableCell>{approval.risk ?? "—"}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{approval.status}</Badge>
+                      <StatusBadge status={approval.status} />
                     </TableCell>
                     <TableCell className="text-xs">{formatDate(approval.expires_at)}</TableCell>
                     <TableCell className="text-xs">

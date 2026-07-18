@@ -1,5 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
-import { Theme } from "@radix-ui/themes";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 type ThemeMode = "light" | "dark";
 
@@ -11,28 +10,40 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 const storageKey = "rbitr_theme";
 
+function getInitialTheme(): ThemeMode {
+  const stored = localStorage.getItem(storageKey);
+  if (stored === "dark" || stored === "light") {
+    return stored;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(storageKey);
-    return stored === "dark" ? "dark" : "light";
-  });
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
 
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next = prev === "light" ? "dark" : "light";
-      localStorage.setItem(storageKey, next);
-      return next;
-    });
-  };
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
-  const value = useMemo(() => ({ theme, toggleTheme }), [theme]);
+  const value = useMemo(
+    () => ({
+      theme,
+      toggleTheme: () => {
+        setTheme((prev) => {
+          const next: ThemeMode = prev === "light" ? "dark" : "light";
+          localStorage.setItem(storageKey, next);
+          return next;
+        });
+      },
+    }),
+    [theme],
+  );
 
   return (
-    <ThemeContext.Provider value={value}>
-      <Theme appearance={theme} accentColor="purple" grayColor="slate" radius="large">
-        {children}
-      </Theme>
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
 }
 

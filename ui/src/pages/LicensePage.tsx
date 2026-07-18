@@ -229,7 +229,7 @@ export function LicensePage() {
               <div>
                 <span className="text-muted-foreground">Status</span>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                   <span className="font-medium">Active</span>
                 </div>
               </div>
@@ -346,7 +346,7 @@ export function LicensePage() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertTriangle className="h-4 w-4 text-warning" />
               <CardTitle className="text-base">Free Tier Limits</CardTitle>
             </div>
           </CardHeader>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -120,15 +121,13 @@ export function SetupPage({ status, onRefreshStatus, onSetupCompleted }: SetupPa
               {checks.map((check) => (
                 <div key={check.label} className="flex items-center justify-between border rounded-md px-3 py-2">
                   <span className="text-sm">{check.label}</span>
-                  <Badge variant={check.ok ? "default" : "destructive"}>{check.ok ? "Ready" : "Not ready"}</Badge>
+                  <Badge variant={check.ok ? "success" : "danger"}>{check.ok ? "Ready" : "Not ready"}</Badge>
                 </div>
               ))}
 
               <div className="flex items-center justify-between border rounded-md px-3 py-2">
                 <span className="text-sm">Persisted setup state</span>
-                <Badge variant={status.setup_state === "failed" ? "destructive" : "secondary"}>
-                  {status.setup_state}
-                </Badge>
+                <StatusBadge status={status.setup_state} />
               </div>
 
               {status.last_error ? (

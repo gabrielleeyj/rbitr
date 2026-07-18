@@ -28,9 +28,9 @@ const WARN_THRESHOLD = 80;
 const CRITICAL_THRESHOLD = 95;
 
 function gaugeColor(pct: number): string {
-  if (pct >= CRITICAL_THRESHOLD) return "bg-red-500";
-  if (pct >= WARN_THRESHOLD) return "bg-amber-500";
-  return "bg-green-500";
+  if (pct >= CRITICAL_THRESHOLD) return "bg-destructive";
+  if (pct >= WARN_THRESHOLD) return "bg-warning";
+  return "bg-success";
 }
 
 function formatLimit(value: number): string {

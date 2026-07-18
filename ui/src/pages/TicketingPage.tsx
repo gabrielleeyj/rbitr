@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import {
   Select,
   SelectContent,
@@ -481,7 +482,7 @@ export function TicketingPage() {
                           href={link.external_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
+                          className="text-primary hover:underline"
                         >
                           {link.external_key}
                         </a>
@@ -506,14 +507,3 @@ export function TicketingPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const variant =
-    status === "resolved"
-      ? "default"
-      : status === "closed"
-        ? "secondary"
-        : status === "in_progress"
-          ? "outline"
-          : "outline";
-  return <Badge variant={variant}>{status || "unknown"}</Badge>;
-}

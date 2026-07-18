@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -136,7 +136,7 @@ export function ApprovalDetailPage() {
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm">{approval.approval_request_id}</span>
-              <Badge variant="secondary">{approval.status}</Badge>
+              <StatusBadge status={approval.status} />
             </CardTitle>
             <CardDescription>{approval.action_summary || approval.action_type}</CardDescription>
           </CardHeader>

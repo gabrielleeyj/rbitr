@@ -369,7 +369,7 @@ export function AuditPage() {
                     Include details (before/after)
                   </label>
                   {includeDetails ? (
-                    <div className="text-[11px] text-amber-600">
+                    <div className="text-[11px] text-warning">
                       Warning: details may include sensitive configuration data.
                     </div>
                   ) : null}

@@ -585,7 +585,7 @@ export function PoliciesPage() {
                         </TableCell>
                         <TableCell>
                           {activeVersion === version.policy_version ? (
-                            <Badge variant="secondary">Active</Badge>
+                            <Badge variant="success">Active</Badge>
                           ) : (
                             <Badge variant="outline">Inactive</Badge>
                           )}
@@ -733,11 +733,9 @@ export function PoliciesPage() {
               <div className="text-xs text-muted-foreground">Compile check</div>
               <div className="mt-2">
                 {compileStatus === "ok" ? (
-                  <Badge className="bg-emerald-100 text-emerald-800">
-                    Passed
-                  </Badge>
+                  <Badge variant="success">Passed</Badge>
                 ) : compileStatus === "error" ? (
-                  <Badge className="bg-rose-100 text-rose-800">Failed</Badge>
+                  <Badge variant="danger">Failed</Badge>
                 ) : (
                   <Badge variant="outline">Not run</Badge>
                 )}
@@ -747,11 +745,9 @@ export function PoliciesPage() {
               <div className="text-xs text-muted-foreground">Simulation</div>
               <div className="mt-2">
                 {simulateStatus === "ok" ? (
-                  <Badge className="bg-emerald-100 text-emerald-800">
-                    Passed
-                  </Badge>
+                  <Badge variant="success">Passed</Badge>
                 ) : simulateStatus === "error" ? (
-                  <Badge className="bg-rose-100 text-rose-800">Failed</Badge>
+                  <Badge variant="danger">Failed</Badge>
                 ) : (
                   <Badge variant="outline">Not run</Badge>
                 )}
@@ -771,9 +767,9 @@ export function PoliciesPage() {
                 ? diffPreview.split("\n").map((line, index) => {
                     let className = "text-muted-foreground";
                     if (line.startsWith("+")) {
-                      className = "text-emerald-600 bg-emerald-50";
+                      className = "text-success bg-success-subtle";
                     } else if (line.startsWith("-")) {
-                      className = "text-rose-600 bg-rose-50";
+                      className = "text-destructive bg-destructive-subtle";
                     }
                     return (
                       <div

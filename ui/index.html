@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Control Plane</title>
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash of the
+      // wrong theme; ThemeProvider takes over once React mounts.
+      (function () {
+        try {
+          var stored = localStorage.getItem("rbitr_theme");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) {
+            document.documentElement.classList.add("dark");
+          }
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          /* localStorage unavailable; default to light */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
