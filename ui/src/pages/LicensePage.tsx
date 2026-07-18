@@ -170,7 +170,7 @@ export function LicensePage() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h2 className="text-lg font-semibold">License</h2>
+        <h2 className="font-display text-lg font-semibold tracking-tight">License</h2>
         <p className="text-sm text-muted-foreground">
           Manage your rbitr license key to unlock paid features.
         </p>

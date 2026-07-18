@@ -194,7 +194,7 @@ export function TicketingPage() {
     return (
       <div className="p-6 space-y-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Ticketing & ITSM</h2>
+          <h2 className="font-display text-2xl font-bold tracking-tight">Ticketing & ITSM</h2>
           <p className="text-sm text-muted-foreground">
             Configure bidirectional ticketing integration with Jira, ServiceNow, or Linear.
           </p>
@@ -245,7 +245,7 @@ export function TicketingPage() {
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Ticketing & ITSM</h2>
+        <h2 className="font-display text-2xl font-bold tracking-tight">Ticketing & ITSM</h2>
         <p className="text-sm text-muted-foreground">
           Configure bidirectional ticketing integration with Jira, ServiceNow, or Linear.
         </p>
@@ -457,7 +457,10 @@ export function TicketingPage() {
         </CardHeader>
         <CardContent>
           {links.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No ticket links found.</p>
+            <p className="text-sm text-muted-foreground">
+              No ticket links yet. Links appear when approval requests create or
+              attach tickets in your ticketing system.
+            </p>
           ) : (
             <Table>
               <TableHeader>

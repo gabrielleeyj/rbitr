@@ -673,7 +673,10 @@ export function TenantsPage() {
                 keysLoading ? (
                   <div className="text-sm text-muted-foreground">Loading tenant keys...</div>
                 ) : tenantKeys.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No keys found.</div>
+                  <div className="text-sm text-muted-foreground">
+                    No API keys yet. Create a key so agents and admins can
+                    authenticate for this tenant.
+                  </div>
                 ) : (
                   <Table>
                     <TableHeader>

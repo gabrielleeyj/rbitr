@@ -460,7 +460,7 @@ export function SettingsPage() {
                 id="mcp-passthrough-upstream"
                 value={mcpPassthroughUpstreamToolID}
                 onChange={(event) => setMCPPassthroughUpstreamToolID(event.target.value)}
-                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm md:max-w-md"
+                className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm md:max-w-md"
                 disabled={loading || !selectedTenant || !canWriteSettings || !canReadTools}
               >
                 <option value="">Automatic fallback (first MCP tool)</option>
@@ -571,7 +571,7 @@ export function SettingsPage() {
                     max={1440}
                     value={sessionTokenTTLMinutes}
                     onChange={(event) => setSessionTokenTTLMinutes(Number(event.target.value) || 60)}
-                    className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
+                    className="h-9 pointer-coarse:h-11 w-24 rounded-md border border-border bg-background px-3 text-sm"
                     disabled={loading || !canWriteSettings}
                   />
                   <Button variant="outline" onClick={handleSessionTokenTTLUpdate} disabled={loading || !canWriteSettings}>
@@ -598,7 +598,7 @@ export function SettingsPage() {
                     min={1}
                     value={rateLimitPerMinute}
                     onChange={(event) => setRateLimitPerMinute(Number(event.target.value) || 0)}
-                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                     disabled={loading || !canWriteSettings}
                   />
                 </div>
@@ -612,7 +612,7 @@ export function SettingsPage() {
                     min={1}
                     value={rateLimitPerDay}
                     onChange={(event) => setRateLimitPerDay(Number(event.target.value) || 0)}
-                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                     disabled={loading || !canWriteSettings}
                   />
                 </div>
@@ -624,7 +624,7 @@ export function SettingsPage() {
                     id="rate-limit-scope"
                     value={rateLimitScope}
                     onChange={(event) => setRateLimitScope(event.target.value as RateLimitScope)}
-                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                    className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                     disabled={loading || !canWriteSettings}
                   >
                     <option value="tenant_agent_tool">Tenant + Agent + Tool</option>
@@ -765,7 +765,7 @@ export function SettingsPage() {
                   value={ssoIssuer}
                   onChange={(event) => setSSOIssuer(event.target.value)}
                   placeholder="https://accounts.google.com"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -779,7 +779,7 @@ export function SettingsPage() {
                   value={ssoClientId}
                   onChange={(event) => setSSOClientId(event.target.value)}
                   placeholder="your-client-id"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -793,7 +793,7 @@ export function SettingsPage() {
                   value={ssoClientSecretRef}
                   onChange={(event) => setSSOClientSecretRef(event.target.value)}
                   placeholder="aws-sm://my-sso-secret"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -807,7 +807,7 @@ export function SettingsPage() {
                   value={ssoRedirectUri}
                   onChange={(event) => setSSORedirectUri(event.target.value)}
                   placeholder="https://your-app.example.com/auth/callback"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -821,7 +821,7 @@ export function SettingsPage() {
                   value={ssoAllowedDomains}
                   onChange={(event) => setSSOAllowedDomains(event.target.value)}
                   placeholder="example.com, corp.example.com"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -835,7 +835,7 @@ export function SettingsPage() {
                   value={ssoDefaultScopes}
                   onChange={(event) => setSSODefaultScopes(event.target.value)}
                   placeholder="openid, email, profile"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+                  className="h-9 pointer-coarse:h-11 w-full rounded-md border border-border bg-background px-3 text-sm"
                   disabled={loading || !canWriteSettings}
                 />
               </div>
@@ -899,7 +899,7 @@ export function SettingsPage() {
                 max={1440}
                 value={defaultTTLMinutes}
                 onChange={(event) => setDefaultTTLMinutes(Number(event.target.value) || 15)}
-                className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
+                className="h-9 pointer-coarse:h-11 w-24 rounded-md border border-border bg-background px-3 text-sm"
                 disabled={loading || !canWriteSettings}
               />
               <Button variant="outline" onClick={handleTTLUpdate} disabled={loading || !canWriteSettings}>
@@ -933,7 +933,7 @@ export function SettingsPage() {
                 max={3650}
                 value={auditRetentionDays}
                 onChange={(event) => setAuditRetentionDaysState(Number(event.target.value) || 365)}
-                className="h-9 w-24 rounded-md border border-border bg-background px-3 text-sm"
+                className="h-9 pointer-coarse:h-11 w-24 rounded-md border border-border bg-background px-3 text-sm"
                 disabled={loading || !canWriteSettings}
               />
               <Button variant="outline" onClick={handleAuditRetentionUpdate} disabled={loading || !canWriteSettings}>

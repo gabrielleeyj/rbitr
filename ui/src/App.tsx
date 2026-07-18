@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AdminKeyProvider, RequireAdminKey } from "@/lib/auth";
 import { EntitlementsProvider } from "@/lib/entitlements";
 import { TenantProvider } from "@/lib/tenant";
@@ -58,8 +59,10 @@ const SetupPage = lazy(() =>
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-64 items-center justify-center px-6 py-12">
-      <div className="text-sm text-muted-foreground">Loading…</div>
+    <div className="space-y-4 px-4 py-4 md:px-6 md:py-6" aria-busy="true">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-40 w-full" />
+      <Skeleton className="h-40 w-full" />
     </div>
   );
 }

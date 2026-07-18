@@ -568,7 +568,8 @@ export function PoliciesPage() {
                   {sortedVersions.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-muted-foreground">
-                        No policy versions yet.
+                        No policy versions yet. Save a policy above to create
+                        the first version.
                       </TableCell>
                     </TableRow>
                   ) : (

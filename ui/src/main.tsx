@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import { App } from "@/App";
+import "@fontsource-variable/schibsted-grotesk";
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/spline-sans-mono";
 import "@/styles/globals.css";
 
 const root = document.getElementById("root");

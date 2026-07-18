@@ -100,7 +100,7 @@ export function UsagePage() {
     <div className="p-6 space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Usage</h2>
+          <h2 className="font-display text-lg font-semibold tracking-tight">Usage</h2>
           <p className="text-sm text-muted-foreground">
             Current period: {summary.period}
           </p>

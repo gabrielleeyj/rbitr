@@ -425,7 +425,10 @@ export function AuditPage() {
               {events.length === 0 ? (
                 <TableRow>
                   <TableCell className="text-muted-foreground">—</TableCell>
-                  <TableCell className="text-muted-foreground">No audit events yet</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    No audit events yet. Admin actions on this tenant are
+                    recorded here as they happen.
+                  </TableCell>
                   <TableCell className="text-muted-foreground">—</TableCell>
                   <TableCell className="text-muted-foreground">—</TableCell>
                 </TableRow>

@@ -235,7 +235,8 @@ export function EvidencePage() {
             {records.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-muted-foreground">
-                  No evidence records yet.
+                  No evidence records yet. Records appear here once agents make
+                  tool calls through the gateway for this tenant.
                 </TableCell>
               </TableRow>
             ) : (

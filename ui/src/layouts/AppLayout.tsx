@@ -23,11 +23,11 @@ export function AppLayout() {
   return (
     <SidebarProvider defaultOpen>
       <Sidebar>
-        <SidebarHeader className="border-b">
+        <SidebarHeader className="border-b border-sidebar-border">
           <div className="flex items-center gap-3 px-4 py-4">
             <GatewayLogo className="h-10 w-10" />
             <div>
-              <div className="text-base font-semibold tracking-tight">
+              <div className="font-display text-lg font-bold tracking-tight">
                 rbitr
               </div>
               <div className="text-xs text-muted-foreground">control plane</div>
@@ -37,7 +37,7 @@ export function AppLayout() {
         <SidebarContent>
           <AppNav />
         </SidebarContent>
-        <SidebarFooter className="border-t">
+        <SidebarFooter className="border-t border-sidebar-border">
           <div className="flex flex-col gap-2 p-3">
             <Button variant="outline" size="sm" onClick={clearAdminKey}>
               End admin session
@@ -49,7 +49,7 @@ export function AppLayout() {
       <SidebarInset>
         <TopBar />
         <Separator />
-        <main className="px-6 py-6">
+        <main className="px-4 py-4 md:px-6 md:py-6">
           <Outlet />
         </main>
       </SidebarInset>
